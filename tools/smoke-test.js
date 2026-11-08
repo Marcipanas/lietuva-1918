@@ -59,7 +59,7 @@ assert(true, `loaded ${order.length} scripts in index.html order`);
 
 /* ---- play session (runs inside the game's global scope) ---- */
 const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t)}};
-  out.towns=S.towns.length;out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
+  out.tut0=TUT.on&&TUT.step===0;out.towns=S.towns.length;out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
   out.edges=S.edges.length;out.houses=S.bld.filter(b=>b.t==='house').length;out.lots=S.lots.length;
   run(20,16);S.speed=3;run(120,100);out.day1=S.day;out.walkers=WALK.length;out.vehicles=VEH.length;out.renders=R3.calls;
   const kau=S.towns.find(x=>x.id==='kau'),aly=S.towns.find(x=>x.id==='aly'),ki=S.towns.indexOf(kau),ai=S.towns.indexOf(aly);
@@ -88,7 +88,7 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   selectTown(ki,true);renderPanel(true);['routes','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
   const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}toggleDrawer(true);toggleDrawer(false);
   [2,8,30,90,400].forEach(d=>{cam.dist=d;cam.anim=null;run(3,16)});
-  S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize());
+  out.tut=TUT.step;S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize());
   restore(JSON.parse(str));analyze();initScene();run(3,16);
   out.roundtrip=S.day===snap.day&&S.bld.length===snap.b&&S.routes.length===snap.r&&Math.round(S.funds)===snap.f&&S.edges.length===snap.e&&S.lots.length===snap.l;
   out.saveKB=Math.round(str.length/1024);out.saved=!!localStorage.getItem(SAVE_KEY);return out})()`;
@@ -112,5 +112,6 @@ assert(o.pop > 400, `towns grow (${Math.round(o.pop)}k residents, ${o.housesNow}
 assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`);
 assert(o.roundtrip, `save and reload keep the game intact (${o.saveKB} KB)`);
 assert(o.saved, 'autosave writes to localStorage');
+assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
 if (failed) { console.error(`\n${failed} check${failed > 1 ? 's' : ''} failed`); process.exit(1); }
 console.log('\nSmoke test passed.');

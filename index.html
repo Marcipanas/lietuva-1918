@@ -39,6 +39,7 @@
     <canvas id="cv" aria-label="3D map of Lithuania. Drag to move, pinch to zoom, twist two fingers to turn, tap to select."></canvas>
     <div id="labels"></div>
     <button id="compass" aria-label="Turn north up"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="n" d="M12 3l3.2 9H8.8z"/><path class="s" d="M12 21l-3.2-9h6.4z"/></svg></button>
+    <div id="tut" role="status" aria-live="polite" hidden></div>
     <div id="hint" role="status" hidden></div>
     <div class="dock">
       <div id="confirm" hidden></div>
@@ -67,6 +68,7 @@
 <script src="js/agents.js"></script>
 <script src="js/input.js"></script>
 <script src="js/panels.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/ui.js"></script>
 <script>
 /* Offline support: register the service worker when served over http(s). Not available inside claude.ai artifacts. */

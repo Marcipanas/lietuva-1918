@@ -275,14 +275,14 @@ function doConfirm() {
     if (m) return toast(m);
     pay(p.cost, town);
     if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${num(p.km)} km to ${p.name.toLowerCase()}`); log(`${num(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
-    else { p.runs.forEach(r => afterLine(buildLine(p.mode, p.lv, r.p, 0.3))); toast(`${p.name} built: ${num(p.km)} km`); log(`${p.name} built from near ${town.n}, ${num(p.km)} km long.`); }
+    else { p.runs.forEach(r => afterLine(buildLine(p.mode, p.lv, r.p, 0.3))); toast(`${p.name} built: ${num(p.km)} km`); log(`${p.name} built from near ${town.n}, ${num(p.km)} km long.`); tutEvent(p.mode); }
     clearPreview(); hint(HINTS[TOOL.k]);
   } else if (p.kind === 'zone') {
     if (S.funds < p.cost.lt) return toast(`Need ${fmt(p.cost.lt - S.funds)} more Lt`);
     S.funds -= p.cost.lt;
     let n = 0;
     p.lots.forEach(c => { if (lotOk(c, false)) { addLot(c.x, c.z, c.rot); n++; } });
-    toast(`${n} lot${n === 1 ? '' : 's'} zoned for homes`); clearPreview(); NET.dirty = true;
+    toast(`${n} lot${n === 1 ? '' : 's'} zoned for homes`); clearPreview(); NET.dirty = true; tutEvent('zone');
   } else if (p.kind === 'bull') {
     const q = p.plan, nb = q.b.length;
     applyBull(q);
@@ -297,7 +297,7 @@ function doConfirm() {
     if (m) return toast(m);
     pay(p.cost, town);
     if (p.t === 'hall') newTownAt(p.x, p.z, p.rot);
-    else { addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); }
+    else { addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
     VIEW.ghost = null; PEND = null; VIEW.ver++; showConfirm();
   }
   analyze(); save(); renderPanel(true);

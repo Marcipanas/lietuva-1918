@@ -81,6 +81,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'rshow':{if(!r)return;VIEW.route=VIEW.route===r.id?null:r.id;const p=routePath(r);if(p&&VIEW.route!==null){const m=p.path[p.path.length>>1];focusAt(m[0],m[1],Math.max(cam.dist,Math.min(300,p.len*0.9)));if(window.innerWidth<960)openSide(false)}break}
     case 'rdel':S.confirmRoute=r?r.id:null;break;case 'rkeep':S.confirmRoute=null;break;
     case 'rdel2':if(r){S.funds+=r.n*VT[r.vt].cost*0.5;S.routes.splice(S.routes.indexOf(r),1);if(VIEW.route===r.id)VIEW.route=null;toast('Route removed')}S.confirmRoute=null;break;
+    case 'tutorial':tutStart(true);if(window.innerWidth<960)openSide(false);return;
     case 'reset':S.confirmReset=true;break;case 'cancelr':S.confirmReset=false;break;
     case 'reset2':{const sp=S.speed;newGame();S.speed=sp;analyze();initScene();VIEW.sel=null;VIEW.route=null;clearPreview();camHome();toast('A new republic: 16 February 1918');break}
     case 'confirm':return doConfirm();case 'cancelp':return clearPreview();case 'rotg':return rotateGhost();
@@ -92,7 +93,7 @@ let last=0,acc=0,pT=0;
 function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=dt*TPS[S.speed];let n=0;
   while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)save()}if(NET.dirty)analyze();
   updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
-  pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false)}requestAnimationFrame(frame)}
+  pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);tutTick()}requestAnimationFrame(frame)}
 /* the opening view: Vilnius from the south-west, slightly tilted */
 function camHome(){const v0=S.towns[0];camLoad({x:v0.x+0.4,z:v0.z+0.6,dist:9,yaw:-0.35,pitch:0.74})}
 function start(data){const saved=data&&data.save?data.save:load();let fresh=false;
@@ -109,7 +110,8 @@ function start(data){const saved=data&&data.save?data.save:load();let fresh=fals
   if(window.ResizeObserver)new window.ResizeObserver(()=>resize()).observe(cv);else window.addEventListener('resize',resize);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
   renderTools();renderPanel(true);updateTop();
-  if(fresh)hint('Vilnius, 16 February 1918. Pinch to zoom, twist two fingers to turn, slide them up or down to tilt. Goods move on routes: open the Routes tab.');
+  $('tut').addEventListener('click',e=>{const b=e.target.closest('[data-tut]');if(!b)return;if(b.dataset.tut==='next')tutNext();else tutEnd()});
+  if(!tutStart(false)&&fresh)hint('Vilnius, 16 February 1918. Pinch to zoom, twist two fingers to turn, slide them up or down to tilt. Goods move on routes: open the Routes tab.');
   requestAnimationFrame(frame)}
 try{window.claude?.hot?.snapshot?.(()=>({save:serialize()}))}catch(e){}
 (function(){const hot=window.claude?.hot;hot?.ready?hot.ready(start):start(hot?.data??{})})();

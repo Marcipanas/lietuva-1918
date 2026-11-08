@@ -106,7 +106,8 @@ function natPanel(){const t=totals();let h='';
     <li>Workers fill local jobs first, then walk to towns within ${WALK_KM} km by road, or ride routes set to carry commuters.</li>
     <li>Factories and kilns pollute homes within ${POL_R} km. Schools raise output; clinics lift morale and growth.</li>
     <li>Buildings join a town when a road links them to its town hall within ${TERRITORY} km.</li>
-    <li>Keys: R road, T rail, Z zone, X remove, B build, Space pause, [ and ] turn, Page Up and Down tilt, N north up.</li></ul></details>`;
+    <li>Keys: R road, T rail, Z zone, X remove, B build, Space pause, [ and ] turn, Page Up and Down tilt, N north up.</li>
+    <li><button class="link sm" data-act="tutorial">Show the tutorial again</button></li></ul></details>`;
   h+=S.confirmReset?`<div class="row"><span class="note">Start again from 1918? This game will be lost.</span><button class="btn sm" data-act="reset2">Start again</button><button class="btn sm ghost" data-act="cancelr">Keep playing</button></div>`
     :`<div class="row"><button class="btn sm ghost" data-act="reset">New game</button></div>`;return h}
 function chronPanel(){return `<ul class="chron">${S.log.map(e=>`<li class="${e.k}"><time>${dateStr(e.d)}</time><p>${e.t}</p></li>`).join('')}</ul>`}
