@@ -1,6 +1,6 @@
 {
   "name": "lietuva-1918",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Isometric economy and city builder of Lithuania from 1918. Plain JavaScript and Canvas 2D, no dependencies.",
   "scripts": {
