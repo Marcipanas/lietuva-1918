@@ -1,0 +1,14 @@
+{
+  "name": "lietuva-1918",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Isometric economy and city builder of Lithuania from 1918. Plain JavaScript and Canvas 2D, no dependencies.",
+  "scripts": {
+    "check": "node tools/check.js",
+    "test": "node tools/check.js && node tools/smoke-test.js",
+    "serve": "python3 -m http.server 8080",
+    "build:artifact": "node tools/build-artifact.js",
+    "icons": "python3 tools/make-icons.py"
+  },
+  "engines": { "node": ">=18" }
+}

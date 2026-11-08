@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lietuva 1918</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Build Lithuania from 1918: an isometric economy and city builder with roads, railways, transport routes and seasons.">
+<meta name="theme-color" content="#0f211d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lietuva 1918">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@500;600;700&family=Jost:wght@400;500;600&family=Spectral:ital,wght@0,400;1,400&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="ribbon" aria-hidden="true"></div>
+    <div class="brand">Lietuva <b>1918</b></div>
+    <div class="stats">
+      <div class="st"><span class="k">Date</span><b id="t-date">16 Feb 1918</b><span class="sea" id="t-sea"></span></div>
+      <div class="st"><span class="k">Treasury</span><b id="t-funds">3,000 Lt</b><span class="inc" id="t-inc"></span></div>
+      <div class="st hide-s"><span class="k">Residents</span><b id="t-pop">—</b></div>
+      <div class="st hide-s"><span class="k">Era</span><b id="t-era">Independence</b></div>
+    </div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button data-speed="0" aria-pressed="false" aria-label="Pause"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg></button>
+      <button data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="3" aria-pressed="false">4×</button>
+    </div>
+  </header>
+  <main class="stage">
+    <canvas id="cv" aria-label="Isometric map of Lithuania. Drag to move, pinch or scroll to zoom, tap to select."></canvas>
+    <div id="hint" role="status" hidden></div>
+    <div class="dock">
+      <div id="confirm" hidden></div>
+      <div id="drawer" hidden></div>
+      <div class="dockrow"><nav id="tools" aria-label="Tools"></nav>
+        <button id="fab" aria-label="Open panel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M7 17h4"/></svg>Panel</button></div>
+    </div>
+  </main>
+  <aside class="side" id="side">
+    <div class="sidehead"><nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
+      <button class="x" id="sideClose" aria-label="Close panel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div id="pbody"></div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status"></div>
+<script src="js/common.js"></script>
+<script src="js/data.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/objects.js"></script>
+<script src="js/agents.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/panels.js"></script>
+<script src="js/ui.js"></script>
+<script>
+/* Offline support: register the service worker when served over http(s). Not available inside claude.ai artifacts. */
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})})}
+</script>
+</body>
+</html>
