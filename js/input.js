@@ -238,16 +238,23 @@ function bullThing(b) {
 }
 function setGhost(x, z) {
   const t = TOOL.bt, T0 = BT[t], [w, d] = T0.fp, kind = t === 'station' ? 'rail' : 'road';
-  let gx = x, gz = z, rot = TOOL.rot;
+  let gx = x, gz = z, rot = TOOL.rot, v = null;
   const ne = t === 'hall' || t === 'hydro' ? null : nearestEdge(x, z, kind, Math.max(1.1, d + 0.7));
   if (ne) {
-    const q = polyAt(ne.e.p, ne.e.c, ne.s);
-    let nx = -q[3], nz = q[2];
-    if ((x - q[0]) * nx + (z - q[1]) * nz < 0) { nx = -nx; nz = -nz; }
+    /* face the road; if that spot is taken, slide along the road to the nearest spot that fits */
     const turn = Math.round(TOOL.rot / (Math.PI / 2)) % 2 !== 0, ext = turn ? w : d, off = espec(ne.e).w / 2 + 0.12 + ext / 2;
-    gx = q[0] + nx * off; gz = q[1] + nz * off; rot = faceRot(-nx, -nz) + TOOL.rot;
+    const side0 = (() => { const q = polyAt(ne.e.p, ne.e.c, ne.s); return (x - q[0]) * -q[3] + (z - q[1]) * q[2] < 0 ? -1 : 1; })();
+    search: for (const side of [side0, -side0]) for (const ds of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) {
+      const s = ne.s + ds;
+      if (ds && (s < 0 || s > ne.e.L)) continue;
+      const q = polyAt(ne.e.p, ne.e.c, s), nx = -q[3] * side, nz = q[2] * side;
+      const px = q[0] + nx * off, pz = q[1] + nz * off, pr = faceRot(-nx, -nz) + TOOL.rot, pv = validPlace(t, px, pz, pr);
+      if (!v || pv.ok) { gx = px; gz = pz; rot = pr; v = pv; }
+      if (pv.ok) break search;
+    }
   }
-  const v = validPlace(t, gx, gz, rot), ti = payTown(gx, gz);
+  if (!v) v = validPlace(t, gx, gz, rot);
+  const ti = payTown(gx, gz);
   VIEW.ghost = { t, x: gx, z: gz, rot, ok: v.ok }; VIEW.ver++;
   PEND = { kind: 'place', t, x: gx, z: gz, rot, ok: v.ok, why: v.why, bonus: v.bonus, ti, cost: T0.cost, fx: x, fz: z };
   showConfirm();

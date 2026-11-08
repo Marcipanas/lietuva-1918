@@ -610,9 +610,19 @@ function clipLine(p) {
   return out;
 }
 const dirAt = (cx, cz, a, r) => [cx + Math.sin(a) * r, cz + Math.cos(a) * r];
+/* A spot near (x, z) with dry land all around, for a town hall and its square. */
+function dryNear(x, z) {
+  const ok = (px, pz) => { let good = true; forCellsIn({ x: px, z: pz, rot: 0, w: 2.2, d: 2.2 }, 0, k => { if (!isLandT(TT[k]) || !(TF[k] & F_LT)) good = false; }); return good; };
+  if (ok(x, z)) return [x, z];
+  for (let r = 0.5; r < 6; r += 0.5) for (let q = 0; q < 16; q++) {
+    const a = q / 16 * Math.PI * 2, px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
+    if (ok(px, pz)) return [px, pz];
+  }
+  return landNear(x, z);
+}
 function layoutTown(t, n, pop) {
   const rnd = rng(1000 + n * 7919);
-  const [cx, cz] = landNear(t.x, t.z);
+  const [cx, cz] = dryNear(t.x, t.z);
   t.x = cx; t.z = cz;
   const need = Math.ceil(pop * 1.05 / HOUSE.cap[1]), zoneN = Math.max(5, Math.ceil(need * 0.6));
   const R = 1.7 + Math.sqrt(need + zoneN) * 0.72, rot0 = rnd() * Math.PI * 2;

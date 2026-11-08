@@ -665,6 +665,8 @@ const OVM = {
   pol: decal(new THREE.MeshBasicMaterial({ transparent: true, map: canvasTex(64, 64, (g, w) => { const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); gr.addColorStop(0, 'rgba(115,72,40,0.55)'); gr.addColorStop(1, 'rgba(115,72,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, w); }) }), 5)
 };
 let ovKey = '';
+const FG = {};
+function fieldGhost(c) { return FG[c] || (FG[c] = decal(new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.7 }), 6)); }
 function quadAt(o, mat, pad, y) { const m = new THREE.Mesh(FIELD_GEO, mat); m.position.set(o.x, y || 0, o.z); m.rotation.y = o.rot; m.scale.set(o.w + (pad || 0), 1, o.d + (pad || 0)); m.renderOrder = 6; return m; }
 function ringMesh(x, z, r, w, mat) { const m = new THREE.Mesh(new THREE.RingGeometry(Math.max(0.01, r - w), r, 48).rotateX(-Math.PI / 2), mat); m.position.set(x, 0, z); m.renderOrder = 7; m.userData.own = true; return m; }
 function lineMesh(pts, w, mat, order) { const out = { pos: [], uv: [], idx: [] }; ribbon(pts, w, 0, 1, out); const m = new THREE.Mesh(flatGeo(out), mat); m.renderOrder = order || 6; m.userData.own = true; return m; }
@@ -695,6 +697,7 @@ function buildOverlays() {
   if (g) {
     const M = model(g.t === 'hall' ? 'hall' : g.t), gm = new THREE.Mesh(M.geo, g.ok ? OVM.ghostOk : OVM.ghostBad);
     gm.position.set(g.x, 0, g.z); gm.rotation.y = g.rot; gm.renderOrder = 8; OV.add(gm);
+    if (M.fields) for (const [fx, fz, fw, fd, crop] of M.fields) { const [x, z] = toWorld(g, fx, fz); OV.add(quadAt({ x, z, rot: g.rot, w: fw, d: fd }, fieldGhost(cropCol(crop, 1)), 0, 0)); }
     OV.add(quadAt({ x: g.x, z: g.z, rot: g.rot, w: BT[g.t].fp[0], d: BT[g.t].fp[1] }, g.ok ? OVM.zone : OVM.bad, 0.12));
     if (BT[g.t].pol) OV.add(ringMesh(g.x, g.z, POL_R, Math.max(0.06, lw * 0.6), OVM.bad));
   }
