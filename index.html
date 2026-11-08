@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Lietuva 1918</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Build Lithuania from 1918: an isometric economy and city builder with roads, railways, transport routes and seasons.">
+<meta name="description" content="Build Lithuania from 1918: a 3D economy and city builder with free-form roads, railways, transport routes and seasons.">
 <meta name="theme-color" content="#0f211d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -36,7 +36,10 @@
     </div>
   </header>
   <main class="stage">
-    <canvas id="cv" aria-label="Isometric map of Lithuania. Drag to move, pinch or scroll to zoom, tap to select."></canvas>
+    <canvas id="cv" aria-label="3D map of Lithuania. Drag to move, pinch to zoom, twist two fingers to turn, tap to select."></canvas>
+    <div id="labels"></div>
+    <button id="compass" aria-label="Turn north up"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="n" d="M12 3l3.2 9H8.8z"/><path class="s" d="M12 21l-3.2-9h6.4z"/></svg></button>
+    <div id="tut" role="status" aria-live="polite" hidden></div>
     <div id="hint" role="status" hidden></div>
     <div class="dock">
       <div id="confirm" hidden></div>
@@ -52,16 +55,20 @@
   </aside>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<script src="vendor/three.min.js"></script>
 <script src="js/common.js"></script>
 <script src="js/data.js"></script>
 <script src="js/geo.js"></script>
+<script src="js/geom.js"></script>
+<script src="js/terrain.js"></script>
 <script src="js/world.js"></script>
 <script src="js/sim.js"></script>
-<script src="js/objects.js"></script>
+<script src="js/models.js"></script>
+<script src="js/scene.js"></script>
 <script src="js/agents.js"></script>
-<script src="js/render.js"></script>
 <script src="js/input.js"></script>
 <script src="js/panels.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/ui.js"></script>
 <script>
 /* Offline support: register the service worker when served over http(s). Not available inside claude.ai artifacts. */

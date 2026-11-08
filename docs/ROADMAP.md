@@ -42,23 +42,16 @@ Interwar Lithuania lived on exports: butter, bacon, eggs, flax, timber and live 
 - Sound: ambient sounds by season and zoom, train whistles. Sound must start from a tap.
 - Balance pass for the late game (era 3), once someone has played that far.
 
-## 3. Graphics: how far can this go? (Decision)
+## 3. The 3D world: next steps
 
-The current renderer is Canvas 2D drawing vector shapes on an isometric grid. Options, from cheapest to most ambitious:
-
-| Option | What changes | Effort | Keeps |
-|---|---|---|---|
-| **A. Better 2D art on the grid** | more building variants, hand-drawn sprites, smoothed road curves, terrain height shading, water reflections, night lighting | small steps, any time | everything |
-| **B. Gridless 2D** | roads as free curves (splines), buildings rotated to face roads, polygon collision, a road graph instead of tile layers, zoning along road frontage | large: rewrite world.js, render.js and input.js (about 60% of the code) | sim.js rules, data, UI |
-| **C. 3D in the browser (three.js or Babylon.js)** | real 3D buildings and terrain, lighting, shadows, rotating camera; still a web app, still offline | large: new renderer and models (glTF or procedural low-poly) | sim, data, UI panels |
-| **D. A game engine (Godot 4)** | an editor, scenes, physics, proper mobile and desktop builds, later Steam | full port; the rules port easily, everything else is new | the design and docs |
-
-Recommendation: keep improving with A while the game design settles, because the rules change fastest now and are cheapest to change here. Choose between C and D once the core loop is proven fun:
-- **Web first, play anywhere, keep iterating with Claude in this repo** → C. The simulation stays as it is; only the drawing changes.
-- **A "real" game with installable builds, controller support and maybe a store release** → D. Godot's text scene files work well with AI coding tools; GDScript reads like Python.
-- Unity and Unreal are heavier than this project needs.
-
-**Gridless** (B, or freeform roads inside C or D) is what makes Workers & Resources feel like Workers & Resources, but it is the single most expensive change. It is worth it only if free road building is central to the fun. A middle step: keep the grid in the rules, but draw roads as smooth curves through tile centres and jitter building positions and angles inside their tiles.
+Done in v0.4: no grid, curved roads and railways with automatic junctions, buildings at any angle, a three.js view with a rotating and tilting camera, shadows, seasons, a field patchwork, animated people, vehicles, smoke, animals and boats. Next, roughly in order of value:
+- **Gentle hills.** Lithuania is flat but not perfectly: a height field (uplands of Žemaitija and Aukštaitija, river valleys) under the ground, roads and buildings following it.
+- **Better water:** moving reflections, shores, the Curonian Spit dunes.
+- **Street detail when close:** fences, gardens, lamp posts, people at stations; window lights at dusk, electric light from the Industrialization era.
+- **Road junction shapes:** proper crossroads instead of discs, and curved roads that bank smoothly into each other.
+- **Building variety:** two or three models per type and level, chosen by id; churches and town halls by region.
+- **Performance on older phones:** a low-quality setting (no shadows, fewer trees, lower pixel ratio) and a frame-time watchdog that switches to it.
+- **A game engine (Godot 4)** only if the project wants installable builds or a store release; the rules port, the view would be rebuilt.
 
 ## 4. Platform and offline
 
