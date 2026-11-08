@@ -31,26 +31,23 @@
       <div class="st hide-s"><span class="k">Era</span><b id="t-era">Independence</b></div>
     </div>
     <div class="speed" role="group" aria-label="Game speed">
-      <button data-speed="0" aria-pressed="false" aria-label="Pause"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg></button>
-      <button data-speed="1" aria-pressed="true">1×</button><button data-speed="2" aria-pressed="false">2×</button><button data-speed="3" aria-pressed="false">4×</button>
+      <button id="sp-play" aria-label="Pause"></button><button id="sp-fast" aria-label="Speed">1×</button>
     </div>
   </header>
-  <main class="stage">
+  <main class="stage" id="stage">
     <canvas id="cv" aria-label="3D map of Lithuania. Drag to move, pinch to zoom, twist two fingers to turn, tap to select."></canvas>
     <div id="labels"></div>
     <button id="compass" aria-label="Turn north up"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="n" d="M12 3l3.2 9H8.8z"/><path class="s" d="M12 21l-3.2-9h6.4z"/></svg></button>
     <div id="tut" role="status" aria-live="polite" hidden></div>
     <div id="hint" role="status" hidden></div>
-    <div class="dock">
-      <div id="confirm" hidden></div>
-      <div id="drawer" hidden></div>
-      <div class="dockrow"><nav id="tools" aria-label="Tools"></nav>
-        <button id="fab" aria-label="Open panel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18M7 17h4"/></svg>Panel</button></div>
+    <div class="dock" id="dock">
+      <div id="bar" role="region" aria-label="Tool" hidden></div>
+      <nav id="nav" aria-label="Views"></nav>
     </div>
   </main>
-  <aside class="side" id="side">
-    <div class="sidehead"><nav class="tabs" id="tabs" role="tablist" aria-label="Views"></nav>
-      <button class="x" id="sideClose" aria-label="Close panel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <aside class="side" id="side" aria-label="Details">
+    <div class="grab" id="grab" aria-hidden="true"><i></i></div>
+    <div class="shead" id="shead"></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -70,8 +67,10 @@
 <script src="js/models.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/agents.js"></script>
+<script src="js/tools.js"></script>
 <script src="js/input.js"></script>
 <script src="js/panels.js"></script>
+<script src="js/dash.js"></script>
 <script src="js/tutorial.js"></script>
 <script src="js/ui.js"></script>
 <script>
