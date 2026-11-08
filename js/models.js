@@ -317,9 +317,163 @@ function M_chapel() {
   for (const [x, z] of [[-0.33, -0.2], [-0.33, -0.06], [-0.24, -0.32], [0.3, -0.25]]) m.cb(x, z, 0.008, 0.008, 0, 0.06, '#d9d4c7').cb(x, z, 0.035, 0.008, 0.035, 0.045, '#d9d4c7');
   return { geo: m.geometry(), h: 0.68 };
 }
+/* ---------- landmarks (LANDMARKS in land.js), each fitting its own footprint: model units are twice the footprint in km ---------- */
+const LMC = { whiteWall: '#ece6d8', whiteShade: '#d6cfbf', redBrick: '#a8492f', redBrick2: '#8e3c27', castleBrick: '#9c4a33', tinRoof: '#6f7a72', darkRoof: '#4a3f38',
+  green: '#5f8f6e', grass: '#7f9d5a', gold: '#d8b54a', stone: '#b9b0a0', paving: '#c9bea2' };
+/* a row of columns along x at z, from x0 to x1 */
+function colonnade(m, x0, x1, z, n, r, h, col) { for (let i = 0; i < n; i++) m.cyl(x0 + (x1 - x0) * i / (n - 1), z, r, 0, h, col, col, 6); return m; }
+/* a pediment: a low triangular gable facing +z over a front w wide at height y */
+function pediment(m, x, z, w, d, y, h, col) { return m.gable(x, z, w, d, y, h, col, col, false, 0.004); }
+function spire(m, x, z, r, y, h, col) { return m.cone(x, z, r, y, h, col, 8); }
+/* Gediminas Tower: the steep castle hill, a path up, and the octagonal brick tower with a flag */
+function LM_gedim() {
+  const m = new MB();
+  m.lathe(0, 0, [[0.26, 0], [0.24, 0.06], [0.19, 0.17], [0.13, 0.25], [0.1, 0.27], [0, 0.27]], LMC.grass, 16);
+  m.cb(0.02, 0.02, 0.2, 0.1, 0.25, 0.28, LMC.stone);
+  m.cyl(-0.02, -0.03, 0.055, 0.27, 0.5, LMC.castleBrick, LMC.redBrick2, 8);
+  m.cyl(-0.02, -0.03, 0.06, 0.5, 0.53, '#8a3f2c', '#7b3827', 8);
+  m.wins(-0.075, 0.025, 0.035, 0.025, 0.33, 0.48, 2, 2, MC.dglass, 0.3);
+  m.cb(0.12, 0.13, 0.01, 0.01, 0.24, 0.28, LMC.stone);
+  m.cyl(-0.02, -0.03, 0.004, 0.53, 0.66, '#d9d4c7', null, 4);
+  return { geo: m.geometry(), h: 0.66, flag: [-0.02, -0.03, 0.66] };
+}
+/* Vilnius Cathedral: a classical temple with a portico of six columns, statues on the pediment, and the bell tower in front */
+function LM_cath() {
+  const m = new MB(), W = LMC.whiteWall, S2 = LMC.whiteShade;
+  m.pad(0, 0.04, 0.28, 0.4, 0.002, LMC.paving);
+  m.cb(0, -0.06, 0.24, 0.32, 0, 0.27, W, S2).gable(0, -0.06, 0.24, 0.32, 0.27, 0.08, LMC.tinRoof, W, true, 0.01);
+  m.wins(0.12, 0.08, 0.12, -0.2, 0.06, 0.22, 1, 4, MC.dglass, 0.35).wins(-0.12, -0.2, -0.12, 0.08, 0.06, 0.22, 1, 4, MC.dglass, 0.35);
+  m.cb(0, 0.14, 0.2, 0.08, 0, 0.025, S2);
+  colonnade(m, -0.085, 0.085, 0.165, 6, 0.011, 0.25, W);
+  m.cb(0, 0.135, 0.21, 0.07, 0.25, 0.28, W);
+  pediment(m, 0, 0.135, 0.21, 0.07, 0.28, 0.06, W);
+  for (const x of [-0.08, 0, 0.08]) m.cb(x, 0.155, 0.014, 0.014, x ? 0.29 : 0.34, (x ? 0.29 : 0.34) + 0.04, '#e9e2d0');
+  /* the bell tower, to the south-west front */
+  m.cb(0.115, 0.2, 0.06, 0.06, 0, 0.3, W, S2).cyl(0.115, 0.2, 0.026, 0.3, 0.48, W, S2, 8).cyl(0.115, 0.2, 0.02, 0.48, 0.6, W, S2, 8);
+  spire(m, 0.115, 0.2, 0.021, 0.6, 0.08, LMC.tinRoof);
+  return { geo: m.geometry(), h: 0.68 };
+}
+/* St Anne's: a narrow Gothic front of red brick with three slender towers */
+function LM_onos() {
+  const m = new MB(), B = LMC.redBrick, B2 = LMC.redBrick2;
+  m.cb(0, -0.02, 0.1, 0.18, 0, 0.17, B, B2).gable(0, -0.02, 0.1, 0.18, 0.17, 0.09, LMC.darkRoof, B, true, 0.006);
+  m.cb(0, 0.09, 0.12, 0.03, 0, 0.24, B, B2);
+  pediment(m, 0, 0.09, 0.12, 0.03, 0.24, 0.06, B);
+  for (const x of [-0.05, 0, 0.05]) { m.cb(x, 0.1, 0.022, 0.022, 0, x ? 0.3 : 0.34, B2); spire(m, x, 0.1, 0.014, x ? 0.3 : 0.34, 0.06, B2); }
+  m.wins(-0.04, 0.106, 0.04, 0.106, 0.05, 0.2, 2, 2, MC.dglass, 0.25);
+  return { geo: m.geometry(), h: 0.4 };
+}
+/* Vilnius Town Hall: a classical block with a portico of six Doric columns to the square and a tower behind */
+function LM_vrot() {
+  const m = new MB(), W = LMC.whiteWall, S2 = LMC.whiteShade;
+  m.pad(0, 0.1, 0.4, 0.28, 0.002, LMC.paving);
+  m.cb(0, -0.04, 0.34, 0.3, 0, 0.19, W, S2).hip(0, -0.04, 0.34, 0.3, 0.19, 0.06, LMC.tinRoof, 0.01);
+  m.boxWins(0, -0.04, 0.34, 0.3, 0.03, 0.17, 2, 5, 4, MC.glass, 0.4);
+  colonnade(m, -0.1, 0.1, 0.15, 6, 0.012, 0.17, W);
+  m.cb(0, 0.135, 0.24, 0.06, 0.17, 0.2, W);
+  pediment(m, 0, 0.135, 0.24, 0.06, 0.2, 0.05, W);
+  m.cb(0, -0.15, 0.08, 0.08, 0.19, 0.31, W, S2).cyl(0, -0.15, 0.03, 0.31, 0.37, W, S2, 8);
+  m.lathe(0, -0.15, [[0.034, 0.37], [0.03, 0.4], [0.015, 0.42], [0, 0.44]], LMC.tinRoof, 8);
+  return { geo: m.geometry(), h: 0.44, flag: [0.16, 0.12, 0.25] };
+}
+/* Kaunas Town Hall, the White Swan: a white baroque body with a slender tower of 53 m */
+function LM_krot() {
+  const m = new MB(), W = '#f3f0e8', S2 = '#dcd6c8';
+  m.pad(0, 0.06, 0.36, 0.44, 0.002, LMC.paving);
+  m.cb(0, 0.05, 0.22, 0.3, 0, 0.17, W, S2).gable(0, 0.05, 0.22, 0.3, 0.17, 0.1, LMC.redBrick2, W, true, 0.01);
+  m.boxWins(0, 0.05, 0.22, 0.3, 0.03, 0.16, 2, 3, 6, MC.glass, 0.35);
+  m.cb(0, 0.205, 0.22, 0.012, 0.17, 0.24, W);
+  m.cb(0, -0.15, 0.09, 0.09, 0, 0.4, W, S2).cb(0, -0.15, 0.07, 0.07, 0.4, 0.52, W, S2);
+  m.wins(-0.035, -0.105, 0.035, -0.105, 0.42, 0.5, 1, 1, MC.dglass, 0.5);
+  m.lathe(0, -0.15, [[0.05, 0.52], [0.045, 0.55], [0.022, 0.6], [0.012, 0.66], [0, 0.7]], '#5f7f73', 8);
+  return { geo: m.geometry(), h: 0.7, flag: [0.13, 0.19, 0.24] };
+}
+/* Kaunas Castle: a round tower and a stretch of broken wall */
+function LM_kpil() {
+  const m = new MB(), B = LMC.castleBrick, B2 = '#7f3a28';
+  m.pad(0, 0, 0.26, 0.26, 0.002, LMC.grass);
+  m.cyl(-0.05, -0.04, 0.06, 0, 0.24, B, B2, 10).cone(-0.05, -0.04, 0.066, 0.24, 0.1, '#7a3a2a', 10);
+  m.cb(0.04, -0.06, 0.16, 0.035, 0, 0.13, B, B2).cb(0.1, 0.02, 0.035, 0.14, 0, 0.09, B, B2).cb(0.1, 0.1, 0.035, 0.05, 0, 0.05, B, B2);
+  return { geo: m.geometry(), h: 0.34 };
+}
+/* St Michael the Archangel: neo-Byzantine, a high central dome on a drum, four small domes, and a portico */
+function LM_mykl() {
+  const m = new MB(), W = '#ecebe6', S2 = '#d2d0c8', D = '#4f6e7d';
+  m.pad(0, 0, 0.3, 0.42, 0.002, LMC.paving);
+  m.cb(0, -0.02, 0.24, 0.3, 0, 0.22, W, S2).hip(0, -0.02, 0.24, 0.3, 0.22, 0.03, D, 0.01);
+  m.boxWins(0, -0.02, 0.24, 0.3, 0.05, 0.19, 1, 3, 4, MC.dglass, 0.3);
+  colonnade(m, -0.07, 0.07, 0.165, 4, 0.012, 0.2, W);
+  m.cb(0, 0.15, 0.17, 0.05, 0.2, 0.23, W); pediment(m, 0, 0.15, 0.17, 0.05, 0.23, 0.05, W);
+  m.cyl(0, -0.02, 0.07, 0.25, 0.38, W, S2, 12);
+  m.lathe(0, -0.02, [[0.075, 0.38], [0.07, 0.42], [0.05, 0.47], [0.02, 0.5], [0, 0.51]], D, 12);
+  m.cb(0, -0.02, 0.006, 0.006, 0.51, 0.58, LMC.gold).cb(0, -0.02, 0.03, 0.006, 0.55, 0.56, LMC.gold);
+  for (const [x, z] of [[-0.09, -0.12], [0.09, -0.12], [-0.09, 0.08], [0.09, 0.08]]) { m.cyl(x, z, 0.03, 0.25, 0.31, W, S2, 8); m.lathe(x, z, [[0.033, 0.31], [0.025, 0.35], [0, 0.37]], D, 8); }
+  return { geo: m.geometry(), h: 0.58 };
+}
+/* Klaipėda theatre: a classical front with a pediment, and the Ännchen fountain in the square before it */
+function LM_ktea() {
+  const m = new MB(), W = '#efe3c8', S2 = '#d8caa8';
+  m.pad(0, 0.08, 0.28, 0.08, 0.002, LMC.paving);
+  m.cb(0, -0.05, 0.26, 0.14, 0, 0.18, W, S2).hip(0, -0.05, 0.26, 0.14, 0.18, 0.05, LMC.redBrick2, 0.01);
+  m.boxWins(0, -0.05, 0.26, 0.14, 0.03, 0.16, 2, 6, 3, MC.glass, 0.4);
+  m.cb(0, 0.035, 0.12, 0.03, 0, 0.21, W, S2); pediment(m, 0, 0.035, 0.12, 0.03, 0.21, 0.05, W);
+  m.cyl(0, 0.1, 0.025, 0, 0.012, LMC.stone, '#7ea6b5', 10).cyl(0, 0.1, 0.005, 0.012, 0.05, LMC.stone, null, 5).blob(0, 0.058, 0.1, 0.006, 0.008, 0.006, '#3f4a42');
+  return { geo: m.geometry(), h: 0.26 };
+}
+/* Šiauliai Cathedral: a white Renaissance church whose front tower carries a spire of 70 m */
+function LM_scat() {
+  const m = new MB(), W = '#f2efe6', S2 = '#d8d3c6';
+  m.cb(0, -0.05, 0.18, 0.3, 0, 0.2, W, S2).gable(0, -0.05, 0.18, 0.3, 0.2, 0.08, LMC.darkRoof, W, true, 0.01);
+  m.wins(0.09, 0.08, 0.09, -0.18, 0.06, 0.17, 1, 4, MC.dglass, 0.3).wins(-0.09, -0.18, -0.09, 0.08, 0.06, 0.17, 1, 4, MC.dglass, 0.3);
+  m.cb(0, 0.15, 0.1, 0.1, 0, 0.42, W, S2).cb(0, 0.15, 0.07, 0.07, 0.42, 0.5, W, S2);
+  spire(m, 0, 0.15, 0.05, 0.5, 0.36, LMC.darkRoof);
+  m.cb(0, 0.15, 0.004, 0.004, 0.86, 0.9, LMC.gold);
+  return { geo: m.geometry(), h: 0.9 };
+}
+/* Hill of Crosses: a grassy hill fort covered in wooden crosses */
+function LM_kryz() {
+  const m = new MB(), rnd = rng(1863);
+  m.lathe(0, 0, [[0.28, 0], [0.24, 0.05], [0.16, 0.1], [0, 0.11]], LMC.grass, 14);
+  for (let i = 0; i < 70; i++) {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.24, x = Math.sin(a) * r, z = Math.cos(a) * r, y = 0.11 * Math.max(0, 1 - (r / 0.28) ** 2) - 0.005, h = 0.03 + rnd() * 0.05, c = rnd() < 0.7 ? '#6d4a31' : '#cfc7b6';
+    m.cb(x, z, 0.005, 0.005, y, y + h, c).cb(x, z, 0.022, 0.005, y + h * 0.7, y + h * 0.7 + 0.005, c);
+  }
+  return { geo: m.geometry(), h: 0.2 };
+}
+/* Trakai Island Castle, in ruins: walls and towers of red brick around a court, and the keep, on its island */
+function LM_trak() {
+  const m = new MB(), B = LMC.castleBrick, B2 = '#7f3a28';
+  m.lathe(0, 0, [[0.2, 0], [0.19, 0.012], [0, 0.014]], '#8d9a63', 14);
+  m.cb(0, 0.05, 0.26, 0.02, 0.014, 0.13, B, B2).cb(-0.12, -0.02, 0.02, 0.16, 0.014, 0.1, B, B2).cb(0.12, -0.02, 0.02, 0.12, 0.014, 0.08, B, B2);
+  for (const [x, z, h] of [[-0.12, 0.05, 0.19], [0.12, 0.05, 0.16], [-0.12, -0.1, 0.14]]) m.cyl(x, z, 0.028, 0.014, h, B, B2, 8);
+  m.cb(0, -0.1, 0.16, 0.1, 0.014, 0.26, B, B2).cb(0.05, -0.1, 0.05, 0.05, 0.26, 0.34, B, B2);
+  m.wins(-0.08, -0.05, 0.08, -0.05, 0.08, 0.24, 2, 3, '#3a2a22', 0.3);
+  return { geo: m.geometry(), h: 0.34 };
+}
+/* Tiškevičius Palace in Palanga: a long two-storey front with a raised centre and terrace, in its park */
+function LM_palg() {
+  const m = new MB(), W = '#f1ece0', S2 = '#d9d2c2';
+  m.pad(0, 0, 0.4, 0.28, 0.002, '#6f9a52');
+  m.cb(0, -0.03, 0.36, 0.13, 0, 0.17, W, S2).hip(0, -0.03, 0.36, 0.13, 0.17, 0.05, LMC.tinRoof, 0.008);
+  m.boxWins(0, -0.03, 0.36, 0.13, 0.025, 0.155, 2, 9, 3, MC.glass, 0.45);
+  m.cb(0, 0.05, 0.1, 0.04, 0, 0.21, W, S2); pediment(m, 0, 0.05, 0.1, 0.04, 0.21, 0.04, W);
+  m.cb(0, 0.1, 0.16, 0.06, 0, 0.02, LMC.stone);
+  return { geo: m.geometry(), h: 0.25 };
+}
+/* Anykščiai: a neo-Gothic church of red brick with two spires at the front */
+function LM_anyk() {
+  const m = new MB(), B = '#b2563a', B2 = '#96462f';
+  m.cb(0, -0.04, 0.16, 0.24, 0, 0.21, B, B2).gable(0, -0.04, 0.16, 0.24, 0.21, 0.1, LMC.darkRoof, B, true, 0.008);
+  m.wins(0.08, 0.06, 0.08, -0.14, 0.05, 0.19, 1, 4, MC.dglass, 0.3).wins(-0.08, -0.14, -0.08, 0.06, 0.05, 0.19, 1, 4, MC.dglass, 0.3);
+  for (const x of [-0.05, 0.05]) { m.cb(x, 0.11, 0.06, 0.06, 0, 0.5, B, B2); spire(m, x, 0.11, 0.035, 0.5, 0.45, LMC.darkRoof); }
+  m.cb(0, 0.12, 0.04, 0.04, 0, 0.3, B, B2);
+  return { geo: m.geometry(), h: 0.95 };
+}
 const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), chapel: M_chapel, customs: M_customs, farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
   fishery: M_fishery, forestry: M_forestry, brick: M_brick, warehouse: M_warehouse, station: M_station, port: M_port, school: M_school, clinic: M_clinic,
-  power: M_power, linen: M_factory('#cdb99a'), furniture: M_factory('#9b7652'), hydro: M_hydro, nuclear: M_nuclear, elec: M_elec };
+  power: M_power, linen: M_factory('#cdb99a'), furniture: M_factory('#9b7652'), hydro: M_hydro, nuclear: M_nuclear, elec: M_elec,
+  landmark: LM_kpil, lm_gedim: LM_gedim, lm_cath: LM_cath, lm_onos: LM_onos, lm_vrot: LM_vrot, lm_krot: LM_krot, lm_kpil: LM_kpil, lm_mykl: LM_mykl,
+  lm_ktea: LM_ktea, lm_scat: LM_scat, lm_kryz: LM_kryz, lm_trak: LM_trak, lm_palg: LM_palg, lm_anyk: LM_anyk };
 const MODELS = {};
 /* A model with its extra data scaled to the drawn size. */
 function model(key) {
@@ -331,6 +485,7 @@ function model(key) {
   return MODELS[key] = M;
 }
 function modelKey(b) {
+  if (b.lm && MODEL_FN['lm_' + b.lm]) return 'lm_' + b.lm;
   if (b.t !== 'hall' || b.ti === undefined || !S.towns[b.ti]) return b.t;
   const t = S.towns[b.ti];
   return t.vil ? 'chapel' : t.capital ? 'hallCap' : 'hall';

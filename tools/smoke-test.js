@@ -62,12 +62,17 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   out.tut0=TUT.on&&TUT.step===0;out.towns=S.towns.length;out.vils=S.towns.filter(x=>x.vil).length;out.named=TOWNS0.length+TOWNS1.length;out.pop0=totals().pop;
   out.halls=S.towns.every((x,n)=>S.bld.some(b=>b.t==='hall'&&b.ti===n));out.homes=S.towns.every((x,n)=>x.lock||S.bld.some(b=>b.t==='house'&&b.town===n));out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
   out.edges=S.edges.length;out.houses=S.bld.filter(b=>b.t==='house').length;out.lots=S.lots.length;
+  /* the 1918 map: every place of PLACES, landmarks, road links everywhere, rail and highways to the main towns, neighbours by country */
+  const cap0=S.towns.findIndex(x=>x.capital);out.places=S.towns.length===PLACES.length&&typeof WORLD1918!=='undefined';out.lm=S.bld.filter(b=>b.lm).length;
+  out.roadAll=S.towns.filter((x,n)=>!x.lock&&NET.comp[n]!==NET.comp[cap0]).map(x=>x.n);out.linked0=totals().linked;out.railKm=Math.round(NET.km.rail[1]);out.paved=Math.round(NET.km.road[2]);
+  const kh=S.bld.find(b=>b.lm==='krot'),kp=ll2xz(23.8857,54.8968);out.kauHall=!!kh&&Math.hypot(kh.x-kp[0],kh.z-kp[1])<0.05;
+  const bp=(lo,la)=>{const p=ll2xz(lo,la);return borderOf(p[0],p[1])};out.gates=[bp(22.78,54.65),bp(24.4,56.38),bp(26.0,54.95),bp(23.5,54.05)].join(',');
   run(20,16);S.speed=3;run(120,100);out.day1=S.day;out.walkers=WALK.length;out.vehicles=VEH.length;out.renders=R3.calls;
   const kau=S.towns.find(x=>x.id==='kau'),aly=S.towns.find(x=>x.id==='aly'),ki=S.towns.indexOf(kau),ai=S.towns.indexOf(aly);
   /* a road from Kaunas to Alytus, drawn as a finger trace */
   const a=townExit(ki,aly),b=townExit(ai,kau);cam.dist=140;applyCam();setTool('road');
   beginDraw(a.x,a.z);moveDraw(a.x+(b.x-a.x)*0.5,a.z+(b.z-a.z)*0.5);moveDraw(b.x,b.z);finishDraw();
-  out.roadPend=!!(PEND&&PEND.kind==='line'&&!PEND.bad);out.roadWhy=PEND&&PEND.bad;out.roadKm=PEND&&PEND.km;doConfirm();analyze();out.alyLinked=NET.linked.has(ai);
+  const road0=NET.km.road[1];out.roadPend=!!(PEND&&PEND.kind==='line'&&!PEND.bad);out.roadWhy=PEND&&PEND.bad;out.roadKm=PEND&&PEND.km;doConfirm();analyze();out.roadAdded=NET.km.road[1]-road0;
   act({act:'newroute',a:String(ki),b:String(ai),m:'road'});const r=S.routes[S.routes.length-1];routeEval(r);out.newRouteOk=r.ok&&r.a===ki&&r.b===ai;
   act({act:'rveh',r:String(r.id),d:'1'});act({act:'rcargo',r:String(r.id),dir:'ab',res:'grain'});act({act:'rpax',r:String(r.id)});out.routeEdit=r.n===3&&Array.isArray(r.ab)&&r.pax;
   /* place buildings around Kaunas, the way the ghost follows a finger */
@@ -107,11 +112,12 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   selectTown(ki,true);renderPanel(true);['routes','trade','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
   const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}toggleDrawer(true);toggleDrawer(false);
   [2,8,30,90,400].forEach(d=>{cam.dist=d;cam.anim=null;run(3,16)});
-  out.tut=TUT.step;S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize());
+  out.tut=TUT.step;S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize(),SAVE_NUM);
   restore(JSON.parse(str));analyze();initScene();run(3,16);
   out.roundtrip=S.day===snap.day&&S.bld.length===snap.b&&S.routes.length===snap.r&&Math.round(S.funds)===snap.f&&S.edges.length===snap.e&&S.lots.length===snap.l;
   out.saveKB=Math.round(str.length/1024);out.saved=!!localStorage.getItem(SAVE_KEY);return out})()`;
 let o;
+const LANDMARKS_N = vm.runInContext('LANDMARKS', sandbox);
 try { o = vm.runInContext(session, sandbox, { filename: 'session' }); }
 catch (e) { console.error('✗ play session threw: ' + (e.stack || e)); process.exit(1); }
 assert(o.towns >= o.named + 100 && o.vils >= 100, `${o.towns} settlements generated (${o.towns - o.vils} towns, ${o.vils} villages)`);
@@ -119,7 +125,11 @@ assert(o.halls && o.homes, 'every settlement has a town hall or chapel, and ever
 assert(o.edges > 50 && o.houses > 60 && o.lots > 20, `towns laid out (${o.edges} road and rail edges, ${o.houses} house lots, ${o.lots} zoned lots)`);
 assert(o.routes0 >= 6 && o.histOk, `${o.routes0} historic routes, all running`);
 assert(o.renders > 0 && o.vehicles > 0, `3D frames render and route vehicles (${o.vehicles}) spawn`);
-assert(o.roadPend && o.alyLinked, `road tool links Alytus to the network${o.roadWhy ? ': ' + o.roadWhy : ` (${(o.roadKm || 0).toFixed(1)} km)`}`);
+assert(o.places && o.lm === Object.keys(LANDMARKS_N).length && o.kauHall, `the start map loads with every place of 1918 and ${o.lm} landmarks at their real places`);
+assert(!o.roadAll.length, `dirt roads join every open settlement to Vilnius${o.roadAll.length ? ' (cut off: ' + o.roadAll.join(', ') + ')' : ''}`);
+assert(o.linked0 >= 30 && o.railKm > 1000 && o.paved > 400, `${o.linked0} towns linked to Vilnius by ${o.railKm} km of railway and ${o.paved} km of paved highway`);
+assert(o.gates === 'de,lv,pl,pl', `border posts trade with the country across: East Prussia, Latvia, Belarus (Polish), Poland (${o.gates})`);
+assert(o.roadPend && o.roadAdded > 0.5, `road tool builds a road from Kaunas toward Alytus${o.roadWhy ? ': ' + o.roadWhy : ` (${(o.roadAdded || 0).toFixed(1)} km new)`}`);
 assert(o.newRouteOk, 'new road route Kaunas–Alytus is created and valid');
 assert(o.routeEdit, 'route editor: vehicles, cargo and commuters change');
 assert(o.placed.every(Boolean), `warehouse, school, pig farm and dairy farm can be placed near Kaunas (${o.placed.join(', ')})`);

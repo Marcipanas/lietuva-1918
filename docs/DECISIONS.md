@@ -45,7 +45,7 @@ The owner asked for a bigger map with more towns and villages. Stretching the co
 Towns and villages had to be supplied or they starved, which made 220 settlements impossible to manage. Now each feeds and heats its 1918 population from its own land (subsistence added to its stock), and growth beyond that needs the player's food, homes and jobs. Towns hold steady without help and grow only with buildup. Growth also waits until food stocks stop falling, so towns do not boom on their starting stock and then starve.
 
 ## 15. Villages are full settlements (2026-11, v0.5)
-Villages are towns with `vil = 1`: they have stock, people, homes and a chapel, take part in routes, trade and commuting, but pay half the tax, need no power, and count apart from towns in goals. Workplaces prefer towns (a 6 km head start for villages), so a farm beside a village joins the town that has workers. Village names come from a list of typical names placed at random; real villages are not placed at their real sites.
+Villages are towns with `vil = 1`: they have stock, people, homes and a chapel, take part in routes, trade and commuting, but pay half the tax, need no power, and count apart from towns in goals. Workplaces prefer towns (a 6 km head start for villages), so a farm beside a village joins the town that has workers. Village names came from a list of typical names placed at random (until v0.6, see 20).
 
 ## 16. Trade through gateway towns, with deals (2026-11, v0.5)
 The roadmap sketched trade routes whose far end is a foreign market. Instead, foreign trade happens in the town that owns a border post or a port, as standing deals that sell from or buy into its stock. Routes still carry the goods to the border, so geography matters, and the route system did not need a second kind of endpoint. Local merchants (the old Sell and Buy) stay at worse prices.
@@ -55,3 +55,18 @@ The game follows real history past 1938, including the Soviet occupation, the wa
 
 ## 18. Neighbours from catchments, paths on demand (2026-11, v0.5)
 All-pairs town paths cost 221 Dijkstra runs per change. Now one sweep from all halls finds which towns' catchments meet (the Voronoi neighbours of the road graph) with exact lengths, union-find gives linked groups, and a single path is computed only when a route or panel asks, with early exit and a cache keyed by `NET.ver`.
+
+## 19. Real geography from open data (2026-11, v0.6)
+The owner asked for accurate borders, every place in its proper location, and neighbours clearly shown. The hand-drawn outlines were replaced by data built offline in `tools/geo`: OpenStreetMap borders (ODbL), Natural Earth coast, lakes and rivers (public domain), and Euronym place names (EuroGeographics Open Data Licence), all reachable from the build machine through GitHub. Natural Earth rivers are a kilometre or two off, so they are bent onto the towns that stand on them, the Nemunas below Smalininkai is laid on the border line, and the Kaunas confluence is drawn by hand. The neighbours are drawn with today's borders and named in Lithuanian; the Kaliningrad region is called East Prussia, as it was until 1945. Generated data lives in `js/geo.js`, hand-drawn data in `js/land.js`.
+
+## 20. Every place of 1918, at its real site (2026-11, v0.6; replaces the random villages of 15)
+All 89 towns that existed in 1918 and 362 villages (Euronym's most prominent) stand at their real coordinates; the five cities start from their old centre, not Euronym's label point. Towns founded later are left out and offered as names when the player founds a town. Smaller towns get a size from today's population, which is rough; the main towns keep their written 1918 sizes.
+
+## 21. A precomputed start map (2026-11, v0.6)
+Laying out 451 settlements, 1,300 km of railway and 8,000 km of roads takes about 16 s, too long for a phone at every new game. `tools/build-world.js` runs `genWorld()` once and stores the result in `js/world1918.js` (340 KB) in the save format; `tools/check.js` fails when the files it was made from change, so it is rebuilt with `npm run world`. The A* planner compares costs in Float32 precision now: comparing a float64 sum with a stored float32 made endless tiny "improvements" on long paths, which hid behind the expansion limit as failed plans.
+
+## 22. Dirt roads everywhere; linked means railway or paved road (2026-11, v0.6)
+In 1918 every village had a road, so the start map joins all settlements by dirt roads (the relative neighbourhood graph, which gives a natural mesh without parallel roads). A road link no longer counts as progress, so "linked to Vilnius" now means a railway or paved road reaches the town's streets, and the power grid follows the same network. Dirt roads cost no upkeep. Ministry tasks follow the interwar railways (Marijampolė 1924, Telšiai 1926, Klaipėda through Telšiai 1932).
+
+## 23. Cities from their real main streets, with landmarks (2026-11, v0.6)
+Big cities keep the five-times scale of houses, so a true-scale plan holds only their main streets: these are laid where the real ones run, as paved roads, and a 1 km grid fills the rest. Landmarks stand at their real coordinates at about twice life size; at five times they would overlap each other in the old towns. Vilnius and Kaunas town halls are the landmark town halls. Rivers are drawn narrower than before (the Nemunas 0.45 km) so the old towns between them have room, and lots test the drawn water exactly (`waterHit`) because the 0.5 km raster is too coarse.

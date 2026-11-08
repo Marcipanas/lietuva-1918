@@ -22,13 +22,11 @@ const GATE_N = { sea: 'a sea port', de: 'a border post on the East Prussian bord
 const MKT_CAP = 20, DUTY = 0.1;
 const FOODS = new Set(FOOD);
 
-/* The country across the nearest border: Latvia to the north, East Prussia (Germany) to the south-west, Poland to the south and east. */
+/* The market across the nearest border: Latvia, East Prussia (Germany), or Poland (which also held the Belarusian side between the wars). */
 function borderOf(x, z) {
   let best = null, bd = 1e9;
-  forDisk(x, z, 3.5, (k, d) => { if (TT[k] === T_FOREIGN && d < bd) { bd = d; best = k; } });
-  if (best === null) return '';
-  const [lo, la] = xz2ll(cellX(best), cellZ(best));
-  return la >= 55.67 ? 'lv' : lo <= 22.85 && la >= 54.35 ? 'de' : 'pl';
+  forDisk(x, z, 3.5, (k, d) => { if (CTY[k] > 1 && d < bd) { bd = d; best = k; } });
+  return best === null ? '' : CTY_GATE[CTY[best]];
 }
 /* How town ti reaches markets: 'sea' for a port, a country code for a border post, 'rail' for a station. */
 function townGates(ti) {

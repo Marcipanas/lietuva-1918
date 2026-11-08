@@ -3,32 +3,55 @@
 let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
-  S={v:5,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
+  S={v:6,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
     towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'sel',cam:null};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
-  genWorld();analyze();
+  if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else genWorld();
+  analyze();
   HIST_ROUTES.forEach(([a,b,m,vt,n])=>addRoute(tIdx(a),tIdx(b),m,vt,n,true));
   S.log=[
     {d:0,t:'Goods only move on transport routes. Open the Routes tab to see the old railway lines and cart routes, and add your own.',k:''},
     {d:0,t:'Every town and village feeds and heats its people from its own fields and woodlots, so it keeps its size without help. To grow it needs more food, homes and work.',k:''},
-    {d:0,t:'Alytus, Tauragė and Utena have no road to the rest of the country. Link them so they can trade.',k:''},
+    {d:0,t:'Dirt roads join every town and village. Railways and the old paved highways link the main towns to Vilnius. Bring them to the rest.',k:''},
     {d:0,t:'People are happier with more kinds of food on the table: grain, potatoes, dairy, meat and fish. In winter every home burns peat or timber.',k:''},
     {d:0,t:'The Council of Lithuania signs the Act of Independence in Vilnius. The new state must build an economy almost from nothing.',k:'hist'}];
 }
-/* Saved games: the graph and lots as compact arrays (coordinates to 10 m), and only the terrain cells that changed. */
-const r2=v=>Math.round(v*100)/100;
-function serialize(){if(typeof camSave==='function')S.cam=camSave();const o={...S};
-  o.nodes=S.nodes.map(n=>[n.id,r2(n.x),r2(n.z)]);
-  o.edges=S.edges.map(e=>[e.id,e.k==='rail'?1:0,e.lv,e.a,e.b,e.p.map(q=>[r2(q[0]),r2(q[1])])]);
-  o.lots=S.lots.map(l=>[l.id,r2(l.x),r2(l.z),Math.round(l.rot*1000)/1000]);o.tf=tfDiff();return o}
-function restore(o){const tf=o.tf;S=o;delete S.tf;
-  S.nodes=o.nodes.map(a=>({id:a[0],x:a[1],z:a[2]}));
-  S.edges=o.edges.map(a=>({id:a[0],k:a[1]?'rail':'road',lv:a[2],a:a[3],b:a[4],p:a[5]}));
-  S.lots=o.lots.map(a=>({id:a[0],x:a[1],z:a[2],rot:a[3],town:-1,cd:0}));
-  genTerrain();tfApply(tf);rebuildIndex();NET.dirty=true}
-function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize()))}catch(e){}}
-function load(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);return o&&o.v===5&&o.edges&&o.towns?o:null}catch(e){return null}}
+/* Saved games and the 1918 start map (js/world1918.js) share one compact form: coordinates in 10 m steps, lines as steps from
+   the previous point (straight runs simplified away, densified again on load), buildings and lots as short arrays, and only
+   the terrain cells that changed. */
+const r2=v=>Math.round(v*100)/100,r3=v=>Math.round(v*1000)/1000;
+function encLine(p){const o=[];let px=0,pz=0;for(const q of rdp(p,0.01)){const x=Math.round(q[0]*100),z=Math.round(q[1]*100);o.push(x-px,z-pz);px=x;pz=z}return o}
+function decLine(a){const o=[];let x=0,z=0;for(let i=0;i<a.length;i+=2){x+=a[i];z+=a[i+1];o.push([x/100,z/100])}return densify(o,0.8)}
+const BKEEP=['ti','lm','fp','f'];
+function encB(b){const x={};BKEEP.forEach(k=>{if(b[k]!==undefined)x[k]=b[k]});return [b.id,b.t,r2(b.x),r2(b.z),r3(b.rot),b.lv,b.on?1:0,Object.keys(x).length?x:0]}
+function decB(a){return Object.assign({id:a[0],t:a[1],x:a[2],z:a[3],rot:a[4],lv:a[5],on:!!a[6],eff:0,why:'Starting',town:-1,cd:0,k:1},a[7]||{})}
+function encWorld(){return {nodes:S.nodes.map(n=>[n.id,r2(n.x),r2(n.z)]),edges:S.edges.map(e=>[e.id,e.k==='rail'?1:0,e.lv,e.a,e.b,encLine(e.p)]),
+  bld:S.bld.map(encB),lots:S.lots.map(l=>[l.id,r2(l.x),r2(l.z),r3(l.rot)]),tf:tfDiff()}}
+function decWorld(o){S.nodes=o.nodes.map(a=>({id:a[0],x:a[1],z:a[2]}));const N=new Map(S.nodes.map(n=>[n.id,n]));
+  S.edges=o.edges.map(a=>{const p=decLine(a[5]),A=N.get(a[3]),B=N.get(a[4]);p[0]=[A.x,A.z];p[p.length-1]=[B.x,B.z];return {id:a[0],k:a[1]?'rail':'road',lv:a[2],a:a[3],b:a[4],p}});
+  S.bld=o.bld.map(decB);S.lots=o.lots.map(a=>({id:a[0],x:a[1],z:a[2],rot:a[3],town:-1,cd:0}));
+  genTerrain();tfApply(o.tf);rebuildIndex();NET.dirty=true}
+/* The start map: the world, its counters, and the settlements (flags: 1 capital, 2 from 1918, 4 locked, 8 Klaipėda Region, 16 village) */
+function encStartMap(){return Object.assign({gid:S.gid,nid:S.nid,lid:S.lid,towns:S.towns.map(t=>[t.id,t.n,t.reg,(t.capital?1:0)|(t.orig?2:0)|(t.lock?4:0)|(t.kr?8:0)|(t.vil?16:0),
+  r2(t.R),r2(t.x),r2(t.z),t.d,t.pop0,t.stock])},encWorld())}
+function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
+  S.towns=W.towns.map(a=>{const f=a[3];return newTown(a[0],a[1],a[5],a[6],{reg:a[2],capital:f&1,orig:f&2?1:0,lock:f&4?1:0,kr:f&8?1:0,vil:f&16?1:0,R:a[4],d:a[7],pop0:a[8],pop:f&4?0:a[8],stock:{...a[9]}})});
+  decWorld(W)}
+/* Towns are saved without what every day recomputes (dem, ate), without empty stock, and without the 1918 descriptions,
+   which come back from the start map. */
+const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
+function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
+  o.towns=S.towns.map(t=>{const c={};for(const k in t){if(k==='dem'||k==='ate'||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
+function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;
+  const desc=new Map(typeof WORLD1918!=='undefined'&&WORLD1918?WORLD1918.towns.map(a=>[a[0],a[7]]):[]);
+  S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};if(t.d===undefined)t.d=desc.get(t.id)||''});decWorld(W)}
+const SAVE_NUM=(k,v)=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*1e4)/1e4:v;
+function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize(),SAVE_NUM))}catch(e){}lastSave=Date.now()}
+/* the frame loop saves at most every 20 seconds: the map makes a save of a few hundred KB */
+let lastSave=0;
+function autosave(){if(Date.now()-lastSave>20000)save()}
+function load(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);return o&&o.v===6&&o.edges&&o.towns?o:null}catch(e){return null}}
 /* yo: only the year of this event is known, so the chronicle shows the year alone */
 function log(t,k,yo){S.log.unshift({d:S.day,t,k:k||'',yo:yo?1:0});if(S.log.length>150)S.log.length=150}
 
@@ -132,7 +155,7 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&fbal>=-0.01)))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
   S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();
-  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
+  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
   if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Food is running out in ${t.n}. People are leaving.`,'warn')}
   else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Homes in ${t.n} are cold. Send peat or timber.`,'warn')}
   RES.forEach(r=>{if((st[r]||0)<1e-4)st[r]=0;if(st[r]>t.cap)st[r]=t.cap})}
@@ -159,16 +182,16 @@ const REV=[
   ()=>{const t=S.towns[pick(activeIdx())],l=Math.floor((t.stock.grain||0)*0.25);if(l<1)return null;t.stock.grain-=l;return [`A wet harvest spoils ${l} grain in ${t.n}.`,'warn']},
   ()=>{if(S.era<2)return null;S.prices.textiles=Math.min(RI.textiles.p*1.6,S.prices.textiles*1.3);return ['Linen is in fashion in Western Europe. Cloth prices rise.','']}];
 const OBJ=[
-  {id:'aly',t:'Link Alytus to the rest of the country',r:600,ok:()=>NET.linked.has(tIdx('aly'))},
   {id:'route',t:'Set up a new transport route',r:400,ok:()=>S.stats.routesMade>0},
-  {id:'ute',t:'Link Utena',r:600,ok:()=>NET.linked.has(tIdx('ute'))},
+  {id:'mar',t:'Bring the railway to Marijampolė (it came in 1924)',r:800,ok:()=>NET.rail.has(tIdx('mar'))},
   {id:'food3',t:'Give a town three kinds of food',r:800,ok:()=>S.towns.some(t=>!t.lock&&t.vari>=3)},
-  {id:'tau',t:'Link Tauragė',r:600,ok:()=>NET.linked.has(tIdx('tau'))},
+  {id:'tel',t:'Bring the railway to Telšiai (it came in 1926)',r:800,ok:()=>NET.rail.has(tIdx('tel'))},
   {id:'wh',t:'Build a warehouse',r:300,ok:()=>S.bld.some(b=>b.t==='warehouse')},
+  {id:'bir',t:'Link Biržai to Vilnius by rail or paved road',r:600,ok:()=>NET.linked.has(tIdx('bir'))},
   {id:'school',t:'Open a school',r:400,ok:()=>S.bld.some(b=>b.t==='school')},
   {id:'town',t:'Found a new town',r:1000,ok:()=>S.towns.some(t=>!t.orig)},
   {id:'p800',t:'Reach 800k residents',r:1500,ok:()=>totals().pop>=800},
-  {id:'kla',t:'Link Klaipėda after it joins in 1923',r:1500,ok:()=>NET.linked.has(tIdx('kla'))},
+  {id:'kla',t:'Link Klaipėda to the railways of Lithuania after it joins in 1923 (done in 1932, through Telšiai)',r:1500,ok:()=>NET.rail.has(tIdx('kla'))},
   {id:'port',t:'Sell goods through the port',r:800,ok:()=>S.stats.portSales>0},
   {id:'trade',t:'Sell goods abroad through a border post or a port',r:600,ok:()=>S.deals.some(d=>d.dir==='out'&&d.done>0)},
   {id:'era2',t:'Enter the Industrialization era',r:2000,ok:()=>S.era>=2},
@@ -183,8 +206,8 @@ function tick(){
   BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b.na)}});
   act.forEach(n=>{before[n]={...S.towns[n].stock};phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
-  const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.comp[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
-  act.forEach(n=>{const t=S.towns[n],c=NET.comp[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
+  const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
+  act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
   act.forEach(n=>phase2(n,sea));
   runRoutes();runDeals();
   act.forEach(n=>{const t=S.towns[n];if(t.pop>=t.house*0.92&&t.fed>=0.99&&t.h>=45){if(++t.dev>=5){t.dev=0;develop(n)}}else if(t.pop<t.house*0.85)t.hint=''});
@@ -204,7 +227,7 @@ function totals(){const t={pop:0,towns:0,vils:0,vpop:0,linked:0,lit:true,stock:{
     RES.forEach(r=>{t.stock[r]+=x.stock[r]||0;t.dl[r]+=x.dl[r]||0})});return t}
 function eraReq(){const n=S.era+1;if(n>3)return null;const R0=ERAS[n].req,t=totals(),L0=[];
   L0.push({t:`${popStr(R0.pop)} residents`,ok:t.pop>=R0.pop,q:popStr(t.pop)});
-  L0.push({t:`${R0.linked} towns linked to Vilnius`,ok:t.linked>=R0.linked,q:t.linked+' of '+t.towns});
+  L0.push({t:`${R0.linked} towns linked to Vilnius by rail or paved road`,ok:t.linked>=R0.linked,q:t.linked+' of '+t.towns});
   if(R0.bricks)L0.push({t:`${R0.bricks} bricks in stock`,ok:t.stock.bricks>=R0.bricks,q:fmt(t.stock.bricks)});
   if(R0.textiles)L0.push({t:`${R0.textiles} linen cloth in stock`,ok:t.stock.textiles>=R0.textiles,q:fmt(t.stock.textiles)});
   L0.push({t:`${fmt(R0.lt)} Lt to invest`,ok:S.funds>=R0.lt,q:fmt(S.funds)});return L0}

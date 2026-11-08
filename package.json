@@ -1,14 +1,18 @@
 {
   "name": "lietuva-1918",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Gridless 3D economy and city builder of Lithuania from 1918. Plain JavaScript and three.js, no build step.",
   "scripts": {
     "check": "node tools/check.js",
     "test": "node tools/check.js && node tools/smoke-test.js",
     "serve": "python3 -m http.server 8080",
+    "world": "node tools/build-world.js",
+    "geo": "python3 -I tools/geo/write_geo.py",
     "build:artifact": "node tools/build-artifact.js",
     "icons": "python3 tools/make-icons.py"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -2,11 +2,13 @@
 /* Lietuva 1918 — terrain. A hidden raster of CELL-km cells holds terrain type and features (forest, soil, bog, clay)
    for the rules and the path planner. The player sees smooth 3D ground drawn from it; nothing snaps to it. */
 const TT = new Uint8Array(GW * GH), TF = new Uint8Array(GW * GH), TF0 = new Uint8Array(GW * GH);
+/* CTY: the country of each cell, 0 for water. CTY_ID gives the codes; CTY_GATE the market a border post there trades with
+   (East Prussia was Germany; the Belarusian side was Polish between the wars). */
+const CTY = new Uint8Array(GW * GH), CTY_ID = { lt: 1, lv: 2, by: 3, pl: 4, ru: 5 }, CTY_GATE = [null, null, 'lv', 'pl', 'pl', 'de'];
 /* BLK marks what is built on each cell for the path planner: 1 building, 2 road, 4 railway, 8 zoned lot. */
 const BLK = new Uint8Array(GW * GH);
 let terrainHook = null; // set by the renderer: called with a list of changed cells (forest cleared or deposits added)
 let exactBlock = null;  // set by the world: true when a straight line would pass through a building
-const RIVW = [0.62, 0.48, 0.36, 0.34, 0.28, 0.32, 0.28, 0.28, 0.28]; // river widths in km, same order as RIV
 
 function ll2xz(lon, lat) { return [(lon - LON0) * KMX, (LAT1 - lat) * KMY]; }
 function xz2ll(x, z) { return [x / KMX + LON0, LAT1 - z / KMY]; }
@@ -38,9 +40,14 @@ function fillPoly(pxz, fn) {
     }
   }
 }
-/* Cells within r km of a polyline. r is at least 0.36 so a stamped line has no diagonal gaps. */
+/* Scanline fill of a polygon with holes ({o, h} in lon/lat): cells inside the outer ring and outside every hole. */
+function fillGeoPoly(w, fn) {
+  const holes = new Set();
+  w.h.forEach(h => fillPoly(polyXZ(h), k => holes.add(k)));
+  fillPoly(polyXZ(w.o), k => { if (!holes.has(k)) fn(k); });
+}
+/* Cells within r km of a polyline. Below 0.36 km a stamped line can have diagonal gaps. */
 function stampLine(pxz, r, fn) {
-  r = Math.max(r, 0.36);
   for (let s = 1; s < pxz.length; s++) {
     const a = pxz[s - 1], b = pxz[s];
     const i0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - r) / CELL)), i1 = Math.min(GW - 1, Math.floor((Math.max(a[0], b[0]) + r) / CELL));
@@ -74,18 +81,27 @@ let TERRAIN_READY = false;
 /* The terrain is the same in every game, so it is generated once; later calls only reset the features. */
 function genTerrain() {
   if (TERRAIN_READY) { TF.set(TF0); return; }
-  TT.fill(T_FOREIGN); TF.fill(0);
-  fillPoly(polyXZ(LT), k => { TT[k] = T_LAND; TF[k] |= F_LT; });
-  fillPoly(polyXZ(KR), k => { if (TF[k] & F_LT) TF[k] |= F_KR; });
-  fillPoly(polyXZ(SEA), k => { TT[k] = T_SEA; TF[k] = 0; });
-  fillPoly(polyXZ(LAG), k => { TT[k] = T_LAGOON; TF[k] = 0; });
-  stampLine(polyXZ(SPIT), 0.5, k => {
-    if (TT[k] !== T_SEA && TT[k] !== T_LAGOON) return;
-    if (xz2ll(cellX(k), cellZ(k))[1] > 55.28) { TT[k] = T_SAND; TF[k] = F_LT | F_KR; } else { TT[k] = T_FOREIGN; TF[k] = 0; }
-  });
-  /* sandy shore along the open sea */
-  const shoreRows = Math.min(GH, Math.ceil((LAT1 - 55.74) * KMY / CELL));
-  for (let k = 0; k < shoreRows * GW; k++) {
+  /* water first, then each country's land; cells left over from simplified outlines take a neighbour's value */
+  const UNK = 255;
+  TT.fill(UNK); TF.fill(0); CTY.fill(0);
+  GEO_SEA.forEach(w => fillGeoPoly(w, k => { TT[k] = T_SEA; }));
+  GEO_LAG.forEach(w => fillGeoPoly(w, k => { TT[k] = T_LAGOON; }));
+  for (const c of ['lv', 'by', 'pl', 'ru']) GEO_C[c].forEach(r => fillPoly(polyXZ(r), k => { TT[k] = T_FOREIGN; CTY[k] = CTY_ID[c]; TF[k] = 0; }));
+  GEO_LT.forEach(r => fillPoly(polyXZ(r), k => { TT[k] = T_LAND; CTY[k] = 1; TF[k] = F_LT; }));
+  for (let left = 1, pass = 0; left && pass < 8; pass++) {
+    left = 0;
+    for (let k = 0; k < GW * GH; k++) {
+      if (TT[k] !== UNK) continue;
+      const i = k % GW, j = (k / GW) | 0;
+      const n = [i > 0 ? k - 1 : -1, i < GW - 1 ? k + 1 : -1, j > 0 ? k - GW : -1, j < GH - 1 ? k + GW : -1].find(q => q >= 0 && TT[q] !== UNK);
+      if (n === undefined) { left++; continue; }
+      TT[k] = TT[n]; CTY[k] = CTY[n]; TF[k] = TF[n] & F_LT;
+    }
+  }
+  for (let k = 0; k < GW * GH; k++) if (TT[k] === UNK) TT[k] = T_FOREIGN;
+  GEO_KR.forEach(r => fillPoly(polyXZ(r), k => { if (TF[k] & F_LT) TF[k] |= F_KR; }));
+  /* sandy shore along the open sea, and the dunes of the Curonian Spit */
+  for (let k = 0; k < GW * GH; k++) {
     if (TT[k] !== T_LAND) continue;
     const i = k % GW, j = (k / GW) | 0;
     for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
@@ -93,13 +109,13 @@ function genTerrain() {
       if (ii >= 0 && jj >= 0 && ii < GW && jj < GH && TT[jj * GW + ii] === T_SEA) { TT[k] = T_SAND; dj = di = 9; }
     }
   }
-  RIV.forEach((r, n) => stampLine(polyXZ(r.p), (RIVW[n] || 0.3) / 2, k => {
-    if (TT[k] === T_LAND || TT[k] === T_FOREIGN || TT[k] === T_SAND) TT[k] = T_RIVER;
-  }));
+  /* rivers wide enough for the raster: cells within half their width (at least 0.26 km) of the line */
+  GEO_RIV.forEach(r => { if (!r.thin) stampLine(polyXZ(r.p), Math.max(0.26, r.w / 2), k => { if (TT[k] === T_LAND || TT[k] === T_FOREIGN || TT[k] === T_SAND) TT[k] = T_RIVER; }); });
+  GEO_LAKES.forEach(r => fillPoly(polyXZ(r), k => { if (TT[k] === T_LAND || TT[k] === T_RIVER || TT[k] === T_FOREIGN) TT[k] = T_LAKE; }));
   LAKES.forEach(([lo, la, rx, ry, rot]) => {
     const c = ll2xz(lo, la), cs = Math.cos(-rot * Math.PI / 180), sn = Math.sin(-rot * Math.PI / 180);
     forDisk(c[0], c[1], Math.max(rx, ry) + 0.5, k => {
-      if (TT[k] !== T_LAND && TT[k] !== T_RIVER) return;
+      if (TT[k] !== T_LAND && TT[k] !== T_RIVER && TT[k] !== T_FOREIGN) return;
       const x = cellX(k) - c[0], y = cellZ(k) - c[1], xr = x * cs - y * sn, yr = x * sn + y * cs;
       if ((xr / rx) ** 2 + (yr / ry) ** 2 <= 1) TT[k] = T_LAKE;
     });
@@ -156,6 +172,33 @@ function genTerrain() {
   }
   TF0.set(TF); TERRAIN_READY = true;
 }
+/* The raster is coarse (0.5 km cells), so buildings and lots also test the drawn rivers and lakes exactly. */
+let WATER_IX = null;
+function waterIndex() {
+  if (WATER_IX) return WATER_IX;
+  const riv = new SpatialHash(2), lakes = [];
+  GEO_RIV.forEach(r => { const p = polyXZ(r.p); for (let i = 1; i < p.length; i++) { const a = p[i - 1], b = p[i], h = r.w / 2; riv.add([a, b, h], Math.min(a[0], b[0]) - h, Math.min(a[1], b[1]) - h, Math.max(a[0], b[0]) + h, Math.max(a[1], b[1]) + h); } });
+  GEO_LAKES.forEach(r => { const p = polyXZ(r); let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const q of p) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); } lakes.push({ p, bb: [x0, z0, x1, z1] }); });
+  LAKES.forEach(([lo, la, rx, ry, rot]) => {
+    const c = ll2xz(lo, la), a = rot * Math.PI / 180, p = [];
+    for (let q = 0; q < 28; q++) { const t = q / 28 * Math.PI * 2, x = Math.cos(t) * rx, y = Math.sin(t) * ry; p.push([c[0] + x * Math.cos(a) - y * Math.sin(a), c[1] + x * Math.sin(a) + y * Math.cos(a)]); }
+    const r = Math.max(rx, ry); lakes.push({ p, bb: [c[0] - r, c[1] - r, c[0] + r, c[1] + r] });
+  });
+  return (WATER_IX = { riv, lakes });
+}
+/* Does a box (grown by pad) touch a drawn river or lake? */
+function waterHit(o, pad) {
+  const W = waterIndex(), bb = obbBounds(o, pad + 0.4);
+  let hit = false;
+  W.riv.query(bb[0], bb[1], bb[2], bb[3], s => { if (!hit && obbSegDist(o, s[0][0], s[0][1], s[1][0], s[1][1]) < s[2] + pad) hit = true; });
+  if (hit) return true;
+  const pts = obbCorners(o, pad).concat([[o.x, o.z]]);
+  for (const L of W.lakes) {
+    if (L.bb[0] > bb[2] || L.bb[2] < bb[0] || L.bb[1] > bb[3] || L.bb[3] < bb[1]) continue;
+    if (pts.some(q => pip(L.p, q[0], q[1]))) return true;
+  }
+  return false;
+}
 /* Saved games store only the cells whose features changed since generation: pairs of [cells skipped, new value]. */
 function tfDiff() {
   const out = []; let skip = 0;
@@ -175,14 +218,14 @@ function setFlags(cells, set, clear) {
 }
 
 /* ---------- path planning on the hidden raster ---------- */
-const PL = { g: new Float32Array(GW * GH), par: new Int32Array(GW * GH), st: new Uint32Array(GW * GH), stamp: 1 };
+const PL = { g: new Float32Array(GW * GH), par: new Int32Array(GW * GH), st: new Uint32Array(GW * GH), stamp: 1, reuse: 0.35 };
 /* Cost of entering a cell; Infinity where a road or track cannot go. gen = world generation (ignores the 1923 lock). */
 function planCost(k, mode, gen) {
   const t = TT[k], f = TF[k];
   if (!(f & F_LT) || t === T_SEA || t === T_LAGOON || t === T_LAKE || t === T_FOREIGN) return Infinity;
   if (!gen && (f & F_KR) && S.kr) return Infinity;
   const b = BLK[k];
-  if (b & (mode === 'road' ? 2 : 4)) return t === T_RIVER ? 0.5 : 0.35; // reuse a line of the same kind (it has its bridges)
+  if (b & (mode === 'road' ? 2 : 4)) return t === T_RIVER ? 0.5 : PL.reuse; // reuse a line of the same kind (it has its bridges)
   if (b & 1) return Infinity;
   let c = 1;
   if (t === T_RIVER) c = BRIDGE * 1.4;
@@ -234,7 +277,7 @@ function planPath(ax, az, bx, bz, mode, gen) {
       let c = cost(nk);
       if (c === Infinity) continue;
       if (di && dj) { if (cost(j * GW + ni) === Infinity || cost(nj * GW + i) === Infinity) continue; c *= 1.414; }
-      const ng = g + c;
+      const ng = Math.fround(g + c); // G is Float32: compare in the same precision, or rounding makes endless tiny "improvements"
       if (ST[nk] === st && G[nk] <= ng) continue;
       ST[nk] = st; G[nk] = ng; P[nk] = k; push(nk, ng + h(ni, nj));
     }
