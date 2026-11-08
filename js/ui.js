@@ -14,18 +14,20 @@ function toggleDrawer(force){const d=$('drawer'),open=force!==undefined?force:d.
     return `<div class="dcat">${cn}</div>`+items.map(([t,T0])=>{const lk=T0.era>S.era;return `<button class="bcard${lk?' lock':''}${TOOL.bt===t&&TOOL.k==='place'?' on':''}" data-bt="${t}" ${lk?'disabled':''} style="--c:${bCol(t)}">${ic(bIcon(t))}<b>${T0.n}</b><small>${lk?ERAS[T0.era].n+' era':costTxt(T0.cost)}</small></button>`}).join('')}).join('');
   d.hidden=!open;renderTools()}
 function showConfirm(){const c=$('confirm'),p=PEND;if(!p){c.hidden=true;return}let h='',ok=!p.bad;const town=p.ti>=0&&S.towns[p.ti]?S.towns[p.ti]:null;
-  if(p.bad)h=`<div class="ct">${p.kind==='place'?BT[p.t].n:'Can’t build here'}</div><div class="cd">${p.bad}</div>`;
-  else if(p.kind==='line'){const m=missing(p.cost,town);ok=!m;h=`<div class="ct">${p.name} · ${p.n} tiles${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''}</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">${m||('Materials from '+(town?town.n:'—'))}</div>`}
-  else if(p.kind==='zone'){ok=S.funds>=p.cost.lt;h=`<div class="ct">Zone ${p.n} tiles for homes</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">Brown tint marks smoky air. Towns build houses here when they need room.</div>`}
-  else if(p.kind==='bull'){const i=p.inf;h=`<div class="ct">Remove</div><div class="cd">${i.b.size} buildings · ${i.r} road · ${i.l} track · ${i.z} zoned tiles</div>`}
+  if(p.bad)h=`<div class="ct">${p.kind==='place'?BT[p.t].n:p.kind==='bull'?'Remove':'Can’t build here'}</div><div class="cd">${p.bad}</div>`;
+  else if(p.kind==='line'){const m=missing(p.cost,town);ok=!m;h=`<div class="ct">${p.name} · ${num(p.km)} km${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''}</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">${m||('Materials from '+(town?town.n:'—'))}</div>`}
+  else if(p.kind==='up'){const m=missing(p.cost,town);ok=!m;h=`<div class="ct">Upgrade ${num(p.km)} km to ${p.name.toLowerCase()}</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">${m||'Or tap elsewhere to draw a new line from here.'}</div>`}
+  else if(p.kind==='zone'){ok=S.funds>=p.cost.lt;h=`<div class="ct">Zone ${p.n} lot${p.n===1?'':'s'} for homes</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">${p.warn||'Brown tint marks smoky air. Towns build houses here when they need room.'}</div>`}
+  else if(p.kind==='bull'){const i=p.plan;h=`<div class="ct">Remove</div><div class="cd">${[i.b.length?`${i.b.length} building${i.b.length>1?'s':''}`:'',i.road>0.05?`${num(i.road)} km of road`:'',i.rail>0.05?`${num(i.rail)} km of track`:'',i.lots.length?`${i.lots.length} zoned lot${i.lots.length>1?'s':''}`:''].filter(Boolean).join(' · ')}. Nothing is refunded.</div>`}
   else if(p.kind==='place'){const m=p.ok?missing(p.cost,town):'';ok=p.ok&&!m;h=`<div class="ct">${BT[p.t].n}${p.ok&&p.bonus?' · good land':''}</div><div class="cost">${costHTML(p.cost)}</div><div class="cd">${!p.ok?p.why:m||('Paid from '+(town?town.n:'—'))}</div>`}
-  c.innerHTML=`<div class="cbody">${h}</div><div class="cbtn">${p.bad?'':`<button class="btn pri" data-act="confirm" ${ok?'':'disabled'}>${p.kind==='bull'?'Remove':p.kind==='zone'?'Zone':'Build'}</button>`}<button class="btn ghost" data-act="cancelp" aria-label="Cancel">${ic('close')}</button></div>`;c.hidden=false}
+  const lab=p.kind==='bull'?'Remove':p.kind==='zone'?'Zone':p.kind==='up'?'Upgrade':'Build';
+  c.innerHTML=`<div class="cbody">${h}</div><div class="cbtn">${p.kind==='place'?`<button class="btn ghost" data-act="rotg" aria-label="Turn">${ic('turn')}</button>`:''}${p.bad?'':`<button class="btn pri" data-act="confirm" ${ok?'':'disabled'}>${lab}</button>`}<button class="btn ghost" data-act="cancelp" aria-label="Cancel">${ic('close')}</button></div>`;c.hidden=false}
 
 /* ---------- selection & side panel ---------- */
 function openSide(on){$('side').classList.toggle('open',on)}
 function select(s){VIEW.sel=s;S.tab='sel';S.confirmDemo=null;renderPanel(true);if(!s&&window.innerWidth<960)openSide(false)}
-function selectTown(ti,focus){VIEW.sel={kind:'t',ti};S.tab='sel';S.confirmDemo=null;if(focus){const t=S.towns[ti];focusTile(t.i,t.j,Math.max(cam.z,0.55))}openSide(true);renderPanel(true)}
-function selectBuilding(b,focus){VIEW.sel={kind:'b',id:b.id};S.tab='sel';S.confirmDemo=null;if(focus)focusTile(b.i,b.j,Math.max(cam.z,0.7));openSide(true);renderPanel(true)}
+function selectTown(ti,focus){VIEW.sel={kind:'t',ti};S.tab='sel';S.confirmDemo=null;if(focus){const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,16))}openSide(true);renderPanel(true)}
+function selectBuilding(b,focus){VIEW.sel={kind:'b',id:b.id};S.tab='sel';S.confirmDemo=null;if(focus)focusAt(b.x,b.z,Math.min(cam.dist,7));openSide(true);renderPanel(true)}
 function selTitle(){const s=VIEW.sel;if(!s)return 'Start';if(s.kind==='t')return S.towns[s.ti].n;const b=BMAP.get(s.id);return b?bName(b):'Start'}
 function renderTabs(){const T0=[['sel',selTitle()],['routes','Routes'],['nat','Lithuania'],['chron','Chronicle']];
   $('tabs').innerHTML=T0.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-act="tab" data-tab="${k}">${l}${k==='chron'?`<span class="cnt" id="logcnt">${S.log.length}</span>`:k==='routes'?`<span class="cnt">${S.routes.length}</span>`:''}</button>`).join('')}
@@ -56,7 +58,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'tab':S.tab=d.tab;S.confirmReset=false;S.confirmRoute=null;break;
     case 'seltown':return selectTown(ti,true);
     case 'selb':if(b)selectBuilding(b,true);return;
-    case 'focus':{const t=S.towns[ti];focusTile(t.i,t.j,Math.max(cam.z,0.6));if(window.innerWidth<960)openSide(false);return}
+    case 'focus':{const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,14));if(window.innerWidth<960)openSide(false);return}
     case 'tool':setTool(d.tool);if(window.innerWidth<960)openSide(false);return;
     case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*S.prices[rs]*(port?1.4:1);
       t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*0.985);toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
@@ -76,12 +78,12 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'rauto':if(r)r[d.dir]='auto';break;
     case 'rcargo':{if(!r)return;let s=r[d.dir];s=s==='auto'?[]:s.slice();const q=s.indexOf(d.res);if(q>=0)s.splice(q,1);else s.push(d.res);r[d.dir]=s.length?s:'auto';break}
     case 'rpax':if(r)r.pax=!r.pax;break;
-    case 'rshow':{if(!r)return;VIEW.route=VIEW.route===r.id?null:r.id;const p=routePath(r);if(p&&VIEW.route!==null){const m=p.path[p.path.length>>1];focusTile(ti_(m),tj_(m),Math.min(cam.z,0.45));if(window.innerWidth<960)openSide(false)}break}
+    case 'rshow':{if(!r)return;VIEW.route=VIEW.route===r.id?null:r.id;const p=routePath(r);if(p&&VIEW.route!==null){const m=p.path[p.path.length>>1];focusAt(m[0],m[1],Math.max(cam.dist,Math.min(300,p.len*0.9)));if(window.innerWidth<960)openSide(false)}break}
     case 'rdel':S.confirmRoute=r?r.id:null;break;case 'rkeep':S.confirmRoute=null;break;
     case 'rdel2':if(r){S.funds+=r.n*VT[r.vt].cost*0.5;S.routes.splice(S.routes.indexOf(r),1);if(VIEW.route===r.id)VIEW.route=null;toast('Route removed')}S.confirmRoute=null;break;
     case 'reset':S.confirmReset=true;break;case 'cancelr':S.confirmReset=false;break;
-    case 'reset2':{const sp=S.speed;newGame();S.speed=sp;analyze();buildCache();VIEW.sel=null;VIEW.route=null;clearPreview();const v0=S.towns[0];cam.x=(v0.i-v0.j)*32;cam.y=(v0.i+v0.j+1)*16;cam.z=0.85;toast('A new republic: 16 February 1918');break}
-    case 'confirm':return doConfirm();case 'cancelp':return clearPreview();
+    case 'reset2':{const sp=S.speed;newGame();S.speed=sp;analyze();initScene();VIEW.sel=null;VIEW.route=null;clearPreview();camHome();toast('A new republic: 16 February 1918');break}
+    case 'confirm':return doConfirm();case 'cancelp':return clearPreview();case 'rotg':return rotateGhost();
   }
   save();renderPanel(true);updateTop()}
 
@@ -89,21 +91,25 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
 let last=0,acc=0,pT=0;
 function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=dt*TPS[S.speed];let n=0;
   while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)save()}if(NET.dirty)analyze();
-  updateAgents(dt);draw(dt);pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false)}requestAnimationFrame(frame)}
+  updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
+  pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false)}requestAnimationFrame(frame)}
+/* the opening view: Vilnius from the south-west, slightly tilted */
+function camHome(){const v0=S.towns[0];camLoad({x:v0.x+0.4,z:v0.z+0.6,dist:9,yaw:-0.35,pitch:0.74})}
 function start(data){const saved=data&&data.save?data.save:load();let fresh=false;
   if(saved){try{restore(saved)}catch(e){newGame();fresh=true}}else{newGame();fresh=true}
-  analyze();S.routes.forEach(routeEval);resize();SEASON=seasonOf(S.day);buildCache();
-  if(S.cam){cam.x=S.cam.x;cam.y=S.cam.y;cam.z=S.cam.z}else{const v0=S.towns[0];cam.x=(v0.i-v0.j)*32;cam.y=(v0.i+v0.j+1)*16;cam.z=0.85}clampCam();
+  analyze();S.routes.forEach(routeEval);if(S.cam&&isFinite(S.cam.dist))camLoad(S.cam);else camHome();initScene();
   document.addEventListener('click',e=>{const t=e.target.closest('[data-tool]');if(t&&t.closest('#tools')){const k=t.dataset.tool;if(k==='build')toggleDrawer();else{toggleDrawer(false);setTool(TOOL.k===k&&k!=='inspect'?'inspect':k)}return}
     const bc=e.target.closest('[data-bt]');if(bc){toggleDrawer(false);setTool('place',bc.dataset.bt);if(window.innerWidth<960)openSide(false);return}
-    const a=e.target.closest('[data-act]');if(a&&(a.closest('#pbody')||a.closest('#tabs')||a.closest('#confirm')))act(a.dataset)});
+    const a=e.target.closest('[data-act]');if(a&&(a.closest('#pbody')||a.closest('#tabs')||a.closest('#confirm')))act(a.dataset);
+    const tl=e.target.closest('.tl');if(tl&&tl.closest('#labels'))selectTown(+tl.dataset.ti,true)});
+  $('compass').addEventListener('click',()=>northUp());
   document.querySelector('.speed').addEventListener('click',e=>{const b=e.target.closest('[data-speed]');if(!b)return;S.speed=+b.dataset.speed;updateTop();save()});
   $('fab').addEventListener('click',()=>openSide(!$('side').classList.contains('open')));$('sideClose').addEventListener('click',()=>openSide(false));
   $('hint').addEventListener('click',()=>hint(''));
   if(window.ResizeObserver)new window.ResizeObserver(()=>resize()).observe(cv);else window.addEventListener('resize',resize);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
   renderTools();renderPanel(true);updateTop();
-  if(fresh)hint('Vilnius, 16 February 1918. Pinch or scroll to zoom out. Goods move on routes: open the Routes tab.');
+  if(fresh)hint('Vilnius, 16 February 1918. Pinch to zoom, twist two fingers to turn, slide them up or down to tilt. Goods move on routes: open the Routes tab.');
   requestAnimationFrame(frame)}
 try{window.claude?.hot?.snapshot?.(()=>({save:serialize()}))}catch(e){}
 (function(){const hot=window.claude?.hot;hot?.ready?hot.ready(start):start(hot?.data??{})})();
