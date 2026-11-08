@@ -36,13 +36,13 @@ const ICON={
   up:'<path d="M12 19V5M6 11l6-6 6 6"/>'
 };
 function ic(n,cls){return `<svg class="ic${cls?' '+cls:''}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]||''}</svg>`}
-function bName(b){return b.t==='house'?HOUSE.n[b.lv]:BT[b.t].n}
+function bName(b){return b.t==='house'?(b.f&&b.lv===1?'Farmsteads':HOUSE.n[b.lv]):b.t==='hall'&&b.ti!==undefined&&S.towns[b.ti]&&S.towns[b.ti].vil?'Village chapel':BT[b.t].n}
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function fmt(n){n=Math.round(n||0);const a=Math.abs(n);const s=a>=100000?Math.round(a/1000)+'k':a>=10000?(a/1000).toFixed(1)+'k':a.toLocaleString('en-US');return (n<0?'−':'')+s}
 function fd(n){return Math.abs(n)<0.05?'0.0':(n>0?'+':'−')+Math.abs(n).toFixed(1)}
 function num(q){return String(Math.round(q*10)/10)}
-function popStr(u){u=u||0;return u>=1000?(u/1000).toFixed(2)+'M':Math.round(u)+'k'}
+function popStr(u){u=u||0;return u>=1000?(u/1000).toFixed(2)+'M':u<1.95?(Math.round(u*10)/10)+'k':Math.round(u)+'k'}
 function dOf(day){return new Date(START+day*864e5)}
 function dateStr(day){const t=dOf(day);return t.getUTCDate()+' '+MON[t.getUTCMonth()]+' '+t.getUTCFullYear()}
 function ymd(day){return dOf(day).toISOString().slice(0,10)}

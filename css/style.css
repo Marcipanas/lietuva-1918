@@ -56,6 +56,8 @@ body.tut #hint{top:auto;bottom:calc(100% - 300px)}
   background:rgba(15,33,29,.86);color:var(--ink);box-shadow:0 4px 14px rgba(0,0,0,.25);font:inherit}
 .tl b{font-family:var(--f-disp);font-weight:700;font-size:12px;letter-spacing:.1em;line-height:1}
 .tl.cap b{font-size:13px}
+.tl.vil{padding:3px 8px;gap:4px;background:rgba(30,40,38,.5)}.tl.vil b{font-size:10px;letter-spacing:.08em;font-weight:600}.tl.vil span{display:none}
+.tl.sm b{font-size:11px}
 .tl span{font-size:11px;font-weight:500;color:rgba(241,234,216,.7);line-height:1}
 .tl .dot{display:none;width:7px;height:7px;border-radius:50%}
 .tl .dot.bad{display:block;background:var(--warn)}.tl .dot.good{display:block;background:var(--good)}
@@ -222,4 +224,32 @@ select{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);b
 .dcat{flex:none;writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--f-disp);font-weight:600;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
   background:rgba(15,33,29,.94);border:1px solid var(--line2);border-radius:10px;padding:8px 5px;text-align:center}
 @media (max-width:560px){h2{font-size:28px}.chron li{grid-template-columns:minmax(0,1fr);gap:2px}}
+.more{margin-top:8px}.more summary{cursor:pointer;font-size:13px;color:var(--amber2);padding:6px 2px}.more .links{margin-top:6px}
+/* foreign trade and the plan */
+.mks,.deals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.mk{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.mkh{display:flex;justify-content:space-between;align-items:center;gap:10px}.mkh b{font-weight:600}
+.tag.ok{color:var(--good);border-color:rgba(143,209,158,.5)}
+.pcs{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.pl{font-size:11px;color:var(--dim);min-width:64px}
+.pc{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);background:var(--panel2);border-radius:999px;padding:2px 8px 2px 5px}
+.pc .ic{width:14px;height:14px;color:var(--c)}.pc.in{color:var(--muted)}
+.dl{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 10px 9px 12px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}
+.dlt{display:flex;flex-direction:column;gap:1px;min-width:0}.dlt b{font-weight:600;font-size:13.5px}
+.dl .note.bad,.dl .bad{color:var(--warn)}
+.nd select{flex:1 1 120px;min-width:0}
+.secb{display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:0 8px}.secb b{font-size:26px;font-weight:500;font-variant-numeric:tabular-nums}.secb>span{color:var(--muted);font-size:12.5px}.secb .mbar{grid-column:1/-1}
+/* decision cards */
+#card{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(5,12,10,.62);padding-block:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-y:auto}
+#card[hidden]{display:none}
+.cbox{width:min(100%,480px);display:flex;flex-direction:column;gap:10px;background:linear-gradient(165deg,var(--panel2),var(--bg));border:1px solid var(--line2);border-radius:18px;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.cbox h2{margin:0;font-family:var(--f-disp);font-weight:700;font-size:22px;letter-spacing:.02em;line-height:1.2;text-wrap:balance}
+.cbox p{margin:0;font-size:14px;line-height:1.5;color:#d9e2dc}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.opt{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--line2);background:var(--panel);color:var(--ink);border-radius:12px;padding:11px 13px;cursor:pointer;font:inherit}
+.opt:hover,.opt:focus-visible{border-color:var(--amber);background:rgba(242,169,59,.08)}
+.opt b{font-weight:600;font-size:14.5px}.opt span{font-size:12.5px;color:var(--muted);line-height:1.4}
+.opt em{display:inline-flex;align-items:center;gap:5px;font-style:normal;font-size:12px;margin-top:2px}.opt em .ic{width:14px;height:14px}
+.opt em.ok{color:var(--good)}.opt em.bad{color:var(--warn)}
 @media (prefers-reduced-motion:reduce){.side,.toast,.meter i,.mbar i{transition:none}}

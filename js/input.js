@@ -25,7 +25,7 @@ function clearPreview() {
   PEND = null; TRACE = []; showConfirm();
 }
 function pos(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-const snapR = () => Math.max(0.25, cam.dist * 0.022), brushR = () => Math.max(0.55, cam.dist * 0.04);
+const snapR = () => Math.max(0.12, cam.dist * 0.022), brushR = () => Math.max(0.28, cam.dist * 0.04);
 
 /* ---------- pointer gestures ---------- */
 cv.addEventListener('pointerdown', e => {
@@ -110,7 +110,7 @@ function tap(sx, sy) {
     if (!g) return select(null);
     if (nearestEdge(g[0], g[1], 'road', snapR())) { const ti = townAtPoint(g[0], g[1]); if (ti >= 0) return selectTown(ti); }
     const nt = nearestTown(g[0], g[1]);
-    if (nt >= 0 && Math.hypot(S.towns[nt].x - g[0], S.towns[nt].z - g[1]) < 3) return selectTown(nt);
+    if (nt >= 0 && Math.hypot(S.towns[nt].x - g[0], S.towns[nt].z - g[1]) < (S.towns[nt].R || 1) * 0.6 + 0.4) return selectTown(nt);
     return select(null);
   }
   if (!g) return;
@@ -157,7 +157,7 @@ function tapTool(x, z) {
   if (isBrush()) { TRACE = [[x, z]]; updateDraw(); return finishDraw(); }
   if (TOOL.k === 'place') {
     const g = VIEW.ghost;
-    if (g && g.ok && obbHas({ x: g.x, z: g.z, rot: g.rot, w: BT[g.t].fp[0], d: BT[g.t].fp[1] }, x, z, 0.2)) return doConfirm();
+    if (g && g.ok && obbHas({ x: g.x, z: g.z, rot: g.rot, w: BT[g.t].fp[0], d: BT[g.t].fp[1] }, x, z, 0.1)) return doConfirm();
     setGhost(x, z);
   }
 }
@@ -171,7 +171,7 @@ function planLine() {
   VIEW.snaps = [[tr[0][0], tr[0][1], !!s0]];
   if (tr.length > 1) VIEW.snaps.push([tr[tr.length - 1][0], tr[tr.length - 1][1], !!s1]);
   let pts = null;
-  if (tr.length > 1 && Math.hypot(tr[tr.length - 1][0] - tr[0][0], tr[tr.length - 1][1] - tr[0][1]) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.12, cam.dist * 0.01)); }
+  if (tr.length > 1 && Math.hypot(tr[tr.length - 1][0] - tr[0][0], tr[tr.length - 1][1] - tr[0][1]) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); }
   VIEW.path = pts || (tr.length > 1 ? tr : null); VIEW.pathOk = !!pts; VIEW.pathMode = k; VIEW.ver++;
   return { pts, s0, s1 };
 }
@@ -193,13 +193,13 @@ function lineHitsBuilding(pts, hw) {
   }
   return null;
 }
-/* the town that pays: the one whose roads reach the spot, or the nearest one */
-function payTown(x, z) { const t = townAtPoint(x, z); return t >= 0 ? t : nearestTown(x, z, true); }
+/* the town that pays: the one whose roads reach the spot (towns before villages), or the nearest town */
+function payTown(x, z) { const t = townAtPoint(x, z, true); return t >= 0 ? t : nearestTown(x, z, true, true); }
 function prepareLine() {
   const k = TOOL.k, plan = planLine(), pts = plan.pts;
   if (!pts) { PEND = { kind: 'line', bad: TRACE.length < 2 ? 'Drag to draw a line.' : 'No way through: water, buildings or the border are in the way.' }; return showConfirm(); }
   const runs = newRuns(pts, k), km = runs.reduce((a, r) => a + r.km, 0);
-  if (polyLen(pts) < 0.25) { PEND = { kind: 'line', bad: 'Drag a little further.' }; return showConfirm(); }
+  if (polyLen(pts) < 0.12) { PEND = { kind: 'line', bad: 'Drag a little further.' }; return showConfirm(); }
   if (!runs.length) { PEND = { kind: 'line', bad: `This runs along an existing ${k === 'road' ? 'road' : 'railway'}. Tap a stretch to upgrade it.` }; return showConfirm(); }
   const lv = k === 'road' ? roadLevel() : railLevel(), spec = (k === 'road' ? ROADT : RAILT)[lv], mk = Object.keys(spec.mat)[0];
   let w = 0, br = 0;
@@ -239,12 +239,12 @@ function bullThing(b) {
 function setGhost(x, z) {
   const t = TOOL.bt, T0 = BT[t], [w, d] = T0.fp, kind = t === 'station' ? 'rail' : 'road';
   let gx = x, gz = z, rot = TOOL.rot, v = null;
-  const ne = t === 'hall' || t === 'hydro' ? null : nearestEdge(x, z, kind, Math.max(1.1, d + 0.7));
+  const ne = t === 'hall' || t === 'hydro' ? null : nearestEdge(x, z, kind, Math.max(0.55, d + 0.35));
   if (ne) {
     /* face the road; if that spot is taken, slide along the road to the nearest spot that fits */
-    const turn = Math.round(TOOL.rot / (Math.PI / 2)) % 2 !== 0, ext = turn ? w : d, off = espec(ne.e).w / 2 + 0.12 + ext / 2;
+    const turn = Math.round(TOOL.rot / (Math.PI / 2)) % 2 !== 0, ext = turn ? w : d, off = espec(ne.e).w / 2 + 0.06 + ext / 2;
     const side0 = (() => { const q = polyAt(ne.e.p, ne.e.c, ne.s); return (x - q[0]) * -q[3] + (z - q[1]) * q[2] < 0 ? -1 : 1; })();
-    search: for (const side of [side0, -side0]) for (const ds of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2]) {
+    search: for (const side of [side0, -side0]) for (const ds of [0, 0.18, -0.18, 0.35, -0.35, 0.55, -0.55, 0.8, -0.8, 1.1, -1.1]) {
       const s = ne.s + ds;
       if (ds && (s < 0 || s > ne.e.L)) continue;
       const q = polyAt(ne.e.p, ne.e.c, s), nx = -q[3] * side, nz = q[2] * side;

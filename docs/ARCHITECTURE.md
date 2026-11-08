@@ -1,6 +1,6 @@
 # Architecture
 
-Lietuva 1918 is fifteen classic scripts sharing one global scope, a stylesheet, and three.js drawing into one canvas. There is no build step. The world has no grid: roads are curves, buildings sit at any angle. This document explains how the pieces fit, so a change in one place does not break another.
+Lietuva 1918 is sixteen classic scripts sharing one global scope, a stylesheet, and three.js drawing into one canvas. There is no build step. The world has no grid: roads are curves, buildings sit at any angle. This document explains how the pieces fit, so a change in one place does not break another.
 
 ## Layers
 
@@ -10,12 +10,12 @@ data             common.js  data.js  geo.js                 constants, rules, ge
 geometry         geom.js                                    points, polylines, rotated boxes, spatial hash
 terrain          terrain.js                                 hidden raster of terrain and soils, path planner
 world            world.js                                   road and rail graph, buildings, lots, analysis, 1918 map
-simulation       sim.js                                     state S, daily tick, routes, people, events, saving
+simulation       sim.js  history.js                         state S, daily tick, routes, people, saving; trade abroad, timeline, cards, plan
 view (3D)        models.js  scene.js  agents.js             models, renderer, people and vehicles
 interaction      input.js  panels.js  tutorial.js  ui.js    gestures, tools, side panel, first-time hints, actions, loop, boot
 ```
 
-`common` to `sim` never touch the DOM, the canvas or THREE, and run headless in `tools/smoke-test.js`. The view reads the world and never changes it. The world tells the view what changed through version counters (`WV.net`, `WV.bld`, `WV.lots`, `WV.kr`) and one hook, `terrainHook(cells)`, called when forest is cleared or deposits change.
+`common` to `history` never touch the DOM, the canvas or THREE, and run headless in `tools/smoke-test.js`. The view reads the world and never changes it. The world tells the view what changed through version counters (`WV.net`, `WV.bld`, `WV.lots`, `WV.kr`) and one hook, `terrainHook(cells)`, called when forest is cleared or deposits change.
 
 ## Units and coordinates
 
@@ -27,7 +27,7 @@ Everything is in km on a flat plane: `x` east, `z` south, from the corner at 20.
 | km → raster cell | `cellAt(x, z)` → `k`; cell centre `cellX(k)`, `cellZ(k)` |
 | screen → ground | `groundAt(sx, sy)` (ray onto `y = 0`), `toScreen(x, y, z)` |
 
-Town scale is exaggerated about ten times (a house lot is 0.85 km), so towns are visible on a country-sized map.
+Town scale is exaggerated about five times (a house lot is `LOT_W` = 0.42 km), so towns are visible on a country-sized map while distances between places stay true. Models in models.js are written at twice their drawn size and scaled by `MS` = 0.5 in `MB.geometry()` and `model()`.
 
 **Rotated boxes.** Buildings and lots are `{x, z, rot, w, d}`: centre, rotation like three.js `rotation.y`, width along local x, depth along local z. Local +z is the front, the side that faces the road; its world direction is `(sin rot, cos rot)`. `faceRot(dx, dz)` gives the rotation that turns a front toward a direction. `geom.js` has the box tests (`obbOverlap`, `obbSegDist`, `obbPolyDist`, `obbHas`, `toLocal`, `toWorld`).
 
@@ -56,67 +56,73 @@ State lives in `S` (see below); world.js keeps lookups: `NODES`, `EDGES`, `BMAP`
 - `removeEdge` drops lone nodes and joins two edges that meet at a node with nothing else (`mergeNode`).
 - `afterLine(edges)` clears trees and zoned lots under new lines.
 
-**Buildings and lots.** `addB(t, x, z, rot, lv, quiet)` (quiet: do not mark the network dirty, used for houses), `removeB`. `validPlace(t, x, z, rot, gen)` checks the cells under the footprint (inside Lithuania, dry land, the 1923 lock), overlap with buildings and lines, and the building's need (forest, bog, clay, open land, rail, coast, lake, shore, river). Zoned lots are boxes along streets: `lotSpots(edge)` lists the candidates on both sides, `zonePlan(trace, R)` picks the free ones near a brush stroke, `bullPlan(trace, R)` collects what a removal stroke touches (edges are cut only where touched).
+**Buildings and lots.** `addB(t, x, z, rot, lv, quiet)` (quiet: do not mark the network dirty, used for houses), `removeB`. `validPlace(t, x, z, rot, gen)` checks the cells under the footprint (inside Lithuania, dry land, the Klaipėda lock), overlap with buildings and lines, and the building's need (forest, bog, clay, open land, rail, coast, lake, shore, river, border). House lots in villages are farmsteads (`b.f = 1`, `FARMSTEAD_CAP` = 0.5k residents; `houseCap(b)` in sim.js). Zoned lots are boxes along streets: `lotSpots(edge)` lists the candidates on both sides, `zonePlan(trace, R)` picks the free ones near a brush stroke, `bullPlan(trace, R)` collects what a removal stroke touches (edges are cut only where touched).
 
-**Network analysis (`analyze()`).** Runs when `NET.dirty` is set.
-1. Each active town hall's road access point (`accessOf`: nearest edge within `ACCESS` of the footprint).
-2. One multi-source Dijkstra over road nodes from all halls (`dijkstra`, `distTo`): every point on a road gets a distance and an owner town. A building or lot belongs to the town that reaches its access point within `TERRITORY` (15 km), else `b.na` is `noroad`, `far` or `locked`.
-3. Land bonuses: forestry counts forest within 1.6 km; farms and flax fields check fertile or flax soil under them.
-4. Town-to-town paths: a Dijkstra from each town (roads from the hall, railways from its stations) gives `NET.pairs.road['a_b']` and `NET.pairs.rail['a_b']` = `{len (km), lv (weakest level), path (polyline)}`. Routes and vehicles use these.
-5. Neighbour links (`NET.edges`, pairs with no town in between), power grid components (`NET.comp`), towns linked to Vilnius (`NET.linked`).
+**Network analysis (`analyze()`).** Runs when `NET.dirty` is set. With about 220 settlements it takes 60–80 ms.
+1. Each active town hall's road access point (`accessOf`: nearest edge within `ACCESS` + 0.15 of the footprint).
+2. Two multi-source Dijkstra sweeps over road nodes from all halls (`dijkstra`, `distTo`): `NET.R0` with plain distances, and `NET.R` where each village starts `VIL_OFF` (6 km) behind. `ownerAt(e, s, pref)` gives the owner and the true distance of any road point. Homes and zoned lots use `R0` (the nearest settlement); workplaces use `R`, so they join a town unless a village is much nearer. Anything beyond `TERRITORY` (15 km) gets `b.na` = `far`; no road access gives `noroad`; inside a locked Klaipėda Region gives `locked`.
+3. Land bonuses: forestry counts forest within 1.6 km; farms and flax fields check fertile or flax soil under them. Border posts get their country (`b.gate = borderOf(x, z)`).
+4. Linked towns: union-find over the graph's nodes, then towns joined through their hall roads and stations (`NET.comp`, one id per connected group; also the power grid). `NET.linked` is the capital's group.
+5. Neighbours: where the catchments of two towns meet along a road (`R0`) or a railway (a sweep from all stations), they are neighbours, and the meeting gives the exact length between them (`NET.edges` = `{a, b, road: {len}, rail: {len}}`, `NET.adj`). Commuting and the Neighbours list use these.
 6. Line lengths and upkeep (`NET.km`, `NET.up`), pollution sources (`NET.pol`, read with `polAt(x, z)`).
 
-**The 1918 map (`genWorld`).** For each town: a hall on a market square ring, four to six curving streets, ring roads for bigger towns, houses on the nearest lots and zoned lots beyond (`layoutTown`). Then stations and historic railways (`stationFor`, `railBetween`), starting industries with access roads (`placeNear`, `connectToTown`; missing forest, bog or clay deposits are created near the town), and historic roads (`roadBetween`). `foundTown` lays out a town the player founds.
+Town-to-town paths are not computed here. `pairPath(k, a, b)` runs a Dijkstra from one town that stops as soon as nothing can beat the best way to the other, and keeps the result `{len, lv (weakest level), path}` until `NET.ver` changes. Routes, vehicles, route highlights and the Neighbours list call it.
+
+**The 1918 map (`genWorld`).** For each town in `TOWNS0` and `TOWNS1`: a hall on a market square ring, three to six curving streets, ring roads for bigger towns, houses on the nearest lots and zoned lots beyond, and extra streets until every home fits (`layoutTown`, `settle`). Named villages and then about 170 placed ones (`placeVillages`, Poisson-style spacing on dry farmland) get a street, a chapel and farmsteads (`layoutVillage`). Between those steps come stations and historic railways (`stationFor`, `railBetween`), starting industries with access roads (`placeNear`, `connectToTown`; missing forest, bog or clay deposits are created near the town), and historic roads (`roadBetween`), so villages placed later join a historic road where their street crosses it. Generation takes about 0.6 s after the terrain (0.55 s). `foundTown` lays out a town the player founds.
 
 ## State (`S` in sim.js)
 
 ```
-S = { v: 4, day, funds, inc, era, speed, kr (Klaipėda still locked), nid, rid, gid, lid,
-      prices{res}, log[], won, ms{}, mod{farm}, ev{}, nextRnd, obj{}, stats{portSales, routesMade},
-      towns[ {id, n, x, z, cap?, orig, lock, pop, h, stock{}, dl{}, dem{}, …per-tick fields} ],
-      bld[ {id, t, x, z, rot, lv, on, town, cd, k, eff, why, ti? (halls and gen stations)} ],
+S = { v: 5, day, funds, inc, era, speed, kr (Klaipėda Region locked), nid, rid, gid, lid, did,
+      prices{res}, log[ {d, t, k, yo (year only)} ], won, ms{}, mod{farm}, ev{}, nextRnd, obj{}, stats{portSales, routesMade},
+      towns[ {id, n, x, z, R (radius), capital, vil, kr, orig, lock, pop, pop0 (1918 size), h, stock{}, dl{}, dem{}, cap (storage), …per-tick fields} ],
+      bld[ {id, t, x, z, rot, lv, on, town, cd, k, eff, why, f? (farmstead), gate? (border post), ti? (halls and gen stations)} ],
       routes[ {id, a, b, mode, vt, n, ab, ba, pax, …per-tick fields} ],
       nodes[ {id, x, z} ], edges[ {id, k, lv, a, b, p} ], lots[ {id, x, z, rot, town, cd} ],
+      deals[ {id, m (market), r, dir ('out' | 'in'), q (loads a day), ti (gateway town), …per-tick fields} ],
+      mkt{ de, gb, lv, pl, su: {open, f (price factor), why} },
+      hist{ path ('free' | 'soviet' | 'neutral'), sec, def (army Lt a day), ally, trust, exp{}, war, purge, collect, mood[], cards[] (waiting), spd, picks{}, unl{}, proj[], plans[], lost, sup, … },
+      plan{ y, name, tgt{res}, got{res} } or null,
       cam, sel, tab }
 ```
 
-`serialize()` writes nodes, edges and lots as compact arrays (coordinates rounded to 10 m) and the terrain flags as a difference from generation. `restore()` regenerates the terrain, applies the difference and rebuilds every index. Saves are about 90 KB.
+`serialize()` writes nodes, edges and lots as compact arrays (coordinates rounded to 10 m) and the terrain flags as a difference from generation. `restore()` regenerates the terrain, applies the difference and rebuilds every index. Saves are about 550 KB, mostly the 220 settlements and their streets.
 
 ## The day tick (`tick()` in sim.js)
 
-1. `BYT` groups buildings by town. Unconnected buildings get `eff = 0` and a reason.
-2. `phase1`: housing, jobs, storage (`STORE_BASE` plus warehouses), schools, clinics, pollution at homes (`polAt`).
-3. `routeEval` for every route: path, capacity each way per day `n · cap · speed · roadFactor / (2 · km + TRIP_OVERHEAD)`.
-4. `commute`: local jobs first, then walking between towns up to `WALK_KM` (30 km) by road, then routes that carry commuters.
-5. `phase1b`: education, health, productivity, power plants. Then the power grid per component.
-6. `phase2`: production, food basket and variety, heating, linen and electronics demand, morale, growth, taxes, building upkeep.
-7. `runRoutes`: `moveCargo` each way; auto cargo moves a good only toward the town with fewer days of supply.
-8. `develop`: towns with full homes, fed and content people build a house on their best zoned lot every 5 days, or rebuild old houses in a later era.
-9. Line and vehicle upkeep, dated events (`HEV`), random events (`REV`), ministry tasks (`OBJ`), milestones, the win check.
+1. Prices drift toward their base (times the Depression factor, `depAt`). `BYT` groups buildings by town. Unconnected buildings get `eff = 0` and a reason.
+2. `phase1`: housing (`houseCap`), jobs, storage (`STORE_BASE` plus warehouses), schools, clinics, pollution at homes (`polAt`).
+3. `routeEval` for every route: path from `pairPath`, capacity each way per day `n · cap · speed · roadFactor / (2 · km + TRIP_OVERHEAD)`.
+4. `commute`: local jobs first, then walking to neighbours up to `WALK_KM` (30 km) by road, then routes that carry commuters.
+5. `phase1b`: education, health, productivity, power plants. Then the power grid per group of linked towns (villages need no power).
+6. `phase2`: production (× `histProd()`: war, inspectors), the settlement's own fields and woodlots (`pop0`, × `histSub` for collective farms), food basket and variety, heating, linen and electronics demand, morale (+ `histMood`), growth, taxes (× `histTax`), building upkeep.
+7. `runRoutes`: `moveCargo` each way; auto cargo moves a good only toward the town with fewer days of supply. Then `runDeals` (history.js): exports and imports through gateway towns, and deliveries to the Union.
+8. `develop`: towns with full homes, fed and content people build on their best zoned lots every 5 days, or rebuild old houses in a later era.
+9. Line and vehicle upkeep, then `histTick` (history.js): dated events (`HEV`), decision cards (`queueCard`, which pauses the game; `pickCard(n)` resolves one), army spending and security, farm support, yearly security from trade with Britain, the yearly state plan (`closePlan`, `openPlan`), Union projects. Then random events (`REV`), ministry tasks (`OBJ`), milestones, the win check.
 
 ## The 3D view
 
-**models.js** builds low-poly geometry with vertex colours from boxes, gable and hip roofs, cylinders, cones, lathes and blobs (`MB`, the mesh builder, with a push/pop local transform). `MODEL_FN` holds one function per building type returning `{geo, h, smoke, fields, flag, cows, pigs, boat}`. Houses are small parts placed by `lotLayout(b)` (three or four wooden houses and a shed, brick blocks, or panel blocks), tinted per instance. Trees, people, animals and vehicles have their own small geometries.
+**models.js** builds low-poly geometry with vertex colours from boxes, gable and hip roofs, cylinders, cones, lathes and blobs (`MB`, the mesh builder, with a push/pop local transform). `MODEL_FN` holds one function per building type returning `{geo, h, smoke, fields, flag, cows, pigs, boat}`. Houses are small parts placed by `lotLayout(b)` (three or four wooden houses and a shed, a farmstead with a barn, brick blocks, or panel blocks), tinted per instance. Village halls are drawn as a wooden chapel (`modelKey`), border posts as a customs house with a barrier. Trees, people, animals and vehicles have their own small geometries.
 
 **scene.js**:
 - Renderer, `SCENE`, perspective camera `CAM3` on an orbit rig `cam = {x, z, dist, yaw, pitch}` (`applyCam`, `panBy`, `zoomAt`, `rotateBy`, `tiltBy`, `focusAt`, `northUp`). Hemisphere light plus a sun whose shadow box follows the view (updates stop beyond 70 km).
 - Snow is a shader patch (`snowy(material)`): every upward-facing surface whitens with `SNOW_U`. The ground has its own material (`groundMat`): base texture painted from the raster (`paintGround`, `patchGround` for small changes), a per-pixel patchwork of fields where the mask allows (`MASK`, `FARM_PAL` by season), fading out when fields get smaller than a pixel, then patchy snow.
 - Water: polygons for the sea, the lagoon and lakes, ribbons for rivers; lakes and rivers freeze in deep winter.
 - Roads and railways (`buildLines`): one ribbon mesh per kind and level with a repeating canvas texture, junction discs, bridges where they cross rivers. Rebuilt when `WV.net` changes or the zoom changes width class (lines widen when far out so they stay visible).
-- Buildings, houses, fields, flags (`buildBuildings`) and lots (`buildLots`) are `InstancedMesh`es grouped by model, managed by `Pool`.
+- Buildings, houses, fields, flags (`buildBuildings`) and lots (`buildLots`) are `InstancedMesh`es grouped by model, managed by `Pool`. Only buildings inside the view box (plus a margin) are added, and the pools are refilled when the camera moves past a grid step (`bldView`). Beyond 40 km, each house lot is one simple block (`far`, `farmFar` parts).
 - Trees (`updateTrees`) are built per 20 km chunk when first in view, shuffled so that drawing only the first part thins the forest with distance; birches change colour in autumn and lose their crowns in winter.
 - Smoke particles (`SMOKE`, `puff`) from chimneys, kilns, power stations, cooling towers and steam engines; cows, pigs and boats (`updateCritters`).
 - Overlays (`buildOverlays`): planned line, snap rings, brush ring, zoning and removal previews, ghost building with its fields and pollution ring, route highlight, selection ring, pollution discs. Rebuilt when `VIEW.ver` or the world changes.
-- Labels (`updateLabels`): town names, country names and problem markers are HTML elements in `#labels`, moved every frame.
+- Labels (`updateLabels`): town names, country names and problem markers are HTML elements in `#labels`, moved every frame. Cities always show their names, towns up to 230 km camera distance, villages up to 38 km (`labelZoom`).
 - `pickBuilding(sx, sy)`: ray against every nearby footprint box.
 
-**agents.js**: residents walk between homes and work along street paths (`streetPath` runs a Dijkstra), commuters walk between towns, and route vehicles shuttle along `NET.pairs` paths. All are instanced; they scale up when zoomed out so they stay visible.
+**agents.js**: residents walk between homes and work along street paths (`streetPath` runs a Dijkstra), commuters walk between neighbouring towns, and route vehicles shuttle along `pairPath` paths. All are instanced; they scale up when zoomed out so they stay visible.
 
 ## Interaction
 
 - **input.js**: one finger pans (or draws with a line or brush tool, or moves the ghost with the place tool); two fingers pinch, twist and pan together, or tilt when both slide up or down; mouse wheel zooms at the cursor, right-drag turns and tilts. Tools work in world km: `beginDraw(x, z)`, `moveDraw`, `finishDraw`, `tapTool`, `setGhost`, `rotateGhost`, `doConfirm`. A finished action fills `PEND`, which `showConfirm()` shows and `doConfirm()` applies.
-- **panels.js**: HTML strings for each tab; changing numbers go through `v()` and `w()`.
-- **ui.js**: `act(dataset)` handles every `data-act` button, `renderPanel(force)` patches values when the structure is unchanged, `frame()` runs the simulation (`TPS[speed]` days a second), agents and the view, `start()` boots (load or new game, `initScene`, camera).
+- **panels.js**: HTML strings for each tab (selection, Routes, Trade or Plan, Lithuania, Chronicle); changing numbers go through `v()` and `w()`.
+- **ui.js**: `act(dataset)` handles every `data-act` button, `renderPanel(force)` patches values when the structure is unchanged, `frame()` runs the simulation (`TPS[speed]` days a second; it stops ticking while a decision card waits), agents and the view, `showCard()` draws the waiting card in `#card`, `start()` boots (load or new game, `initScene`, camera).
 
 ## Saving and offline
 
@@ -125,7 +131,8 @@ S = { v: 4, day, funds, inc, era, speed, kr (Klaipėda still locked), nid, rid, 
 
 ## Performance budget
 
-Measured in headless Chromium at phone size: the JavaScript side of a frame is under 1 ms (simulation tick, agents, labels, overlays); the scene is 30 to 45 draw calls and 40k to 130k triangles depending on zoom. Keep it that way:
+Measured in headless Chromium at phone size: a simulation tick takes about 1.5 ms with 220 settlements, and the JavaScript side of a frame stays around 1 ms. The scene is 16 to 35 draw calls and 35k to 100k triangles depending on zoom. Keep it that way:
 - Add things as instances in an existing `Pool`, not as separate meshes.
-- Anything numerous needs a distance limit (trees: `TREE_MAX`, chunk level of detail; walkers: 20 km; vehicles: 70 km; critters: 22 km).
-- Rebuild meshes only when a version counter changes, never every frame.
+- Anything numerous needs a distance limit or a view box (buildings: `bldView`; trees: `TREE_MAX` 55 km and chunk level of detail; walkers: 11 km; vehicles: 70 km; critters: 12 km; village labels: 38 km).
+- Rebuild meshes only when a version counter changes or the camera crosses a grid step, never every frame.
+- `analyze()` runs after every build action; keep it linear in the size of the graph (no all-pairs work).

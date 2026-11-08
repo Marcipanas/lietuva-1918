@@ -37,3 +37,21 @@ Roads and railways are polylines between nodes. Drawing a line attaches its ends
 
 ## 12. Exaggerated town scale on a real-size country (2026-11, v0.4)
 The country is its real size (400 × 310 km) but a house lot is 0.85 km across and holds a block of homes, about ten times larger than life. Real-scale towns would be specks; real-scale vehicles and people would be invisible. People, vehicles and trees use the same exaggeration, and vehicles grow further when zoomed out.
+
+## 13. Smaller towns rather than a bigger map (2026-11, v0.5)
+The owner asked for a bigger map with more towns and villages. Stretching the country would have made every distance false and quadrupled the terrain raster. Instead towns and everything in them are drawn at half the size (a lot is 0.42 km, about five times larger than life), so the real-sized country holds four times as many places. Models keep their old numbers and are scaled by `MS` in one place. The terrain raster stays at 0.5 km: path planning around buildings is coarser, but exact checks (`exactBlock`) keep roads off buildings.
+
+## 14. Every settlement feeds itself (2026-11, v0.5)
+Towns and villages had to be supplied or they starved, which made 220 settlements impossible to manage. Now each feeds and heats its 1918 population from its own land (subsistence added to its stock), and growth beyond that needs the player's food, homes and jobs. Towns hold steady without help and grow only with buildup. Growth also waits until food stocks stop falling, so towns do not boom on their starting stock and then starve.
+
+## 15. Villages are full settlements (2026-11, v0.5)
+Villages are towns with `vil = 1`: they have stock, people, homes and a chapel, take part in routes, trade and commuting, but pay half the tax, need no power, and count apart from towns in goals. Workplaces prefer towns (a 6 km head start for villages), so a farm beside a village joins the town that has workers. Village names come from a list of typical names placed at random; real villages are not placed at their real sites.
+
+## 16. Trade through gateway towns, with deals (2026-11, v0.5)
+The roadmap sketched trade routes whose far end is a foreign market. Instead, foreign trade happens in the town that owns a border post or a port, as standing deals that sell from or buy into its stock. Routes still carry the goods to the border, so geography matters, and the route system did not need a second kind of endpoint. Local merchants (the old Sell and Buy) stay at worse prices.
+
+## 17. History after 1938, with choices (2026-11, v0.5; settles the open question in 8)
+The game follows real history past 1938, including the Soviet occupation, the war, the Holocaust, deportations, collectivization and the restoration of independence in 1990. At key dates a card asks the player to choose; every option says whether it is what happened. Defying a great power works only with enough security, which the player builds over decades. Resisting in 1940 with enough security leads to a neutral republic that did not exist; the Soviet path brings a planned economy with yearly delivery targets, Union projects and Party trust. Dark events are stated plainly in the Chronicle and are never choices for the player.
+
+## 18. Neighbours from catchments, paths on demand (2026-11, v0.5)
+All-pairs town paths cost 221 Dijkstra runs per change. Now one sweep from all halls finds which towns' catchments meet (the Voronoi neighbours of the road graph) with exact lengths, union-find gives linked groups, and a single path is computed only when a route or panel asks, with early exit and a cache keyed by `NET.ver`.

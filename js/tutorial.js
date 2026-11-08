@@ -8,11 +8,11 @@ const TUT_STEPS = [
   { t: 'Welcome to 1918', d: 'You lead Lithuania from 16 February 1918. Drag to look around, pinch to zoom and twist two fingers to turn the map.', done: () => tutCamMoved() },
   { t: 'Your towns', d: 'Tap a town’s name to open it. You see its people, its stock and what it is short of.', done: () => !!(VIEW.sel && VIEW.sel.kind === 't') },
   { t: 'Routes move goods', d: 'Nothing travels on its own. Open the Routes tab to see the old railways and cart roads that keep towns fed.', done: () => S.tab === 'routes' },
-  { t: 'Build a road', d: 'Alytus, Tauragė and Utena have no road, and their food will run out. Choose Road and drag from one town’s streets to another’s.', done: () => !!TUT.ev.road },
+  { t: 'Build a road', d: 'Every town and village feeds itself, but Alytus, Tauragė and Utena have no road, so they cannot trade or grow. Choose Road and drag from one town’s streets to another’s.', done: () => !!TUT.ev.road },
   { t: 'Start a route', d: 'A road alone moves nothing. Open a town, find its new neighbour under Neighbours and tap Road route.', done: () => S.stats.routesMade > 0 },
   { t: 'Room for homes', d: 'Towns grow into zoned lots. Choose Zone and paint along a street.', done: () => !!TUT.ev.zone },
   { t: 'Farms and industry', d: 'Choose Build to place farms, forestry camps and brickworks. Each needs a road to a town hall within 15 km.', done: () => !!TUT.ev.build },
-  { t: 'Time and tasks', d: 'Speed up time with 2× or 4×. The Lithuania tab lists ministry tasks that pay rewards. Good luck!', done: () => S.speed >= 2, last: true }
+  { t: 'Time and history', d: 'Speed up time with 2× or 4×. On key dates history stops the clock and asks you to choose. The Lithuania tab lists ministry tasks that pay rewards. Good luck!', done: () => S.speed >= 2, last: true }
 ];
 function tutRead() { try { return localStorage.getItem(TUT_KEY); } catch (e) { return 'done'; } }
 function tutWrite(v) { try { localStorage.setItem(TUT_KEY, String(v)); } catch (e) { /* storage blocked: the tutorial just shows again */ } }
