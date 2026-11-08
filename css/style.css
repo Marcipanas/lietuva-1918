@@ -56,6 +56,8 @@ body.tut #hint{top:auto;bottom:calc(100% - 300px)}
   background:rgba(15,33,29,.86);color:var(--ink);box-shadow:0 4px 14px rgba(0,0,0,.25);font:inherit}
 .tl b{font-family:var(--f-disp);font-weight:700;font-size:12px;letter-spacing:.1em;line-height:1}
 .tl.cap b{font-size:13px}
+.tl.vil{padding:3px 8px;gap:4px;background:rgba(30,40,38,.5)}.tl.vil b{font-size:10px;letter-spacing:.08em;font-weight:600}.tl.vil span{display:none}
+.tl.sm b{font-size:11px}
 .tl span{font-size:11px;font-weight:500;color:rgba(241,234,216,.7);line-height:1}
 .tl .dot{display:none;width:7px;height:7px;border-radius:50%}
 .tl .dot.bad{display:block;background:var(--warn)}.tl .dot.good{display:block;background:var(--good)}

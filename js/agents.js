@@ -24,20 +24,22 @@ function spawnWalker(ti) {
   const a = accessOf(bOBB(h), 'road'), b = accessOf(bOBB(w), 'road');
   if (!a || !b) return;
   const p = streetPath(a, b);
-  if (!p || p.length < 2 || polyLen(p) < 0.3) return;
-  const m = mover(p, 0.05 + Math.random() * 0.04, 2 + Math.floor(Math.random() * 3));
-  m.t = ti; m.off = (Math.random() < 0.5 ? -1 : 1) * (0.06 + Math.random() * 0.03); m.col = SHIRTS[S.era - 1][Math.floor(Math.random() * SHIRTS[S.era - 1].length)];
+  if (!p || p.length < 2 || polyLen(p) < 0.15) return;
+  const m = mover(p, 0.025 + Math.random() * 0.02, 2 + Math.floor(Math.random() * 3));
+  m.t = ti; m.off = (Math.random() < 0.5 ? -1 : 1) * (0.03 + Math.random() * 0.015); m.col = SHIRTS[S.era - 1][Math.floor(Math.random() * SHIRTS[S.era - 1].length)];
   WALK.push(m);
 }
 function spawnCommuter() {
-  const keys = Object.keys(NET.pairs.road).filter(k => NET.pairs.road[k].len <= WALK_KM);
-  if (!keys.length || WALK.filter(w => w.cm).length > 10) return;
-  const k = keys[Math.floor(Math.random() * keys.length)], [a, b] = k.split('_').map(Number), A = S.towns[a], B = S.towns[b];
+  const links = NET.edges.filter(e => e.road && e.road.len <= WALK_KM);
+  if (!links.length || WALK.filter(w => w.cm).length > 10) return;
+  const e = links[Math.floor(Math.random() * links.length)], A = S.towns[e.a], B = S.towns[e.b];
   if (!A || !B || A.lock || B.lock) return;
   const ab = A.comOut > 0.1 && B.comIn > 0.1, ba = B.comOut > 0.1 && A.comIn > 0.1;
   if (!ab && !ba) return;
-  const m = mover(NET.pairs.road[k].path, 0.12, 1);
-  m.cm = 1; m.t = -1; m.off = 0.07; m.col = SHIRTS[S.era - 1][0];
+  const p = pairPath('road', e.a, e.b);
+  if (!p || p.path.length < 2) return;
+  const m = mover(p.path, 0.06, 1);
+  m.cm = 1; m.t = -1; m.off = 0.035; m.col = SHIRTS[S.era - 1][0];
   if (!ab) { m.s = m.L; m.dir = -1; }
   WALK.push(m);
 }
@@ -63,8 +65,8 @@ function updateAgents(dt) {
   const key = S.routes.map(r => r.id + ':' + r.n + ':' + r.vt + ':' + (r.ok ? 1 : 0) + ':' + Math.round(r.len || 0)).join(',');
   if (key !== vehKey) { vehKey = key; rebuildVeh(); }
   const f = [0, 1, 1.5, 2.2][S.speed];
-  if (cam.dist < 20 && f > 0) S.towns.forEach((t, ti) => {
-    if (t.lock || Math.hypot(t.x - cam.x, t.z - cam.z) > cam.dist * 2 + 6) return;
+  if (cam.dist < 11 && f > 0) S.towns.forEach((t, ti) => {
+    if (t.lock || Math.hypot(t.x - cam.x, t.z - cam.z) > cam.dist * 2 + 3) return;
     const want = Math.min(14, 3 + Math.floor(Math.sqrt(t.pop) * 0.9));
     let have = 0;
     for (const w of WALK) if (w.t === ti) have++;
@@ -80,10 +82,10 @@ function updateAgents(dt) {
 /* draw: called by the renderer each frame */
 function drawAgents() {
   AG.begin();
-  const walkers = cam.dist < 20, vehicles = cam.dist < 70, sc = cam.dist > 25 ? cam.dist / 25 : 1;
+  const walkers = cam.dist < 11, vehicles = cam.dist < 70, sc = cam.dist > 12 ? cam.dist / 12 : 1;
   if (walkers) for (const w of WALK) {
     const q = polyAt(w.p, w.c, w.s), d = w.dir, x = q[0] - q[3] * w.off * d, z = q[1] + q[2] * w.off * d, rot = Math.atan2(q[2] * d, q[3] * d);
-    const bob = Math.abs(Math.sin(NOW * 0.012 + w.off * 90)) * 0.004 * (w.wait > 0 ? 0 : 1);
+    const bob = Math.abs(Math.sin(NOW * 0.012 + w.off * 180)) * 0.002 * (w.wait > 0 ? 0 : 1);
     AG.add('legs', agentGeo('legs'), MAT.agent, x, bob, z, rot, 1, 1, 1);
     AG.add('body', agentGeo('body'), MAT.agent, x, bob, z, rot, 1, 1, 1, SEASON.snow > 0.4 ? '#5b4a3a' : w.col);
   }
@@ -97,11 +99,11 @@ function drawAgents() {
       const [x, z, rot] = at(v.s);
       AG.add(r.vt === 'etrain' ? 'eloco' : 'steam', agentGeo(r.vt === 'etrain' ? 'eloco' : 'steam'), MAT.agent, x, 0, z, rot, sc, sc, sc);
       for (let q = 1; q <= 4; q++) {
-        const [wx, wz, wr] = at(v.s - v.dir * q * 0.17 * sc);
+        const [wx, wz, wr] = at(v.s - v.dir * q * 0.085 * sc);
         if (r.pax) AG.add('coach', agentGeo('coach'), MAT.agent, wx, 0, wz, wr, sc, sc, sc);
         else AG.add('wagon', agentGeo('wagon'), MAT.agent, wx, 0, wz, wr, sc, sc, sc, q === 1 || q === 3 ? cargo : '#ffffff');
       }
-      if (r.vt === 'steam' && S.speed && cam.dist < 40 && v.wait <= 0) { v.puff += 0.016 * 3; if (v.puff > 1) { v.puff = 0; puff(x, 0.11 * sc, z, 'loco'); } }
+      if (r.vt === 'steam' && S.speed && cam.dist < 40 && v.wait <= 0) { v.puff += 0.016 * 3; if (v.puff > 1) { v.puff = 0; puff(x, 0.055 * sc, z, 'loco'); } }
     } else {
       const [x, z, rot] = at(v.s);
       if (r.vt === 'cart') { AG.add('cart', agentGeo('cart'), MAT.agent, x, 0, z, rot, sc, sc, sc); AG.add('load', agentGeo('load'), MAT.agent, x, 0, z, rot, sc, sc, sc, r.pax ? '#d9cfb8' : cargo); }

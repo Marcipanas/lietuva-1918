@@ -8,7 +8,7 @@ const TUT_STEPS = [
   { t: 'Welcome to 1918', d: 'You lead Lithuania from 16 February 1918. Drag to look around, pinch to zoom and twist two fingers to turn the map.', done: () => tutCamMoved() },
   { t: 'Your towns', d: 'Tap a town’s name to open it. You see its people, its stock and what it is short of.', done: () => !!(VIEW.sel && VIEW.sel.kind === 't') },
   { t: 'Routes move goods', d: 'Nothing travels on its own. Open the Routes tab to see the old railways and cart roads that keep towns fed.', done: () => S.tab === 'routes' },
-  { t: 'Build a road', d: 'Alytus, Tauragė and Utena have no road, and their food will run out. Choose Road and drag from one town’s streets to another’s.', done: () => !!TUT.ev.road },
+  { t: 'Build a road', d: 'Every town and village feeds itself, but Alytus, Tauragė and Utena have no road, so they cannot trade or grow. Choose Road and drag from one town’s streets to another’s.', done: () => !!TUT.ev.road },
   { t: 'Start a route', d: 'A road alone moves nothing. Open a town, find its new neighbour under Neighbours and tap Road route.', done: () => S.stats.routesMade > 0 },
   { t: 'Room for homes', d: 'Towns grow into zoned lots. Choose Zone and paint along a street.', done: () => !!TUT.ev.zone },
   { t: 'Farms and industry', d: 'Choose Build to place farms, forestry camps and brickworks. Each needs a road to a town hall within 15 km.', done: () => !!TUT.ev.build },

@@ -59,7 +59,8 @@ assert(true, `loaded ${order.length} scripts in index.html order`);
 
 /* ---- play session (runs inside the game's global scope) ---- */
 const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t)}};
-  out.tut0=TUT.on&&TUT.step===0;out.towns=S.towns.length;out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
+  out.tut0=TUT.on&&TUT.step===0;out.towns=S.towns.length;out.vils=S.towns.filter(x=>x.vil).length;out.named=TOWNS0.length+TOWNS1.length;out.pop0=totals().pop;
+  out.halls=S.towns.every((x,n)=>S.bld.some(b=>b.t==='hall'&&b.ti===n));out.homes=S.towns.every((x,n)=>x.lock||S.bld.some(b=>b.t==='house'&&b.town===n));out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
   out.edges=S.edges.length;out.houses=S.bld.filter(b=>b.t==='house').length;out.lots=S.lots.length;
   run(20,16);S.speed=3;run(120,100);out.day1=S.day;out.walkers=WALK.length;out.vehicles=VEH.length;out.renders=R3.calls;
   const kau=S.towns.find(x=>x.id==='kau'),aly=S.towns.find(x=>x.id==='aly'),ki=S.towns.indexOf(kau),ai=S.towns.indexOf(aly);
@@ -85,6 +86,7 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   setTool('inspect');run(500,100);const tt=totals();out.day2=S.day;out.pop=tt.pop;out.funds=S.funds;out.inc=S.inc;
   out.finite=S.towns.every(x=>isFinite(x.pop)&&RES.every(q=>isFinite(x.stock[q]||0)))&&isFinite(S.funds);
   out.moved=Object.values(r.mAB||{}).reduce((a,b)=>a+b,0);out.housesNow=S.bld.filter(b=>b.t==='house').length;
+  out.steady=S.towns.filter(x=>!x.lock).every(x=>x.pop>=x.pop0*0.95);out.low=S.towns.filter(x=>!x.lock&&x.pop<x.pop0*0.95).map(x=>x.n+' '+x.pop.toFixed(1)+'/'+x.pop0).join(', ');
   selectTown(ki,true);renderPanel(true);['routes','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
   const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}toggleDrawer(true);toggleDrawer(false);
   [2,8,30,90,400].forEach(d=>{cam.dist=d;cam.anim=null;run(3,16)});
@@ -95,7 +97,8 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
 let o;
 try { o = vm.runInContext(session, sandbox, { filename: 'session' }); }
 catch (e) { console.error('✗ play session threw: ' + (e.stack || e)); process.exit(1); }
-assert(o.towns === 11, '11 towns generated');
+assert(o.towns >= o.named + 100 && o.vils >= 100, `${o.towns} settlements generated (${o.towns - o.vils} towns, ${o.vils} villages)`);
+assert(o.halls && o.homes, 'every settlement has a town hall or chapel, and every open one has homes');
 assert(o.edges > 50 && o.houses > 60 && o.lots > 20, `towns laid out (${o.edges} road and rail edges, ${o.houses} house lots, ${o.lots} zoned lots)`);
 assert(o.routes0 >= 6 && o.histOk, `${o.routes0} historic routes, all running`);
 assert(o.renders > 0 && o.vehicles > 0, `3D frames render and route vehicles (${o.vehicles}) spawn`);
@@ -108,7 +111,8 @@ assert(o.railAdded > 0.5, `rail tool lays track from a station${o.railWhy ? ': '
 assert(o.pigGone, 'remove tool demolishes a building');
 assert(o.day2 > o.day1 + 500, `game time advances (day ${o.day2})`);
 assert(o.finite, 'no NaN or infinite values in towns or treasury');
-assert(o.pop > 400, `towns grow (${Math.round(o.pop)}k residents, ${o.housesNow} house lots, income ${o.inc.toFixed(1)} Lt a day)`);
+assert(o.pop > o.pop0, `towns grow (${Math.round(o.pop0)}k to ${Math.round(o.pop)}k residents, ${o.housesNow} house lots, income ${o.inc.toFixed(1)} Lt a day)`);
+assert(o.steady, `towns and villages keep their 1918 size without help${o.low ? ' (shrank: ' + o.low + ')' : ''}`);
 assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`);
 assert(o.roundtrip, `save and reload keep the game intact (${o.saveKB} KB)`);
 assert(o.saved, 'autosave writes to localStorage');

@@ -22,9 +22,9 @@ SCENE.add(HEMI, SUN, SUN.target);
 SUN.castShadow = true;
 SUN.shadow.mapSize.set(2048, 2048);
 SUN.shadow.bias = -0.0003;
-SUN.shadow.normalBias = 0.015;
+SUN.shadow.normalBias = 0.008;
 const SUN_DIR = new THREE.Vector3(-0.5, 0.78, 0.38).normalize();
-const CAM_LIM = { dist: [1.3, 720], pitch: [0.42, 1.52] };
+const CAM_LIM = { dist: [0.6, 720], pitch: [0.42, 1.52] };
 
 function resize() {
   const r = cv.getBoundingClientRect();
@@ -45,11 +45,11 @@ function applyCam() {
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   CAM3.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist, sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist);
   CAM3.lookAt(cam.x, 0, cam.z);
-  CAM3.near = Math.max(0.05, cam.dist * 0.03); CAM3.far = cam.dist * 7 + 400;
+  CAM3.near = Math.max(0.02, cam.dist * 0.03); CAM3.far = cam.dist * 7 + 400;
   CAM3.updateProjectionMatrix(); CAM3.updateMatrixWorld();
   SCENE.fog.near = cam.dist * 2.4; SCENE.fog.far = cam.dist * 6 + 260;
   /* the sun's shadow box follows the view; far out, shadows stop updating */
-  const near = cam.dist < 70, half = clamp(cam.dist * 1.15, 4, 75), D = 120;
+  const near = cam.dist < 70, half = clamp(cam.dist * 1.15, 2, 75), D = 120;
   SUN.shadow.autoUpdate = near;
   if (near) {
     const snap = half / 512, tx = Math.round(cam.x / snap) * snap, tz = Math.round(cam.z / snap) * snap;
@@ -212,7 +212,7 @@ function paintMask() {
   const d = MASK.image.data;
   for (let k = 0; k < GW * GH; k++) { const t = TT[k], f = TF[k]; d[k * 4] = t === T_LAND && !(f & (F_FOREST | F_BOG)) ? (f & F_LT ? 255 : 140) : 0; d[k * 4 + 3] = 255; }
   for (const t of S.towns) {
-    const r = 1.8 + Math.sqrt(t.pop0 || 3) * 0.45;
+    const r = t.vil ? 0.7 : 0.6 + (t.R || 1) * 0.9;
     forDisk(t.x, t.z, r, (k, dd) => { d[k * 4] = Math.round(d[k * 4] * clamp((dd - r * 0.55) / (r * 0.45), 0, 1)); });
   }
   MASK.needsUpdate = true; maskTowns = S.towns.length;
@@ -231,9 +231,9 @@ function groundMat() {
       'float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   float farm = texture2D(uMask, vWxz / uMap).r;
   if (farm > 0.02) {
-    vec2 tile = floor(vWxz / 14.0), loc = vWxz - tile * 14.0;
+    vec2 tile = floor(vWxz / 9.0), loc = vWxz - tile * 9.0;
     float an = h21(tile) * 3.1416, ca = cos(an), sa = sin(an);
-    vec2 q = vec2(ca * loc.x - sa * loc.y, sa * loc.x + ca * loc.y) / vec2(1.3, 0.5);
+    vec2 q = vec2(ca * loc.x - sa * loc.y, sa * loc.x + ca * loc.y) / vec2(0.85, 0.32);
     q += vec2(texture2D(uNoise, vWxz * 0.055).r, texture2D(uNoise, vWxz * 0.055 + vec2(0.37, 0.71)).r) * 1.2 - 0.6;
     vec2 cell = floor(q), f = fract(q);
     float px = length(fwidth(q));
@@ -360,7 +360,7 @@ const LINE_MAT = {
 let LINES = [], lineKey = '';
 function lineW(e) { const w0 = espec(e).w; return Math.max(w0, cam.dist * (e.k === 'rail' ? 0.0034 : 0.0032) * (e.lv === 3 ? 1.3 : 1)); }
 function buildLines() {
-  const wk = Math.round(Math.log(Math.max(1, cam.dist * 0.0034 / 0.11)) / 0.3);
+  const wk = Math.round(Math.log(Math.max(1, cam.dist * 0.0034 / 0.055)) / 0.3);
   const key = WV.net + ':' + wk;
   if (key === lineKey) return;
   lineKey = key;
@@ -370,11 +370,11 @@ function buildLines() {
   EDGES.forEach(e => {
     const g = groups[e.k + e.lv] || (groups[e.k + e.lv] = { mat: LINE_MAT[e.k][e.lv], out: { pos: [], uv: [], idx: [] }, nodes: new Set(), w: 0 });
     const w = lineW(e);
-    ribbon(e.p, w, 0, e.k === 'rail' ? 0.24 : 0.5, g.out);
+    ribbon(e.p, w, 0, e.k === 'rail' ? 0.12 : 0.25, g.out);
     if (e.k === 'road') { g.nodes.add(e.a); g.nodes.add(e.b); g.w = Math.max(g.w, w); }
     /* bridges where the line crosses a river */
     let run = null;
-    for (let s = 0; s <= e.L + 0.1; s += 0.1) {
+    for (let s = 0; s <= e.L + 0.05; s += 0.05) {
       const q = polyAt(e.p, e.c, Math.min(s, e.L)), wet = terrAt(q[0], q[1]) === T_RIVER;
       if (wet && !run) run = [[q[0], q[1]]]; else if (wet) run.push([q[0], q[1]]);
       if ((!wet || s >= e.L) && run) { if (run.length > 1) ribbon(run, w * 1.45, 0, 1, br); run = null; }
@@ -437,26 +437,35 @@ const LOT_MAT = decal(new THREE.MeshBasicMaterial({ map: LOT_TEX, transparent: t
 const CROP = { grain: [['#d4bb5f', '#aec66d'], '#8c6a45'], grain2: [['#cbb75c', '#b9c770'], '#8c6a45'], potato: [['#6f9a4a', '#7aa452'], '#7a5a3a'],
   flax: [['#9db7e6', '#a9c0ea'], '#c9b27a'], peat: [['#5e4a3a', '#5e4a3a'], '#5e4a3a'], pasture: [['#8fbf5f', '#96c463'], '#b5ad5e'], garden: [['#86a356', '#8f7f55'], '#7a6a48'] };
 function cropCol(crop, id) { const c = CROP[crop]; return SEASON.aut > 0.5 ? c[1] : c[0][hash2(id, 3, 9) < 0.5 ? 0 : 1]; }
-let bldKey = '';
+let bldKey = '', FLAG_LIST = [];
+/* Only buildings around the view are drawn; far out, each house lot is one simple block. */
+function bldView() {
+  const bb = viewBox(), m = Math.max(1.5, cam.dist * 0.6), q = Math.max(1.5, cam.dist * 0.5);
+  return [Math.floor((bb[0] - m) / q) * q, Math.floor((bb[1] - m) / q) * q, Math.ceil((bb[2] + m) / q) * q, Math.ceil((bb[3] + m) / q) * q];
+}
 function buildBuildings() {
-  const key = WV.bld + ':' + NET.ver + ':' + (SEASON.aut > 0.5 ? 1 : 0);
+  const box = bldView(), far = cam.dist > 40;
+  const key = WV.bld + ':' + NET.ver + ':' + (SEASON.aut > 0.5 ? 1 : 0) + ':' + far + ':' + box.map(v => v.toFixed(1)).join(',');
   if (key === bldKey) return;
   bldKey = key;
-  BLD.begin(); FIELDP.begin(); FLAGS.begin();
+  BLD.begin(); FIELDP.begin(); FLAGS.begin(); FLAG_LIST = [];
   for (const b of S.bld) {
+    if (b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3]) continue;
     if (b.t === 'house') {
+      if (far && b.lv === 1) { BLD.add(b.f ? 'h:farmFar' : 'h:far', housePart(b.f ? 'farmFar' : 'far'), MAT.bld, b.x, 0, b.z, b.rot, 1, 1, 1, WALL_TINT[Math.floor(hash2(b.id, 40, 77) * 6)]); continue; }
       for (const [part, lx, lz, lr, tint] of lotLayout(b)) {
         const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, lx, lz), col = part === 'woodWalls' ? WALL_TINT[tint] : part === 'woodRoof' ? ROOF_TINT[tint] : undefined;
         if (part === 'tree') BLD.add('h:tree', treeGeo('pine'), MAT.tree, x, 0, z, lr, 0.85, 0.85, 0.85);
         else BLD.add('h:' + part, housePart(part), MAT.bld, x, 0, z, b.rot + lr, 1, 1, 1, col);
       }
-      if (b.lv === 1) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, 0.0, -0.02); FIELDP.add('f', FIELD_GEO, FIELD_MAT, x, 0, z, b.rot, 0.16, 1, 0.12, cropCol('garden', b.id)); }
+      if (b.lv === 1 && b.f) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, 0.0, -0.02); FIELDP.add('f', FIELD_GEO, FIELD_MAT, x, 0, z, b.rot, 0.34, 1, 0.13, cropCol('garden', b.id)); }
+      else if (b.lv === 1) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, 0.0, -0.01); FIELDP.add('f', FIELD_GEO, FIELD_MAT, x, 0, z, b.rot, 0.08, 1, 0.06, cropCol('garden', b.id)); }
       continue;
     }
     const mk = modelKey(b), M = model(mk), o = { x: b.x, z: b.z, rot: b.rot };
     BLD.add('b:' + mk, M.geo, MAT.bld, b.x, 0, b.z, b.rot, 1, 1, 1, b.town < 0 && b.t !== 'hall' ? '#b0aaa0' : undefined);
     if (M.fields) for (const [fx, fz, fw, fd, crop] of M.fields) { const [x, z] = toWorld(o, fx, fz); FIELDP.add('f', FIELD_GEO, FIELD_MAT, x, 0, z, b.rot, fw, 1, fd, cropCol(crop, b.id + fx)); }
-    if (M.flag) { const [x, z] = toWorld(o, M.flag[0], M.flag[1]); FLAGS.add('flag', agentGeo('flag'), MAT.flag, x, M.flag[2] - 0.052, z, b.rot + Math.PI / 2, 1, 1, 1); }
+    if (M.flag) { const [x, z] = toWorld(o, M.flag[0], M.flag[1]); FLAGS.add('flag', agentGeo('flag'), MAT.flag, x, M.flag[2] - 0.052 * MS, z, b.rot + Math.PI / 2, 1, 1, 1); FLAG_LIST.push(b); }
   }
   BLD.end(); FIELDP.end(); FLAGS.end();
   rebuildEmitters();
@@ -471,7 +480,7 @@ function buildLots() {
 }
 
 /* ---------- trees, in chunks built when first seen ---------- */
-const TCH = 20, TREE_CH = new Map(), TREE_MAX = 85;
+const TCH = 20, TREE_CH = new Map(), TREE_MAX = 55;
 const CROWN_COL = { sum: ['#5f8f3e', '#6f9a45', '#7aa04a', '#668f40'], aut: ['#d9a23a', '#c9852f', '#e0b84a', '#b8792c'] };
 function treeChunk(ci, cj) {
   const key = ci + '_' + cj;
@@ -532,12 +541,12 @@ function updateTrees() {
   const show = cam.dist < TREE_MAX, aut = SEASON.aut > 0.5, winter = SEASON.snow > 0.55;
   let budget = 3;
   const bb = show ? viewBox() : null, ci0 = show ? Math.floor((bb[0] - 2) / TCH) : 0, ci1 = show ? Math.floor((bb[2] + 2) / TCH) : -1, cj0 = show ? Math.floor((bb[1] - 2) / TCH) : 0, cj1 = show ? Math.floor((bb[3] + 2) / TCH) : -1;
-  TREE_CH.forEach(c => { const vis = show && c.ci >= ci0 && c.ci <= ci1 && c.cj >= cj0 && c.cj <= cj1; c.meshes.forEach(m => { m.visible = vis; m.castShadow = vis && cam.dist < 14; }); });
+  TREE_CH.forEach(c => { const vis = show && c.ci >= ci0 && c.ci <= ci1 && c.cj >= cj0 && c.cj <= cj1; c.meshes.forEach(m => { m.visible = vis; m.castShadow = vis && cam.dist < 9; }); });
   if (!show) return;
   for (let cj = Math.max(0, cj0); cj <= Math.min(Math.ceil(MAPV / TCH), cj1); cj++) for (let ci = Math.max(0, ci0); ci <= Math.min(Math.ceil(MAPU / TCH), ci1); ci++) {
     const c = treeChunk(ci, cj);
-    if ((c.dirty || !c.built) && budget > 0) { buildTreeChunk(c); budget--; c.meshes.forEach(m => { m.visible = true; m.castShadow = cam.dist < 14; }); }
-    const dd = Math.hypot((ci + 0.5) * TCH - cam.x, (cj + 0.5) * TCH - cam.z), lod = clamp(1.35 - dd / (14 + cam.dist * 0.9), 0.2, 1);
+    if ((c.dirty || !c.built) && budget > 0) { buildTreeChunk(c); budget--; c.meshes.forEach(m => { m.visible = true; m.castShadow = cam.dist < 9; }); }
+    const dd = Math.hypot((ci + 0.5) * TCH - cam.x, (cj + 0.5) * TCH - cam.z), lod = clamp(1.3 - dd / (10 + cam.dist * 0.7), 0.12, 1);
     c.meshes.forEach(m => { m.count = Math.max(1, Math.round(m.userData.total * lod)); });
     if (c.crown) {
       c.crown.visible = !winter;
@@ -566,12 +575,12 @@ let EMIT = [];
 function rebuildEmitters() {
   EMIT = [];
   for (const b of S.bld) {
-    if (b.t === 'house') { if (b.lv === 1 && hash2(b.id, 5, 5) < 0.6) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, -0.14, 0.17); EMIT.push({ b, x, y: 0.2, z, kind: 'home', acc: hash2(b.id, 1, 1) }); } continue; }
+    if (b.t === 'house') { if (b.lv === 1 && hash2(b.id, 5, 5) < 0.6) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, -0.07, 0.085); EMIT.push({ b, x, y: 0.1, z, kind: 'home', acc: hash2(b.id, 1, 1) }); } continue; }
     const M = model(modelKey(b));
     if (M.smoke) for (const [sx, sy, sz, kind] of M.smoke) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, sx, sz); EMIT.push({ b, x, y: sy, z, kind, acc: hash2(b.id, 2, 2) }); }
   }
 }
-const SMOKE_KIND = { home: ['#e8e6e2', 0.05, 0.35, 2.4], dark: ['#5d5a57', 0.09, 0.55, 3.2], grey: ['#9a9894', 0.08, 0.5, 3], steam: ['#f7f7f5', 0.22, 0.6, 3.6], loco: ['#d9d9d6', 0.05, 0.5, 1.6] };
+const SMOKE_KIND = { home: ['#e8e6e2', 0.026, 0.35, 2.4], dark: ['#5d5a57', 0.045, 0.55, 3.2], grey: ['#9a9894', 0.04, 0.5, 3], steam: ['#f7f7f5', 0.11, 0.6, 3.6], loco: ['#d9d9d6', 0.026, 0.5, 1.6] };
 function puff(x, y, z, kind) {
   const S0 = SMOKE, p = S0.P[S0.next], k = SMOKE_KIND[kind];
   S0.next = (S0.next + 1) % S0.N;
@@ -582,13 +591,13 @@ function updateEffects(dt) {
   const f = S.speed ? 1 : 0, near = cam.dist < 45;
   if (near && f) for (const e of EMIT) {
     const b = e.b;
-    if (e.kind === 'home') { if (SEASON.heat < 0.25 || cam.dist > 16 || Math.hypot(e.x - cam.x, e.z - cam.z) > cam.dist * 1.6) continue; }
+    if (e.kind === 'home') { if (SEASON.heat < 0.25 || cam.dist > 10 || Math.hypot(e.x - cam.x, e.z - cam.z) > cam.dist * 1.6) continue; }
     else if (!b.on || b.eff < 0.25) continue;
     if (Math.hypot(e.x - cam.x, e.z - cam.z) > cam.dist * 2.5) continue;
     e.acc += dt * (e.kind === 'home' ? 0.6 : e.kind === 'steam' ? 1.6 : 1.8);
     while (e.acc > 1) { e.acc -= 1; puff(e.x, e.y, e.z, e.kind); }
   }
-  const S0 = SMOKE, wind = 0.06;
+  const S0 = SMOKE, wind = 0.03;
   for (let i = 0; i < S0.N; i++) {
     const p = S0.P[i];
     if (p.age < p.life) { p.age += dt; p.y += p.vy * dt * 2.2; p.x += wind * dt; p.z -= wind * 0.4 * dt; }
@@ -600,13 +609,12 @@ function updateEffects(dt) {
   for (const k of ['position', 'aAlpha', 'aSize', 'aCol']) S0.g.attributes[k].needsUpdate = true;
   /* flags flutter */
   const fl = FLAGS.m.get('flag');
-  if (fl && fl.mesh.count && cam.dist < 25) {
+  if (fl && fl.mesh.count && cam.dist < 14) {
     let i = 0;
-    for (const b of S.bld) {
-      const M = b.t === 'hall' || b.t === 'school' ? model(modelKey(b)) : null;
-      if (!M || !M.flag) continue;
+    for (const b of FLAG_LIST) {
+      const M = model(modelKey(b));
       const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, M.flag[0], M.flag[1]);
-      _p.set(x, M.flag[2] - 0.052, z); _q.setFromAxisAngle(_Y, b.rot + Math.PI / 2 + Math.sin(NOW / 420 + b.id) * 0.25); _s.set(1, 1, 1);
+      _p.set(x, M.flag[2] - 0.052 * MS, z); _q.setFromAxisAngle(_Y, b.rot + Math.PI / 2 + Math.sin(NOW / 420 + b.id) * 0.25); _s.set(1, 1, 1);
       fl.mesh.setMatrixAt(i++, _m4.compose(_p, _q, _s));
     }
     fl.mesh.instanceMatrix.needsUpdate = true;
@@ -623,7 +631,7 @@ function waterNear(b) {
 }
 function updateCritters() {
   CRIT.begin();
-  if (cam.dist < 22) {
+  if (cam.dist < 12) {
     const t = NOW / 1000;
     for (const b of S.bld) {
       if (Math.hypot(b.x - cam.x, b.z - cam.z) > cam.dist * 2) continue;
@@ -640,7 +648,7 @@ function updateCritters() {
       if (M.boat) {
         const w = waterNear(b);
         if (w && !(SEASON.snow > 0.75 && TT[cellAt(w[0], w[1])] !== T_SEA)) {
-          const ph = t * 0.12 + b.id, r = 0.35, x = w[0] + Math.cos(ph) * r, z = w[1] + Math.sin(ph) * r;
+          const ph = t * 0.12 + b.id, r = 0.2, x = w[0] + Math.cos(ph) * r, z = w[1] + Math.sin(ph) * r;
           CRIT.add(M.boat === 2 ? 'ship' : 'boat', agentGeo(M.boat === 2 ? 'ship' : 'boat'), MAT.agent, x, 0.004, z, -ph, 1, 1, 1);
         }
       }
@@ -678,32 +686,32 @@ function buildOverlays() {
   if (key === ovKey) return;
   ovKey = key;
   clearOV();
-  const lw = Math.max(0.2, cam.dist * 0.004);
+  const lw = Math.max(0.1, cam.dist * 0.004);
   if (pz) NET.pol.forEach(s => { const m = new THREE.Mesh(FIELD_GEO, OVM.pol); m.position.set(s.x, 0, s.z); m.scale.set(POL_R * 2 * Math.min(1.4, s.p * 0.5 + 0.6), 1, POL_R * 2 * Math.min(1.4, s.p * 0.5 + 0.6)); m.renderOrder = 5; OV.add(m); });
   if (VIEW.route != null) {
     const r = S.routes.find(q => q.id === VIEW.route), p = r && routePath(r);
     if (p && p.path.length > 1) { OV.add(lineMesh(p.path, lw * 1.6, OVM.route, 5.5)); [p.path[0], p.path[p.path.length - 1]].forEach(q => OV.add(ringMesh(q[0], q[1], lw * 2.2, lw * 1.2, OVM.ring))); }
   }
-  if (VIEW.path && VIEW.path.length > 1) OV.add(lineMesh(VIEW.path, Math.max(0.15, cam.dist * 0.0055), VIEW.pathOk ? OVM.path : OVM.bad, 6));
+  if (VIEW.path && VIEW.path.length > 1) OV.add(lineMesh(VIEW.path, Math.max(0.08, cam.dist * 0.0055), VIEW.pathOk ? OVM.path : OVM.bad, 6));
   (VIEW.snaps || []).forEach(s => OV.add(ringMesh(s[0], s[1], lw * 1.8, lw * 0.8, s[2] ? OVM.snap : OVM.ring)));
   if (VIEW.brush) OV.add(ringMesh(VIEW.brush[0], VIEW.brush[1], VIEW.brush[2], Math.max(0.05, lw * 0.5), OVM.ring));
   if (VIEW.zone) VIEW.zone.forEach(c => OV.add(quadAt({ x: c.x, z: c.z, rot: c.rot, w: LOT_W, d: LOT_D }, OVM.zone, 0, 0)));
   if (VIEW.bull) {
-    VIEW.bull.b.forEach(b => OV.add(quadAt(bOBB(b), OVM.bull, 0.1)));
+    VIEW.bull.b.forEach(b => OV.add(quadAt(bOBB(b), OVM.bull, 0.05)));
     VIEW.bull.lots.forEach(l => OV.add(quadAt(lotOBB(l), OVM.bull, 0)));
     VIEW.bull.segs.forEach(q => { const e = q.e; if (EDGES.has(e.id)) OV.add(lineMesh(polySlice(e.p, e.c, q.s0, Math.max(q.s0 + 0.05, q.s1)), lineW(e) * 1.6, OVM.bull, 6)); });
   }
   const g = VIEW.ghost;
   if (g) {
-    const M = model(g.t === 'hall' ? 'hall' : g.t), gm = new THREE.Mesh(M.geo, g.ok ? OVM.ghostOk : OVM.ghostBad);
+    const M = model(g.t), gm = new THREE.Mesh(M.geo, g.ok ? OVM.ghostOk : OVM.ghostBad);
     gm.position.set(g.x, 0, g.z); gm.rotation.y = g.rot; gm.renderOrder = 8; OV.add(gm);
     if (M.fields) for (const [fx, fz, fw, fd, crop] of M.fields) { const [x, z] = toWorld(g, fx, fz); OV.add(quadAt({ x, z, rot: g.rot, w: fw, d: fd }, fieldGhost(cropCol(crop, 1)), 0, 0)); }
-    OV.add(quadAt({ x: g.x, z: g.z, rot: g.rot, w: BT[g.t].fp[0], d: BT[g.t].fp[1] }, g.ok ? OVM.zone : OVM.bad, 0.12));
+    OV.add(quadAt({ x: g.x, z: g.z, rot: g.rot, w: BT[g.t].fp[0], d: BT[g.t].fp[1] }, g.ok ? OVM.zone : OVM.bad, 0.06));
     if (BT[g.t].pol) OV.add(ringMesh(g.x, g.z, POL_R, Math.max(0.06, lw * 0.6), OVM.bad));
   }
   const s = VIEW.sel;
-  if (s && s.kind === 'b') { const b = BMAP.get(s.id); if (b) { const o = bOBB(b); OV.add(ringMesh(b.x, b.z, Math.hypot(o.w, o.d) / 2 + 0.25, Math.max(0.05, lw * 0.6), OVM.ring)); } }
-  if (s && s.kind === 't') { const t = S.towns[s.ti]; if (t) OV.add(ringMesh(t.x, t.z, 2.2, Math.max(0.08, lw * 0.8), OVM.ring)); }
+  if (s && s.kind === 'b') { const b = BMAP.get(s.id); if (b) { const o = bOBB(b); OV.add(ringMesh(b.x, b.z, Math.hypot(o.w, o.d) / 2 + 0.12, Math.max(0.03, lw * 0.6), OVM.ring)); } }
+  if (s && s.kind === 't') { const t = S.towns[s.ti]; if (t) OV.add(ringMesh(t.x, t.z, Math.max(0.9, (t.R || 1) * 0.75), Math.max(0.05, lw * 0.8), OVM.ring)); }
 }
 function overlayPulse() { const a = 0.55 + 0.4 * Math.sin(NOW / 260); OVM.ring.opacity = a; }
 
@@ -723,31 +731,34 @@ function place(el, x, y, show) {
   if (el.style.display === 'none') el.style.display = '';
   el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
 }
+/* Cities always show their names; towns until the whole country is in view; villages only up close. */
+function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : t.vil ? 38 : 230; }
 function updateLabels() {
   syncLabels();
   const sb = VIEW.sel && VIEW.sel.kind === 'b' ? BMAP.get(VIEW.sel.id) : null;
   S.towns.forEach((t, ti) => {
-    const L = LBLS[ti], [x, y, ok] = toScreen(t.x, t.cap ? 0.95 : 0.8, t.z), on = ok && x > -80 && x < cw + 80 && y > -20 && y < ch + 40;
+    const L = LBLS[ti], sel = !!(VIEW.sel && ((VIEW.sel.kind === 't' && VIEW.sel.ti === ti) || (sb && sb.town === ti)));
+    if (!sel && cam.dist > labelZoom(t)) { place(L.el, 0, 0, false); return; }
+    const [x, y, ok] = toScreen(t.x, t.capital ? 0.5 : t.vil ? 0.36 : 0.4, t.z), on = ok && x > -80 && x < cw + 80 && y > -20 && y < ch + 40;
     place(L.el, x, y, on);
     if (!on) return;
-    const sel = !!(VIEW.sel && ((VIEW.sel.kind === 't' && VIEW.sel.ti === ti) || (sb && sb.town === ti)));
     const bad = !t.lock && (t.note === 'Hungry' || t.note === 'Cold homes'), good = !t.lock && t.note === 'Thriving';
-    const key = t.n + '|' + (t.lock ? '1923' : popStr(t.pop)) + '|' + sel + bad + good + t.lock + t.cap;
+    const key = t.n + '|' + (t.lock ? '1923' : popStr(t.pop)) + '|' + sel + bad + good + t.lock;
     if (key === L.key) return;
     L.key = key; L.b.textContent = t.n.toUpperCase(); L.s.textContent = t.lock ? '1923' : popStr(t.pop);
-    L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.cap ? ' cap' : '');
+    L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.capital ? ' cap' : '') + (t.vil ? ' vil' : t.pop0 < 20 && !t.capital ? ' sm' : '');
     L.d.className = 'dot' + (bad ? ' bad' : good ? ' good' : '');
   });
   NLBL.forEach(n => { const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]); place(n.el, x, y, ok && cam.dist > 140); });
   /* problem markers over buildings */
   let i = 0;
-  if (cam.dist < 30) for (const b of S.bld) {
+  if (cam.dist < 18) for (const b of S.bld) {
     if (i >= 40) break;
     const T0 = BT[b.t];
     if (b.t === 'house' || b.t === 'hall' || !(T0.w || b.t === 'station' || b.t === 'port' || b.t === 'warehouse')) continue;
     const prob = b.town < 0 || (T0.w && b.eff < 0.35 && b.on) || b.why === 'Storage full';
     if (!prob) continue;
-    const [x, y, ok] = toScreen(b.x, model(modelKey(b)).h + 0.15, b.z);
+    const [x, y, ok] = toScreen(b.x, model(modelKey(b)).h + 0.08, b.z);
     if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
     let el = STATUS[i];
     if (!el) { el = document.createElement('i'); el.className = 'st'; LBL.appendChild(el); STATUS.push(el); }
@@ -767,7 +778,7 @@ function pickBuilding(sx, sy) {
   const R0 = Math.max(3, cam.dist * 0.2);
   space();
   BH.query(g[0] - R0, g[1] - R0, g[0] + R0, g[1] + R0, b => {
-    const o = bOBB(b), h = b.t === 'house' ? (b.lv === 3 ? 0.55 : b.lv === 2 ? 0.26 : 0.18) : model(modelKey(b)).h;
+    const o = bOBB(b), h = b.t === 'house' ? (b.lv === 3 ? 0.55 : b.lv === 2 ? 0.26 : 0.18) * MS : model(modelKey(b)).h;
     const ox = r.o.x - b.x, oz = r.o.z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot);
     const lo = [ox * c - oz * s, r.o.y, ox * s + oz * c], ld = [r.d.x * c - r.d.z * s, r.d.y, r.d.x * s + r.d.z * c];
     const mn = [-o.w / 2, 0, -o.d / 2], mx = [o.w / 2, h, o.d / 2];

@@ -26,8 +26,8 @@ function showConfirm(){const c=$('confirm'),p=PEND;if(!p){c.hidden=true;return}l
 /* ---------- selection & side panel ---------- */
 function openSide(on){$('side').classList.toggle('open',on)}
 function select(s){VIEW.sel=s;S.tab='sel';S.confirmDemo=null;renderPanel(true);if(!s&&window.innerWidth<960)openSide(false)}
-function selectTown(ti,focus){VIEW.sel={kind:'t',ti};S.tab='sel';S.confirmDemo=null;if(focus){const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,16))}openSide(true);renderPanel(true)}
-function selectBuilding(b,focus){VIEW.sel={kind:'b',id:b.id};S.tab='sel';S.confirmDemo=null;if(focus)focusAt(b.x,b.z,Math.min(cam.dist,7));openSide(true);renderPanel(true)}
+function selectTown(ti,focus){VIEW.sel={kind:'t',ti};S.tab='sel';S.confirmDemo=null;if(focus){const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,Math.max(3.5,(t.R||1)*3)))}openSide(true);renderPanel(true)}
+function selectBuilding(b,focus){VIEW.sel={kind:'b',id:b.id};S.tab='sel';S.confirmDemo=null;if(focus)focusAt(b.x,b.z,Math.min(cam.dist,4));openSide(true);renderPanel(true)}
 function selTitle(){const s=VIEW.sel;if(!s)return 'Start';if(s.kind==='t')return S.towns[s.ti].n;const b=BMAP.get(s.id);return b?bName(b):'Start'}
 function renderTabs(){const T0=[['sel',selTitle()],['routes','Routes'],['nat','Lithuania'],['chron','Chronicle']];
   $('tabs').innerHTML=T0.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-act="tab" data-tab="${k}">${l}${k==='chron'?`<span class="cnt" id="logcnt">${S.log.length}</span>`:k==='routes'?`<span class="cnt">${S.routes.length}</span>`:''}</button>`).join('')}
@@ -49,7 +49,7 @@ function updateTop(){$('t-date').textContent=dateStr(S.day);$('t-funds').textCon
 /* ---------- actions ---------- */
 const RT_=id=>S.routes.find(r=>r.id===+id);
 function createRoute(a,b,m){if(a===b)return toast('Pick two different towns');const A=S.towns[a],B0=S.towns[b];if(!A||!B0||A.lock||B0.lock)return toast('Both towns must be part of Lithuania');
-  const p=NET.pairs[m][Math.min(a,b)+'_'+Math.max(a,b)];if(!p)return toast(m==='rail'?'No railway joins their stations. Lay track and build a station in each town.':'No road joins them yet. Draw one with the Road tool.');
+  const p=pairPath(m,a,b);if(!p)return toast(m==='rail'?'No railway joins their stations. Lay track and build a station in each town.':'No road joins them yet. Draw one with the Road tool.');
   const vts=Object.keys(VT).filter(k=>VT[k].mode===m&&VT[k].era<=S.era&&(!VT[k].elec||p.lv>=2)),vt=vts[vts.length-1],n=m==='rail'?1:2,cost=VT[vt].cost*n;
   if(S.funds<cost)return toast(`Need ${fmt(cost-S.funds)} more Lt for the vehicles`);S.funds-=cost;const r=addRoute(a,b,m,vt,n,false);VIEW.route=r.id;S.tab='routes';openSide(true);
   log(`New ${m==='rail'?'rail':'road'} route between ${A.n} and ${B0.n}.`);toast('Route created');save();renderPanel(true)}
@@ -58,7 +58,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'tab':S.tab=d.tab;S.confirmReset=false;S.confirmRoute=null;break;
     case 'seltown':return selectTown(ti,true);
     case 'selb':if(b)selectBuilding(b,true);return;
-    case 'focus':{const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,14));if(window.innerWidth<960)openSide(false);return}
+    case 'focus':{const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,Math.max(3.5,(t.R||1)*3)));if(window.innerWidth<960)openSide(false);return}
     case 'tool':setTool(d.tool);if(window.innerWidth<960)openSide(false);return;
     case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*S.prices[rs]*(port?1.4:1);
       t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*0.985);toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
@@ -95,7 +95,7 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);tutTick()}requestAnimationFrame(frame)}
 /* the opening view: Vilnius from the south-west, slightly tilted */
-function camHome(){const v0=S.towns[0];camLoad({x:v0.x+0.4,z:v0.z+0.6,dist:9,yaw:-0.35,pitch:0.74})}
+function camHome(){const v0=S.towns[0];camLoad({x:v0.x+0.2,z:v0.z+0.3,dist:6,yaw:-0.35,pitch:0.74})}
 function start(data){const saved=data&&data.save?data.save:load();let fresh=false;
   if(saved){try{restore(saved)}catch(e){newGame();fresh=true}}else{newGame();fresh=true}
   analyze();S.routes.forEach(routeEval);if(S.cam&&isFinite(S.cam.dist))camLoad(S.cam);else camHome();initScene();

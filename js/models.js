@@ -1,7 +1,9 @@
 'use strict';
 /* Lietuva 1918 — low-poly 3D models built from boxes, roofs, cylinders and cones, with colours baked into the vertices.
-   Units are km like the world. A house lot is 0.85 km across, so everything is drawn about ten times larger than life.
-   Local +z is the front, the side that faces the road. Needs THREE (vendor/three.min.js). */
+   Units are km like the world. Models are written at twice the size they are drawn: geometry() scales every vertex by MS,
+   and model() scales the extra data (smoke, fields, flags) the same way. Local +z is the front, the side that faces the road.
+   Needs THREE (vendor/three.min.js). */
+const MS = 0.5;
 
 const LIN = {};
 /* sRGB hex to the linear colour three.js works in */
@@ -115,7 +117,7 @@ class MB {
   }
   geometry() {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p.map(v => v * MS), 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
     g.computeVertexNormals();
     g.computeBoundingSphere();
@@ -291,12 +293,38 @@ function M_elec() {
   m.cb(-0.4, 0.62, 0.5, 0.2, 0, 0.1, '#d4dde3', '#9fb0bc');
   return { geo: m.geometry(), h: 0.27 };
 }
-const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
+/* village chapel: a wooden church with a bell tower, a roadside cross and a few graves */
+function M_chapel() {
+  const m = new MB(), wood = '#8f6b4c', wood2 = '#7a5a3f', roof = '#4f4a43';
+  m.pad(0, 0, 0.9, 0.9, 0.002, '#a9a07c');
+  m.cb(0, -0.08, 0.28, 0.5, 0, 0.15, wood, wood2).gable(0, -0.08, 0.28, 0.5, 0.15, 0.17, roof, wood2, true, 0.02);
+  m.wins(0.14, 0.12, 0.14, -0.28, 0.05, 0.12, 1, 3, MC.dglass, 0.35).wins(-0.14, -0.28, -0.14, 0.12, 0.05, 0.12, 1, 3, MC.dglass, 0.35);
+  m.cb(0, 0.24, 0.16, 0.16, 0, 0.36, wood, wood2).hip(0, 0.24, 0.16, 0.16, 0.36, 0.06, roof, 0.01);
+  m.cb(0, 0.24, 0.09, 0.09, 0.42, 0.5, wood2).hip(0, 0.24, 0.09, 0.09, 0.5, 0.1, MC.copper, 0.005);
+  m.cb(0, 0.24, 0.008, 0.008, 0.6, 0.68, '#e8dcb0').cb(0, 0.24, 0.04, 0.008, 0.645, 0.655, '#e8dcb0');
+  m.quad([-0.035, 0, 0.3205], [0.035, 0, 0.3205], [0.035, 0.1, 0.3205], [-0.035, 0.1, 0.3205], MC.door);
+  m.cb(0.32, 0.36, 0.014, 0.014, 0, 0.3, '#6d4a31').cb(0.32, 0.36, 0.12, 0.014, 0.21, 0.225, '#6d4a31').hip(0.32, 0.36, 0.05, 0.05, 0.3, 0.04, '#5a4434');
+  for (const [x, z] of [[-0.33, -0.2], [-0.33, -0.06], [-0.24, -0.32], [0.3, -0.25]]) m.cb(x, z, 0.008, 0.008, 0, 0.06, '#d9d4c7').cb(x, z, 0.035, 0.008, 0.035, 0.045, '#d9d4c7');
+  return { geo: m.geometry(), h: 0.68 };
+}
+const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), chapel: M_chapel, farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
   fishery: M_fishery, forestry: M_forestry, brick: M_brick, warehouse: M_warehouse, station: M_station, port: M_port, school: M_school, clinic: M_clinic,
   power: M_power, linen: M_factory('#cdb99a'), furniture: M_factory('#9b7652'), hydro: M_hydro, nuclear: M_nuclear, elec: M_elec };
 const MODELS = {};
-function model(key) { if (!MODELS[key]) MODELS[key] = MODEL_FN[key](); return MODELS[key]; }
-function modelKey(b) { return b.t === 'hall' && b.ti !== undefined && S.towns[b.ti] && S.towns[b.ti].cap ? 'hallCap' : b.t; }
+/* A model with its extra data scaled to the drawn size. */
+function model(key) {
+  if (MODELS[key]) return MODELS[key];
+  const M = MODEL_FN[key](), s = q => q.map(v => typeof v === 'number' ? v * MS : v);
+  M.h *= MS;
+  for (const k of ['smoke', 'fields', 'cows', 'pigs']) if (M[k]) M[k] = M[k].map(s);
+  if (M.flag) M.flag = s(M.flag);
+  return MODELS[key] = M;
+}
+function modelKey(b) {
+  if (b.t !== 'hall' || b.ti === undefined || !S.towns[b.ti]) return b.t;
+  const t = S.towns[b.ti];
+  return t.vil ? 'chapel' : t.capital ? 'hallCap' : 'hall';
+}
 
 /* ---------- houses on a lot: small instanced parts ---------- */
 const HOUSE_PARTS = {};
@@ -306,14 +334,25 @@ function housePart(k) {
   if (k === 'woodWalls') { m.cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).boxWins(0, 0, 0.3, 0.23, 0.014, 0.088, 1, 3, 2, '#3b3328', 0.38); m.quad([-0.025, 0, 0.1155], [0.03, 0, 0.1155], [0.03, 0.065, 0.1155], [-0.025, 0.065, 0.1155], '#5a4030'); }
   else if (k === 'woodRoof') { m.gable(0, 0, 0.3, 0.23, 0.1, 0.1, MC.white, MC.white, false, 0.02); m.cb(0.08, -0.04, 0.03, 0.03, 0.12, 0.22, '#b7a99a'); }
   else if (k === 'shed') { m.cb(0, 0, 0.14, 0.12, 0, 0.06, '#8a6a48').gable(0, 0, 0.14, 0.12, 0.06, 0.05, '#6d5038', '#8a6a48', true); }
+  else if (k === 'far') { for (const [x, z, r] of [[-0.2, 0.2, 0], [0.2, 0.21, 0], [-0.19, -0.17, Math.PI / 2], [0.2, -0.18, 0]]) m.push(x, z, r).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#8a6a58', MC.white, false, 0.02).pop(); }
+  else if (k === 'farmFar') { m.push(-0.1, 0.2).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#8a6a58', MC.white, false, 0.02).pop(); m.cb(0, -0.2, 0.34, 0.2, 0, 0.1, '#9a7a5e').gable(0, -0.2, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#9a7a5e', false, 0.02); }
+  else if (k === 'barn') { m.cb(0, 0, 0.34, 0.2, 0, 0.1, '#7d5c40', '#6a4c34').gable(0, 0, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#7d5c40', false, 0.02); m.quad([-0.05, 0, 0.1005], [0.05, 0, 0.1005], [0.05, 0.08, 0.1005], [-0.05, 0.08, 0.1005], '#4a3526'); }
   else if (k === 'brick') { m.cb(0, 0, 0.36, 0.26, 0, 0.24, '#b05a42', '#7d6a5c').boxWins(0, 0, 0.36, 0.26, 0.01, 0.23, 3, 4, 3, '#f1deb2', 0.45).hip(0, 0, 0.36, 0.26, 0.24, 0.07, '#7d6a5c', 0.014); }
   else if (k === 'panel') { m.cb(0, 0, 0.62, 0.22, 0, 0.55, MC.panel, MC.panel2).boxWins(0, 0, 0.62, 0.22, 0.02, 0.54, 9, 7, 2, '#5f7891', 0.55).cb(0.2, 0, 0.08, 0.08, 0.55, 0.6, MC.panel2); }
   return HOUSE_PARTS[k] = m.geometry();
 }
-/* Positions of the parts on a house lot, in the lot's local frame: [part, x, z, rot, tint index]. */
-function lotLayout(b) {
+/* Positions of the parts on a house lot, in the lot's local frame at drawn size: [part, x, z, rot, tint index]. */
+function lotLayout(b) { return lotLayout2(b).map(q => [q[0], q[1] * MS, q[2] * MS, q[3], q[4]]); }
+function lotLayout2(b) {
   const h = q => hash2(b.id, q, 77), out = [];
-  if (b.lv === 1) {
+  if (b.lv === 1 && b.f) {
+    /* a farmstead: one or two cottages, a barn, a shed and trees */
+    const two = h(1) < 0.45, spots = two ? [[-0.2, 0.2], [0.21, 0.17]] : [[-0.08 + (h(2) - 0.5) * 0.2, 0.2]];
+    spots.forEach((s, q) => { const r = (h(30 + q) - 0.5) * 0.2, tint = Math.floor(h(40 + q) * 6); out.push(['woodWalls', s[0], s[1], r, tint], ['woodRoof', s[0], s[1], r, Math.floor(h(50 + q) * 4)]); });
+    out.push(['barn', (h(3) - 0.5) * 0.16, -0.2, (h(4) - 0.5) * 0.12], ['shed', h(5) < 0.5 ? 0.3 : -0.3, -0.02, Math.PI / 2 + (h(6) - 0.5) * 0.3]);
+    out.push(['tree', -0.36 + h(7) * 0.06, -0.38, h(8) * 6], ['tree', 0.34, -0.36 + h(9) * 0.08, h(11) * 6]);
+    if (h(12) < 0.6) out.push(['tree', 0.36, 0.34, h(13) * 6]);
+  } else if (b.lv === 1) {
     const spots = [[-0.2, 0.2, 0], [0.2, 0.21, 0], [-0.19, -0.17, Math.PI / 2], [0.2, -0.18, 0]], n = h(1) < 0.55 ? 4 : 3;
     for (let q = 0; q < n; q++) {
       const s = spots[q], x = s[0] + (h(10 + q) - 0.5) * 0.05, z = s[1] + (h(20 + q) - 0.5) * 0.04, r = s[2] + (h(30 + q) - 0.5) * 0.14;
