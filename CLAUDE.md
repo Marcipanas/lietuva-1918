@@ -27,7 +27,7 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 2. **All scripts share one global scope.** A top-level `const`/`let`/`class`/`function` name may exist in only one file. A duplicate is a SyntaxError that silently stops the later file in a browser. `tools/check.js` parses all scripts together to catch it. Watch for names already taken by the data: `GEO_LT`, `GEO_C`, `GEO_SEA`, `GEO_LAG`, `GEO_BORD`, `GEO_KR`, `GEO_RIV`, `GEO_LAKES`, `PLACES` (geo.js), `LAKES`, `FOR`, `FIELDS`, `BOGS`, `CLAYS`, `FLAXR`, `MAP_LBL`, `CITY_PLAN`, `LANDMARKS`, `RAIL1918`, `ROAD1918`, `BORDER_ROADS` (land.js), `WORLD1918`, `FOOD`, `FOODS`, `MARKETS`, `CARDS`, `HEV`. Old names like `SEA` and `FIELDS` have caused this bug.
 3. **Units are km.** `x` east, `z` south, `y` up. Distances between places are true; towns are drawn about five times larger than life (a lot is 0.42 km). Buildings and lots are rotated boxes `{x, z, rot, w, d}`; local +z is the front, which faces the road. Models are written at twice their size and scaled by `MS` = 0.5.
 4. **Simulation code never touches the DOM, the canvas or THREE.** `common`, `data`, `geo`, `geom`, `terrain`, `world`, `sim` and `history` must run headless; the smoke test depends on it. The view reads the world; the world signals changes through `WV` version counters and `terrainHook`.
-5. **Saved games:** if you change the shape of `S`, of an edge, a lot or a building, bump `SAVE_KEY` in `js/data.js` and the `v` checks in `newGame`/`load` in `js/sim.js`. Old saves are then ignored instead of crashing.
+5. **Saved games:** if you change the shape of `S`, of an edge, a lot or a building, bump `SAVE_KEY` in `js/data.js` and the `v` checks in `newGame`/`load` in `js/sim.js`. Old saves are then ignored instead of crashing. A new optional field that `restore()` fills in with a default (like `S.series`) needs no bump. Figures each day recomputes stay out of the save (`DAILY` in sim.js).
 6. **Offline cache:** after changing any shipped file, bump `VERSION` in `sw.js`. A new file must also be added to `SHELL` in `sw.js` and to `index.html`; `tools/check.js` fails otherwise.
 7. **Performance:** add drawable things as instances in an existing `Pool` (scene.js), give anything numerous a distance limit, and rebuild meshes only when a version counter changes. See the budget in `docs/ARCHITECTURE.md`.
 8. **Copy:** plain words, active voice, short sentences, no em-dash asides. Buttons say what happens ("Build", "Remove route"). Distances in km, population in thousands (`popStr`), goods per day.
@@ -51,10 +51,12 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 | `js/models.js` | Low-poly models built with `MB`; `MODEL_FN` per building type (village halls draw as a chapel); house parts and `lotLayout` (farmsteads too); trees, people, animals, vehicles | THREE |
 | `js/scene.js` | Renderer, camera rig, light and shadows, snow shader, ground and field patchwork, water, roads and rails, instanced buildings and trees, smoke, overlays, HTML labels, picking, `draw()` | DOM, THREE |
 | `js/agents.js` | Walking residents, commuters and route vehicles (visual only) | THREE |
-| `js/input.js` | Gestures and keys; the tools (`TOOL`, `PEND`, `beginDraw`, `setGhost`, `doConfirm`) | DOM |
-| `js/panels.js` | Side panel HTML as strings, with `v()`/`w()` dynamic fields: town, building, routes, trade or plan, Lithuania (security), chronicle | no writes |
+| `js/tools.js` | The tools in world km (`TOOL`, `PEND`, `TRACE`): lines from tapped points (`addPoint`, `undoStep`) planned with `routePieces` into new, used and upgraded stretches; zoning that adds up; removal; the ghost (`setGhost`) and `findSpot`; `doConfirm` | body class only |
+| `js/input.js` | Gestures and keys: one finger moves the map, a tap acts, hold then drag draws or paints, drag the ghost or a line's point | DOM |
+| `js/panels.js` | Sheet HTML as strings, with `v()`/`w()`/`pd()`/`sc()` dynamic fields: header, build menu, town card, building card, routes, country view, trade or plan, chronicle | no writes |
+| `js/dash.js` | Dashboards with no DOM: `townIssues` (problems and one-tap fixes), `natIssues`, `goodsRows`, `townAlert` (label dots), `sparkPath` | no |
 | `js/tutorial.js` | First-time hint card (`TUT_STEPS`); the tools report actions with `tutEvent` | DOM |
-| `js/ui.js` | Toolbar, build drawer, confirm bar, tabs, `act()` actions, decision card dialog (`showCard`), main loop, `start()` boot | DOM |
+| `js/ui.js` | Status bar and speed, bottom navigation, the sheet (`setSheet`, drag), the action bar (`showBar`), `act()` actions, decision card dialog (`showCard`), main loop, `start()` boot | DOM |
 
 ## Concepts you need before changing code
 
@@ -68,25 +70,29 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 - **History:** a decision card in `S.hist.cards` pauses the game (`S.speed = 0`); `pickCard(n)` applies an option and restores the speed. `S.hist.path` is `'free'`, `'soviet'` or `'neutral'`; events check it with `when`.
 - **Goods move only on routes.** Auto cargo equalizes days of supply in one direction only, so goods never ping-pong. Trade abroad leaves from the stock of a town with a border post or port (deals), so routes bring goods to the border.
 - **Agents are visual only.** Walkers and vehicles show what the aggregated simulation does; they never move goods.
-- **Panels:** `renderPanel(false)` rebuilds nothing if the HTML structure is unchanged; it only patches values made with `v(key, text)` and widths made with `w(key, pct)`. A changing number shown without `v()` re-renders the panel every 0.3 s and buttons stop responding.
+- **Panels:** `renderPanel(false)` rebuilds nothing if the HTML structure is unchanged; it only patches values made with `v(key, text)`, widths made with `w(key, pct)`, chart paths made with `pd(key, d)` and states made with `sc(key, state)` (CSS reads `data-c`). A changing number shown without them makes the structure change; the panel then rebuilds at most every 1.5 s, and a button can miss a tap.
+- **Interface layout:** a status bar on top, the map, and a bottom bar with five views (`NAV` in ui.js) that open the sheet: a bottom sheet on phones (`VIEW.sheet` 0 closed, 1 half, 2 full) and a side panel from 960 px. A tool replaces the bottom bar with the action bar (`showBar`). Panels cover the bottom of the view, so the camera's target is drawn in the middle of what stays visible (`VOFF`, `setViewOffset` in scene.js); use `[cam.x, cam.z]` as the centre of the view, not the middle of the canvas.
+- **Tools:** one finger always moves the map. A tap acts; hold and drag draws or paints. Lines are lists of points: never build the planner's raw path, which wanders off existing lines on its 0.5 km cells; `routePieces` replaces those stretches with the network's own way and builds only the rest.
+- **Dashboards:** the day tick leaves made and used goods per town (`t.mk`, `t.us`) and growth (`t.gr`); dash.js turns these and the usual figures (`fed`, `heat`, `house`, `hint`, `pr`, `pol`, buildings' `why`) into problems. A new kind of problem goes in `townIssues`, with a fix that is an `act` the UI already has.
 
 ## Recipes
 
 - **Move or add a landmark, a city street, a railway or highway of 1918:** edit `LANDMARKS`, `CITY_PLAN`, `RAIL1918` or `ROAD1918` in `land.js` (lon/lat), add a model `LM_<key>` to `MODEL_FN` as `lm_<key>` for a new landmark, then `npm run world` and check the log for lines it could not build.
 - **Change borders, rivers or the list of places:** see `tools/geo/README.md`, then `npm run geo` and `npm run world`.
 
-- **New building:** add it to `BT` in `data.js` (cat, era, `fp: [w, d]` in km, w, in/out, need, cost, pol, d). Add a model function to `MODEL_FN` in `models.js` (front at +z, fit the footprint; optional `smoke`, `fields`, `flag`, `cows`, `pigs`, `boat`). If it needs special ground, extend `validPlace` in `world.js`. Add an icon to `ICON` if none fits, then place one in `tools/smoke-test.js`.
+- **New building:** add it to `BT` in `data.js` (cat, era, `fp: [w, d]` in km, w, in/out, need, cost, pol, d). Add a model function to `MODEL_FN` in `models.js` (front at +z, fit the footprint; optional `smoke`, `fields`, `flag`, `cows`, `pigs`, `boat`). If it needs special ground, extend `validPlace` in `world.js`, `quickNeed` in tools.js (so `findSpot` stays fast) and `NEED_TXT` in panels.js; ground the overlay can light goes in `needKey` (tools.js) and `NEED_BIT` (scene.js). If it makes a good, list it in `PRODUCER` (dash.js) so problems can offer it as a fix. Add an icon to `ICON` if none fits, then place one in `tools/smoke-test.js`.
 - **New resource:** `RES` and `RI` in `data.js`, `RCOL` in `agents.js`, CSS variable `--r-<name>` in `css/style.css`, an icon. If it is food, add it to `FOOD`.
 - **New historical event:** `HEV` in `history.js` with an exact date (`y: 1` if only the year is known) and `when` for the path it belongs to. Random events go in `REV` (sim.js).
 - **New decision card:** an entry in `CARDS` (history.js) with `t`, `when` (date text), `txt` and `opts` (`t`, `d` saying whether it happened, optional `risk: {sec}`, `go(ok)`), then an `HEV` entry with `card: 'id'`. Drive it in the smoke test with the `jump()` helper and `act({act: 'card', o})`.
 - **New market or good abroad:** `MARKETS` in history.js (`gate`, `buy`, `sell`) and its opening state in `newMarkets()`.
 - **New ministry task:** `OBJ` in `sim.js`.
-- **New panel section:** a string function in `panels.js`; route every changing number through `v()`.
+- **New panel section:** a string function in `panels.js`; route every changing number through `v()`, and changing colours through `sc()`.
+- **New problem on the dashboards:** a line in `townIssues` (dash.js): a key, a severity (2 urgent, 1 holds the town back, 0 a note), an icon, a title, a detail and fixes as `{t, a: {act, ...}}`. Add it to `townAlert` if it should colour the town's dot on the map.
 - **New overlay:** add it in `buildOverlays` (scene.js) and include whatever it depends on in that function's cache key.
 
 ## Testing
 
-`tools/smoke-test.js` is the safety net. When you add a system, drive it through the same functions the UI calls (`setTool`, `beginDraw`/`moveDraw`/`finishDraw`, `setGhost`, `doConfirm`, `act({...})`) with world km coordinates, and assert on `S`. For visuals, run `npm run serve` and check a phone-sized viewport (390×844) in a real browser; headless Chromium can screenshot WebGL with `--use-angle=swiftshader --enable-unsafe-swiftshader`.
+`tools/smoke-test.js` is the safety net. When you add a system, drive it through the same functions the UI calls (`setTool`, `tapTool`, `undoStep`, `beginDraw`/`moveDraw`/`finishDraw`, `setGhost`, `findSpot`, `doConfirm`, `navTo`, `act({...})`) with world km coordinates, and assert on `S`. For visuals, run `npm run serve` and check a phone-sized viewport (390×844) in a real browser; headless Chromium can screenshot WebGL with `--use-angle=swiftshader --enable-unsafe-swiftshader`. To test gestures there, dispatch `PointerEvent`s on the canvas (`pointerType: 'touch'`); the handlers tolerate pointers the browser did not start.
 
 ## Publishing
 

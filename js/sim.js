@@ -4,7 +4,7 @@ let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
   S={v:6,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
-    towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'sel',cam:null};
+    towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'nat',cam:null,series:[]};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
   if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else genWorld();
@@ -38,14 +38,16 @@ function encStartMap(){return Object.assign({gid:S.gid,nid:S.nid,lid:S.lid,towns
 function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
   S.towns=W.towns.map(a=>{const f=a[3];return newTown(a[0],a[1],a[5],a[6],{reg:a[2],capital:f&1,orig:f&2?1:0,lock:f&4?1:0,kr:f&8?1:0,vil:f&16?1:0,R:a[4],d:a[7],pop0:a[8],pop:f&4?0:a[8],stock:{...a[9]}})});
   decWorld(W)}
-/* Towns are saved without what every day recomputes (dem, ate), without empty stock, and without the 1918 descriptions,
-   which come back from the start map. */
+/* Towns are saved without what every day recomputes (dem, ate, and the made, used and growth figures the dashboards show),
+   without empty stock, and without the 1918 descriptions, which come back from the start map. */
 const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
+const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us']);
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
-  o.towns=S.towns.map(t=>{const c={};for(const k in t){if(k==='dem'||k==='ate'||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
-function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;
+  o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
+/* Fields added after a save format was fixed get their defaults here, so older saves of the same format keep loading. */
+function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;S.series=S.series||[];
   const desc=new Map(typeof WORLD1918!=='undefined'&&WORLD1918?WORLD1918.towns.map(a=>[a[0],a[7]]):[]);
-  S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};if(t.d===undefined)t.d=desc.get(t.id)||''});decWorld(W)}
+  S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};t.mk={};t.us={};t.gr=0;if(t.d===undefined)t.d=desc.get(t.id)||''});decWorld(W)}
 const SAVE_NUM=(k,v)=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*1e4)/1e4:v;
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize(),SAVE_NUM))}catch(e){}lastSave=Date.now()}
 /* the frame loop saves at most every 20 seconds: the map makes a save of a few hundred KB */
@@ -103,9 +105,9 @@ function commute(act){act.forEach(n=>{const t=S.towns[n];t.comIn=0;t.comOut=0;t.
 /* ---------- production and town life ---------- */
 /* residents a house lot holds: village farmsteads hold fewer than town houses */
 function houseCap(b){return b.f&&b.lv===1?FARMSTEAD_CAP:HOUSE.cap[b.lv]}
-function useInputs(b,e,st,dem,fill){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';
+function useInputs(b,e,st,dem,fill,us){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';
   for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const q=(st[r]||0)/need;if(q<ir){ir=q;b.lack=r}}}
-  ir=clamp(ir,0,1);for(const r in T0.in)st[r]=(st[r]||0)-T0.in[r]*im*e*ir;return ir}
+  ir=clamp(ir,0,1);for(const r in T0.in){const q=T0.in[r]*im*e*ir;st[r]=(st[r]||0)-q;us[r]=(us[r]||0)+q}return ir}
 function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
 const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall',locked:'Klaipėda joins Lithuania in 1923'};
 function naTxt(na){return na==='locked'&&S.hist.lost?'The Klaipėda Region belongs to Germany':NA_TXT[na]||'Not connected'}
@@ -113,29 +115,29 @@ let BYT=[];
 function phase1(ti){const t=S.towns[ti];let house=0,jobs=0,cap=STORE_BASE,sch=0,cli=0,pol=0,hn=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(b.t==='house'){house+=houseCap(b);pol+=polAt(b.x,b.z);hn++}else if(T0.w&&b.on)jobs+=T0.w;
     if(T0.store)cap+=WH_CAP[b.lv];if(T0.svc==='school'&&b.on)sch++;if(T0.svc==='clinic'&&b.on)cli++});
-  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={}}
+  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={};t._mk={};t._us={}}
 function phase1b(ti){const t=S.towns[ti],st=t.stock;t.edu=Math.min(1,t.nsch*50*t.fill/Math.max(1,t.pop));t.med=Math.min(1,t.ncli*70*t.fill/Math.max(1,t.pop));
   t.pm=(0.7+0.6*t.h/100)*(1+0.1*t.edu);t.powS=0;t.powD=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.pow)return;if(!b.on){b.eff=0;b.why='Paused';return}
-    const ir=useInputs(b,t.fill,st,t.dem,t.fill);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
+    const ir=useInputs(b,t.fill,st,t.dem,t.fill,t._us);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(T0.powNeed&&b.on)t.powD+=T0.powNeed*LV[b.lv]*t.fill;if(T0.svc){b.eff=b.on?t.fill:0;b.why=b.on?(t.fill<0.9?'Short of workers':'Running'):'Paused'}});
   if(S.era>=2&&!t.vil)t.powD+=t.pop*(S.era>=3?0.06:0.03)}
-function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill,hp=histProd();
+function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill,hp=histProd(),mk=t._mk,us=t._us;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.out)return;if(!b.on){b.eff=0;b.why='Paused';return}
-    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill),mod=(b.t==='farm'||b.t==='potato'?S.mod.farm:1)*(b.k||1)*hp;let full=false;
-    for(const r in T0.out){const made=T0.out[r]*LV[b.lv]*e0*ir*t.pm*mod,sp=room(t,r);if(sp<made*0.5)full=true;st[r]=(st[r]||0)+Math.min(made,sp)}
+    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill,us),mod=(b.t==='farm'||b.t==='potato'?S.mod.farm:1)*(b.k||1)*hp;let full=false;
+    for(const r in T0.out){const made=T0.out[r]*LV[b.lv]*e0*ir*t.pm*mod,sp=room(t,r),q=Math.min(made,sp);if(sp<made*0.5)full=true;st[r]=(st[r]||0)+q;mk[r]=(mk[r]||0)+q}
     b.eff=e0*ir;b.why=full?'Storage full':why(b,fill,p,ir)});
   /* the settlement's own fields and woodlots: they feed its 1918 population and heat their homes, so it never shrinks below that size */
-  const base=t.pop0||0,sub=histSub(t);['grain','potatoes'].forEach(r=>{st[r]=(st[r]||0)+Math.min(base*0.05*sub,room(t,r))});
+  const base=t.pop0||0,sub=histSub(t);['grain','potatoes'].forEach(r=>{const q=Math.min(base*0.05*sub,room(t,r));st[r]=(st[r]||0)+q;mk[r]=(mk[r]||0)+q});
   const need=t.pop*0.1;FOOD.forEach(r=>{t.dem[r]=(t.dem[r]||0)+need*0.3});
   t.ate={};let rem=need,pool=FOOD.filter(r=>(st[r]||0)>1e-4);
-  while(rem>1e-6&&pool.length){const share=rem/pool.length,next=[];pool.forEach(r=>{const take=Math.min(share,st[r]);st[r]-=take;rem-=take;t.ate[r]=(t.ate[r]||0)+take;if(st[r]>1e-4)next.push(r)});pool=next}
+  while(rem>1e-6&&pool.length){const share=rem/pool.length,next=[];pool.forEach(r=>{const take=Math.min(share,st[r]);st[r]-=take;rem-=take;t.ate[r]=(t.ate[r]||0)+take;us[r]=(us[r]||0)+take;if(st[r]>1e-4)next.push(r)});pool=next}
   const fed=need?(need-rem)/need:1;t.vari=FOOD.filter(r=>(t.ate[r]||0)>=need*0.08).length;
   t.fdays=need>0?FOOD.reduce((a,r)=>a+(st[r]||0),0)/need:99;
   const hm=t.pop*0.03*sea.heat*(era>=3&&pr>0.9?0.5:1),hsub=Math.min(t.pop,base)*0.03*sea.heat*(era>=3&&pr>0.9?0.5:1),hneed=hm-hsub;
   t.dem.peat=(t.dem.peat||0)+hneed*0.6;t.dem.timber=(t.dem.timber||0)+hneed*0.4;
-  let hr=hneed;['peat','timber'].forEach(r=>{const take=Math.min(hr,st[r]||0);st[r]=(st[r]||0)-take;hr-=take});t.heat=hm>0?1-hr/hm:1;
-  const eat=(r,per)=>{const nd=t.pop*per;t.dem[r]=(t.dem[r]||0)+nd;const got=Math.min(st[r]||0,nd);st[r]=(st[r]||0)-got;return nd?got/nd:1};
+  let hr=hneed;['peat','timber'].forEach(r=>{const take=Math.min(hr,st[r]||0);st[r]=(st[r]||0)-take;us[r]=(us[r]||0)+take;hr-=take});t.heat=hm>0?1-hr/hm:1;
+  const eat=(r,per)=>{const nd=t.pop*per;t.dem[r]=(t.dem[r]||0)+nd;const got=Math.min(st[r]||0,nd);st[r]=(st[r]||0)-got;us[r]=(us[r]||0)+got;return nd?got/nd:1};
   const gm=era>=2?eat('textiles',0.012):1,em=era>=3?eat('electronics',0.004):1;
   let h=58,note='Content';const unemp=Math.max(0,t.wf-Math.min(t.wf,t.jobs)-t.comOut-Math.min(t.pop,base)*0.5);
   h+=Math.max(0,t.vari-1)*4;h+=6*t.med;h+=histMood(t);
@@ -159,14 +161,16 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Food is running out in ${t.n}. People are leaving.`,'warn')}
   else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Homes in ${t.n} are cold. Send peat or timber.`,'warn')}
   RES.forEach(r=>{if((st[r]||0)<1e-4)st[r]=0;if(st[r]>t.cap)st[r]=t.cap})}
+/* building materials a town spends on its own homes count as goods used */
+function useMat(t,cost){if(!t._us)return;for(const k in cost)if(k!=='lt')t._us[k]=(t._us[k]||0)+cost[k]}
 /* towns grow into zoned lots along their streets, nearest and cleanest first; in later eras old houses are rebuilt bigger */
 function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.floor(t.pop/50);
   for(let q=0;q<n;q++){let best=null,bd=1e9;
     for(const l of S.lots){if(l.town!==ti)continue;const sc=l.cd*0.5+hash2(l.id,7,3)*1.5+polAt(l.x,l.z)*4;if(sc<bd){bd=sc;best=l}}
     if(best){if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to build homes`;return}
-      pay(cost,t);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
+      pay(cost,t);useMat(t,cost);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
     if(lv>=2){const old=BYT[ti].filter(b=>b.t==='house'&&b.lv<lv);if(old.length){const b=old[Math.floor(Math.random()*old.length)];
-      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
+      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);useMat(t,cost);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
     t.hint='No room to grow: zone more land along its streets';return}}
 
 /* ---------- history, chance and ministry tasks ---------- */
@@ -204,20 +208,24 @@ function tick(){
   S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);
   RES.forEach(r=>{const base=RI[r].p*depAt(r);let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
   BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b.na)}});
-  act.forEach(n=>{before[n]={...S.towns[n].stock};phase1(n)});
+  act.forEach(n=>{before[n]={...S.towns[n].stock};before[n].pop=S.towns[n].pop;phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
   act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
   act.forEach(n=>phase2(n,sea));
   runRoutes();runDeals();
   act.forEach(n=>{const t=S.towns[n];if(t.pop>=t.house*0.92&&t.fed>=0.99&&t.h>=45){if(++t.dev>=5){t.dev=0;develop(n)}}else if(t.pop<t.house*0.85)t.hint=''});
-  act.forEach(n=>{const t=S.towns[n];RES.forEach(r=>{const d=(t.stock[r]||0)-(before[n][r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2})});
+  /* smoothed per-day figures: net change of each good (routes and trade included), made, used, and population growth */
+  act.forEach(n=>{const t=S.towns[n],b0=before[n],mk=t.mk||(t.mk={}),us=t.us||(t.us={});RES.forEach(r=>{const d=(t.stock[r]||0)-(b0[r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2;
+    mk[r]=(mk[r]||0)*0.8+(t._mk[r]||0)*0.2;us[r]=(us[r]||0)*0.8+(t._us[r]||0)*0.2});t.gr=(t.gr||0)*0.9+(t.pop-b0.pop)*0.1});
   S.funds-=NET.up;S.routes.forEach(r=>{S.funds-=r.n*VT[r.vt].up});
   S.inc=S.inc*0.9+(S.funds-f0)*0.1;
   histTick();
   if(S.day>=S.nextRnd){S.nextRnd=S.day+170+Math.floor(Math.random()*170);const r=pick(REV)();if(r)log(r[0],r[1])}
   if(S.day%10===0)checkObj();
   const t=totals();
+  /* a weekly sample of residents and treasury for the trend charts; halved in resolution when it grows long */
+  if(S.day%7===0){const L0=S.series||(S.series=[]);L0.push([S.day,Math.round(t.pop*10)/10,Math.round(S.funds)]);if(L0.length>520)S.series=L0.filter((x,i)=>i%2===0||i===L0.length-1)}
   [750,1000,1500,2000,2500].forEach(x=>{if(t.pop>=x&&!S.ms['p'+x]){S.ms['p'+x]=1;log(`${popStr(x)} people now live in Lithuania's towns and villages.`,'good')}});
   if(!S.won&&S.era===3&&t.pop>=GOAL_POP&&t.linked===t.towns&&t.lit){S.won=true;log(`Every town is linked and lit, and ${popStr(GOAL_POP)} people live in the towns and villages. The plan is fulfilled.`,'good')}
 }

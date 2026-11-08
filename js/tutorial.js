@@ -6,13 +6,14 @@ const TUT_KEY = 'lietuva1918-tutorial';
 const TUT = { on: false, step: 0, cam0: null, ev: {} };
 const TUT_STEPS = [
   { t: 'Welcome to 1918', d: 'You lead Lithuania from 16 February 1918. Drag to look around, pinch to zoom and twist two fingers to turn the map.', done: () => tutCamMoved() },
-  { t: 'Your towns', d: 'Tap a town’s name to open it. You see its people, its stock and what it is short of.', done: () => !!(VIEW.sel && VIEW.sel.kind === 't') },
-  { t: 'Routes move goods', d: 'Nothing travels on its own. Open the Routes tab to see the old railways and cart roads that keep towns fed.', done: () => S.tab === 'routes' },
-  { t: 'Build a road', d: 'Slow dirt roads join every town and village. Railways and the old paved highways reach only some towns. Choose Road and drag from a town’s streets to build a shorter way.', done: () => !!TUT.ev.road },
-  { t: 'Start a route', d: 'A road alone moves nothing. Open a town, pick a neighbour under Neighbours and tap Road route.', done: () => S.stats.routesMade > 0 },
-  { t: 'Room for homes', d: 'Towns grow into zoned lots. Choose Zone and paint along a street.', done: () => !!TUT.ev.zone },
-  { t: 'Farms and industry', d: 'Choose Build to place farms, forestry camps and brickworks. Each needs a road to a town hall within 15 km.', done: () => !!TUT.ev.build },
-  { t: 'Time and history', d: 'Speed up time with 2× or 4×. On key dates history stops the clock and asks you to choose. The Lithuania tab lists ministry tasks that pay rewards. Good luck!', done: () => S.speed >= 2, last: true }
+  { t: 'Your towns', d: 'Tap a town’s name. Its card shows what it makes, what it lacks and what to fix, with a button for each fix.', done: () => !!(VIEW.sel && VIEW.sel.kind === 't') },
+  { t: 'Lithuania at a glance', d: 'Tap Lithuania at the bottom. It shows the whole country: residents, money, goods, and which towns need help.', done: () => S.tab === 'nat' && VIEW.sheet > 0 },
+  { t: 'Routes move goods', d: 'Nothing travels on its own. Tap Routes to see the old railways and cart roads that keep towns fed.', done: () => S.tab === 'routes' },
+  { t: 'Build a road', d: 'Tap Build, then Road. Tap where the road starts, then where it goes. It finds its way around lakes. Press Build.', done: () => !!TUT.ev.road },
+  { t: 'Start a route', d: 'A road alone moves nothing. Open a town and tap Road route beside a neighbour.', done: () => S.stats.routesMade > 0 },
+  { t: 'Room for homes', d: 'Towns grow into zoned lots. Tap Build, then Zone homes, and tap a few streets.', done: () => !!TUT.ev.zone },
+  { t: 'Farms and industry', d: 'Tap Build and pick a group, then a building. It appears on a good spot. Drag it to move it, then press Build.', done: () => !!TUT.ev.build },
+  { t: 'Time and history', d: 'The buttons at the top right pause the game and speed it up. On key dates history stops the clock and asks you to choose. Good luck!', done: () => S.speed >= 2, last: true }
 ];
 function tutRead() { try { return localStorage.getItem(TUT_KEY); } catch (e) { return 'done'; } }
 function tutWrite(v) { try { localStorage.setItem(TUT_KEY, String(v)); } catch (e) { /* storage blocked: the tutorial just shows again */ } }

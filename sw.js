@@ -1,11 +1,11 @@
 /* Lietuva 1918 — offline support (service worker).
    Bump VERSION whenever any shipped file changes, and keep SHELL in sync with the files the game loads.
    tools/check.js fails if a js/ file is missing from SHELL. */
-const VERSION='l1918-0.6.0';
+const VERSION='l1918-0.7.0';
 const FONTS='l1918-fonts';
 const SHELL=['./','index.html','css/style.css','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png',
   'vendor/three.min.js','js/common.js','js/data.js','js/geo.js','js/land.js','js/geom.js','js/terrain.js','js/world.js','js/world1918.js','js/sim.js','js/history.js','js/models.js','js/scene.js','js/agents.js',
-  'js/input.js','js/panels.js','js/tutorial.js','js/ui.js'];
+  'js/tools.js','js/input.js','js/panels.js','js/dash.js','js/tutorial.js','js/ui.js'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==VERSION&&k!==FONTS).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{

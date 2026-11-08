@@ -25,6 +25,9 @@ SUN.shadow.bias = -0.0003;
 SUN.shadow.normalBias = 0.008;
 const SUN_DIR = new THREE.Vector3(-0.5, 0.78, 0.38).normalize();
 const CAM_LIM = { dist: [0.6, 720], pitch: [0.42, 1.52] };
+/* View offset: panels cover the bottom of the view, so the camera's target is drawn VOFF.y pixels higher, in the middle of what
+   stays visible. The interface sets VOFF.ty; the view eases toward it. Picking and labels use the same projection. */
+const VOFF = { y: 0, ty: 0 };
 
 function resize() {
   const r = cv.getBoundingClientRect();
@@ -46,6 +49,7 @@ function applyCam() {
   CAM3.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist, sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist);
   CAM3.lookAt(cam.x, 0, cam.z);
   CAM3.near = Math.max(0.02, cam.dist * 0.03); CAM3.far = cam.dist * 7 + 400;
+  if (cw && ch) CAM3.setViewOffset(cw, ch, 0, Math.round(VOFF.y * 2) / 2, cw, ch);
   CAM3.updateProjectionMatrix(); CAM3.updateMatrixWorld();
   SCENE.fog.near = cam.dist * 2.4; SCENE.fog.far = cam.dist * 6 + 260;
   /* the sun's shadow box follows the view; far out, shadows stop updating */
@@ -694,6 +698,8 @@ const OV = new THREE.Group();
 SCENE.add(OV);
 const OVM = {
   path: decal(new THREE.MeshBasicMaterial({ color: '#f2a93b', transparent: true, opacity: 0.85 }), 6),
+  up: decal(new THREE.MeshBasicMaterial({ color: '#8fd19e', transparent: true, opacity: 0.9 }), 6),
+  use: decal(new THREE.MeshBasicMaterial({ color: '#f2a93b', transparent: true, opacity: 0.4 }), 6),
   bad: decal(new THREE.MeshBasicMaterial({ color: '#ef7b58', transparent: true, opacity: 0.85 }), 6),
   zone: decal(new THREE.MeshBasicMaterial({ color: '#78dc78', transparent: true, opacity: 0.5 }), 6),
   bull: decal(new THREE.MeshBasicMaterial({ color: '#ef7b58', transparent: true, opacity: 0.55 }), 6),
@@ -724,8 +730,12 @@ function buildOverlays() {
     const r = S.routes.find(q => q.id === VIEW.route), p = r && routePath(r);
     if (p && p.path.length > 1) { OV.add(lineMesh(p.path, lw * 1.6, OVM.route, 5.5)); [p.path[0], p.path[p.path.length - 1]].forEach(q => OV.add(ringMesh(q[0], q[1], lw * 2.2, lw * 1.2, OVM.ring))); }
   }
-  if (VIEW.path && VIEW.path.length > 1) OV.add(lineMesh(VIEW.path, Math.max(0.08, cam.dist * 0.0055), VIEW.pathOk ? OVM.path : OVM.bad, 6));
-  (VIEW.snaps || []).forEach(s => OV.add(ringMesh(s[0], s[1], lw * 1.8, lw * 0.8, s[2] ? OVM.snap : OVM.ring)));
+  /* a planned line: new stretches amber, old ones it upgrades green, ones it only uses thin; red when it cannot be built */
+  const pw = Math.max(0.08, cam.dist * 0.0055);
+  if (VIEW.lines && VIEW.pathOk) VIEW.lines.forEach(q => { if (q.p.length > 1) OV.add(lineMesh(q.p, q.k === 'use' ? pw * 0.55 : pw, q.k === 'new' ? OVM.path : q.k === 'up' ? OVM.up : OVM.use, 6)); });
+  else if (VIEW.path && VIEW.path.length > 1) OV.add(lineMesh(VIEW.path, pw, VIEW.pathOk ? OVM.path : OVM.bad, 6));
+  if (VIEW.hit && BMAP.has(VIEW.hit.id)) OV.add(quadAt(bOBB(VIEW.hit), OVM.bad, 0.08));
+  (VIEW.snaps || []).forEach(s => OV.add(ringMesh(s[0], s[1], lw * (s[3] ? 1.4 : 1.8), lw * 0.8, s[2] ? OVM.snap : OVM.ring)));
   if (VIEW.brush) OV.add(ringMesh(VIEW.brush[0], VIEW.brush[1], VIEW.brush[2], Math.max(0.05, lw * 0.5), OVM.ring));
   if (VIEW.zone) VIEW.zone.forEach(c => OV.add(quadAt({ x: c.x, z: c.z, rot: c.rot, w: LOT_W, d: LOT_D }, OVM.zone, 0, 0)));
   if (VIEW.bull) {
@@ -745,7 +755,35 @@ function buildOverlays() {
   if (s && s.kind === 'b') { const b = BMAP.get(s.id); if (b) { const o = bOBB(b); OV.add(ringMesh(b.x, b.z, Math.hypot(o.w, o.d) / 2 + 0.12, Math.max(0.03, lw * 0.6), OVM.ring)); } }
   if (s && s.kind === 't') { const t = S.towns[s.ti]; if (t) OV.add(ringMesh(t.x, t.z, Math.max(0.9, (t.R || 1) * 0.75), Math.max(0.05, lw * 0.8), OVM.ring)); }
 }
-function overlayPulse() { const a = 0.55 + 0.4 * Math.sin(NOW / 260); OVM.ring.opacity = a; }
+function overlayPulse() { const a = 0.55 + 0.4 * Math.sin(NOW / 260); OVM.ring.opacity = a; NEED_MAT.opacity = 0.42 + 0.14 * Math.sin(NOW / 420); }
+
+/* ---------- where the chosen building fits: clay, bog or forest, or the land where it does best (fertile soil, flax belt) ---------- */
+const NEED_BIT = { clay: F_CLAY, bog: F_BOG, forest: F_FOREST, fertile: F_FERTILE, flaxland: F_FLAX };
+const NEED_TEX = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
+NEED_TEX.magFilter = THREE.LinearFilter; NEED_TEX.minFilter = THREE.LinearFilter; NEED_TEX.generateMipmaps = false;
+const NEED_MAT = decal(new THREE.MeshBasicMaterial({ map: NEED_TEX, transparent: true, opacity: 0.5 }), 1);
+/* diagonal hatching in screen space, so lit ground never reads as a kind of terrain */
+NEED_MAT.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+  diffuseColor.a *= mix(0.3, 1.0, step(0.55, fract((gl_FragCoord.x + gl_FragCoord.y) / 18.0)));`); };
+NEED_MAT.customProgramCacheKey = () => 'need-hatch';
+const NEED_MESH = (() => {
+  const g = new THREE.PlaneGeometry(MAPU, MAPV); g.rotateX(-Math.PI / 2); g.translate(MAPU / 2, 0.002, MAPV / 2);
+  const m = new THREE.Mesh(g, NEED_MAT); m.renderOrder = 1; m.visible = false; SCENE.add(m); return m;
+})();
+let needDrawn = '';
+function updateNeed() {
+  const k = VIEW.need || '', key = k + ':' + lastGround + ':' + S.kr;
+  NEED_MESH.visible = !!k;
+  if (!k || key === needDrawn) return;
+  needDrawn = key;
+  const d = NEED_TEX.image.data, bit = NEED_BIT[k];
+  for (let k2 = 0; k2 < GW * GH; k2++) {
+    const f = TF[k2], t = TT[k2], on = (f & bit) && (f & F_LT) && (t === T_LAND || t === T_SAND) && !(S.kr && (f & F_KR));
+    const o = ((GH - 1 - ((k2 / GW) | 0)) * GW + (k2 % GW)) * 4;
+    d[o] = 255; d[o + 1] = 222; d[o + 2] = 89; d[o + 3] = on ? 255 : 0;
+  }
+  NEED_TEX.needsUpdate = true;
+}
 
 /* ---------- labels and status markers (HTML over the canvas) ---------- */
 const LBL = document.getElementById('labels');
@@ -767,19 +805,19 @@ function place(el, x, y, show) {
 function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : t.vil ? 38 : t.pop0 >= 4 ? 230 : 120; }
 function updateLabels() {
   syncLabels();
-  const sb = VIEW.sel && VIEW.sel.kind === 'b' ? BMAP.get(VIEW.sel.id) : null;
+  const sb = VIEW.sel && VIEW.sel.kind === 'b' ? BMAP.get(VIEW.sel.id) : null, heatOn = SEASON.heat > 0.05;
   S.towns.forEach((t, ti) => {
     const L = LBLS[ti], sel = !!(VIEW.sel && ((VIEW.sel.kind === 't' && VIEW.sel.ti === ti) || (sb && sb.town === ti)));
     if (!sel && cam.dist > labelZoom(t)) { place(L.el, 0, 0, false); return; }
     const [x, y, ok] = toScreen(t.x, t.capital ? 0.5 : t.vil ? 0.36 : 0.4, t.z), on = ok && x > -80 && x < cw + 80 && y > -20 && y < ch + 40;
     place(L.el, x, y, on);
     if (!on) return;
-    const bad = !t.lock && (t.note === 'Hungry' || t.note === 'Cold homes'), good = !t.lock && t.note === 'Thriving';
-    const lockTxt = S.hist.lost ? 'Germany' : '1923', key = t.n + '|' + (t.lock ? lockTxt : popStr(t.pop)) + '|' + sel + bad + good + t.lock;
+    const al = townAlert(t, heatOn);
+    const lockTxt = S.hist.lost ? 'Germany' : '1923', key = t.n + '|' + (t.lock ? lockTxt : popStr(t.pop)) + '|' + sel + al + t.lock;
     if (key === L.key) return;
     L.key = key; L.b.textContent = t.n.toUpperCase(); L.s.textContent = t.lock ? lockTxt : popStr(t.pop);
     L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.capital ? ' cap' : '') + (t.vil ? ' vil' : t.pop0 < 20 && !t.capital ? ' sm' : '');
-    L.d.className = 'dot' + (bad ? ' bad' : good ? ' good' : '');
+    L.d.className = 'dot' + (al >= 2 ? ' bad' : al === 1 ? ' warn' : al < 0 ? ' good' : '');
   });
   NLBL.forEach(n => { const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]); place(n.el, x, y, ok && (n.k === 't' ? cam.dist > 14 && cam.dist < 300 : n.k === 's' ? cam.dist > 100 : cam.dist > 60)); });
   /* problem markers over buildings */
@@ -845,8 +883,9 @@ function draw(dt) {
   NOW = performance.now();
   if (!cw || !S) return;
   SEASON = seasonOf(S.day); seasonUpdate();
+  VOFF.y = Math.abs(VOFF.ty - VOFF.y) < 0.5 ? VOFF.ty : VOFF.y + (VOFF.ty - VOFF.y) * Math.min(1, dt * 9);
   camAnimate(dt); applyCam();
-  buildBorder(); buildLines(); buildBuildings(); buildLots(); updateTrees(); buildOverlays(); overlayPulse();
+  buildBorder(); buildLines(); buildBuildings(); buildLots(); updateTrees(); buildOverlays(); overlayPulse(); updateNeed();
   if (typeof drawAgents === 'function') drawAgents(dt);
   updateEffects(dt); updateLabels();
   R3.render(SCENE, CAM3);

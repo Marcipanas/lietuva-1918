@@ -85,7 +85,7 @@ Placement: a building may not overlap another building or a road or track; near 
 - Route capacity each way per day = vehicles × loads per trip × trips a day, where trips a day = speed / (2 × route km + 22). On roads, trucks and lorries move at 0.7× on dirt, 1× on paved and 1.25× on highway (the weakest stretch counts).
 - **Auto cargo:** a good moves only toward the town with fewer days of supply, enough to even them out, keeping 5 days for the sender and at most 25 days for the receiver. Building materials keep a buffer of 40. **Picked cargo** sends everything above 5 days of local use, up to the receiver's storage room.
 - Selling a vehicle returns half its price. Removing a route returns half the price of all its vehicles.
-- **Roads,** per km: dirt 5 Lt + 0.3 timber; paved 14 + 0.6 bricks; highway 30 + 1.2 bricks. **Railways:** 20 + 1 timber; electric 45 + 1.2 bricks. Bridges cost 4×. Drawing along an existing line costs nothing: only new stretches are built. Upgrading an existing stretch (tap it with the tool) costs 60%. Upkeep per km a day: dirt roads nothing (the villages keep them up), paved roads 0.006, highways 0.009, railways 0.009 / 0.018 Lt.
+- **Roads,** per km: dirt 5 Lt + 0.3 timber; paved 14 + 0.6 bricks; highway 30 + 1.2 bricks. **Railways:** 20 + 1 timber; electric 45 + 1.2 bricks. Bridges cost 4×. A line is drawn by tapping the points it passes; the planner goes around lakes, the border and buildings, and bridges rivers. Where it follows a line that exists, it uses that line: following it costs nothing, and an old line of a lower kind than the one chosen is upgraded on the way for 60% of the price. A town at either end that has the materials pays. Tapping an old line first offers to upgrade that whole stretch. Upkeep per km a day: dirt roads nothing (the villages keep them up), paved roads 0.006, highways 0.009, railways 0.009 / 0.018 Lt.
 - **Drawing lines:** the line follows the finger, runs straight where it can, goes around lakes, the sea and buildings, bridges rivers, joins roads it touches and makes a junction where it crosses another road. Roads and railways cross on the level.
 
 ## Money
@@ -148,7 +148,21 @@ Random events every 170–340 days: bumper harvests, London butter prices, Briti
 
 ## Tutorial
 
-New players get an 8-step hint card (`js/tutorial.js`): look around, open a town, see the routes, build a road, start a route, zone homes, place industry, speed up time (and expect history's decisions). Each step finishes when the player does it, or on Next. It shows once per device (`localStorage['lietuva1918-tutorial']`); the Lithuania tab can start it again.
+New players get a 9-step hint card (`js/tutorial.js`): look around, open a town, open the Lithuania view, see the routes, build a road, start a route, zone homes, place industry, speed up time (and expect history's decisions). Each step finishes when the player does it, or on Next. It shows once per device (`localStorage['lietuva1918-tutorial']`); the Lithuania view can start it again.
+
+## The interface
+
+Made for one hand on a phone first. One finger always moves the map; two fingers zoom, turn and tilt. A tap acts. Nothing is built until the player presses Build in the action bar, which says what will happen, what it costs and who pays.
+
+- **Five views** at the bottom: Build, Routes, Lithuania, Trade (Plan under Soviet rule), Chronicle. Lithuania shows a red count of places with urgent problems; Chronicle shows how many entries are new.
+- **Build** is two steps: lines and land (Road, Railway, Zone homes, Remove), then a group of buildings (Food, Raw materials, Industry, Power, Transport and storage, Town services) and a building in it, with what it makes, what ground it needs and what it costs.
+- **Placing a building:** it appears on the best spot near the town it was chosen for (or near the middle of the view): facing a road, on ground that suits it, where a town takes it in. Ground that suits it is lit with hatching. The player drags it, taps elsewhere to move it there, turns it, or asks for another spot.
+- **Roads and railways:** tap where the line starts, then each place it passes; drag a point to move it; Undo takes the last one back. Hold still a moment and drag to draw freehand. The plan shows new stretches in amber, old ones it upgrades in green, and anything in the way in red.
+- **Zoning** adds up street by street with taps, or by painting after a short hold. **Remove** takes one thing per tap, or everything a painted stroke touches.
+- **A town's card**: residents and their trend, morale, its link to Vilnius, six health tiles (food, heat, homes, jobs, power or storage, air), its problems worst first with one-tap fixes, the goods it makes, uses and stocks each day, its buildings, its neighbours with a button to start a route, and its stock to buy and sell.
+- **Problems and fixes.** Urgent: hungry, cold homes, blackouts. Holding it back: food running low, overcrowded, no land to build on, no materials for homes, people out of work, buildings missing an input, short of workers or stopped by full stores, smoky air, wanted goods missing, low morale. Notes: not linked to Vilnius, a railway without a station. Fixes start a route from the neighbour with the most to spare (or add a vehicle to the route there is), place the building that makes what is missing, zone land, build a warehouse, sell the surplus, or carry commuters.
+- **The Lithuania view**: residents and treasury with their trend since 1918, towns linked to Vilnius, progress to the next era, problems by kind with the places that have them, the goods the country makes and uses each day, towns sorted by need, size or name, then the goal, the era, ministry tasks and security.
+- **On the map**, a town's label carries a dot: red for an urgent problem, amber when something holds it back, green when it thrives. Villages show only red.
 
 ## Ministry tasks
 

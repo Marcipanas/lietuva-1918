@@ -22,12 +22,15 @@ const ctx2d = () => new Proxy({}, {
   set: (t, p, v) => { t[p] = v; return true; }
 });
 function el(id) {
-  const kids = [];
+  const kids = [], full = id === 'cv' || id === 'stage';
   return {
-    id, hidden: true, innerHTML: '', textContent: '', value: '0', className: '', dataset: {}, style: {}, width: 300, height: 150,
+    id, hidden: true, innerHTML: '', textContent: '', value: '0', className: '', dataset: {}, style: { setProperty: noop }, width: 300, height: 150,
     classList: { toggle: noop, add: noop, remove: noop, contains: () => false },
     addEventListener: noop, setPointerCapture: noop, appendChild: c => { kids.push(c); return c; }, firstElementChild: { style: {} },
-    getContext: () => ctx2d(), getBoundingClientRect: () => ({ width: 390, height: 700, left: 0, top: 0 }),
+    setAttribute: noop, getAttribute: () => null, scrollIntoView: noop,
+    getContext: () => ctx2d(),
+    /* the map fills a 390 by 700 phone screen; panels are closed (no height) */
+    getBoundingClientRect: () => full ? { width: 390, height: 700, left: 0, top: 0, right: 390, bottom: 700 } : { width: 390, height: 0, left: 0, top: 700, right: 390, bottom: 700 },
     querySelector: () => el('q'), querySelectorAll: () => [], closest: () => null
   };
 }
@@ -35,7 +38,8 @@ const els = {};
 const sandbox = {
   console, Math, Date, JSON, btoa, atob, performance, setTimeout: () => 0, clearTimeout: noop,
   document: { getElementById: id => els[id] || (els[id] = el(id)), querySelector: s => el(s), querySelectorAll: () => [], createElement: t => el(t), addEventListener: noop,
-    body: el('body'), fonts: { ready: { then: noop } }, hidden: false },
+    body: el('body'), documentElement: el('html'), fonts: { ready: { then: noop } }, hidden: false },
+  getComputedStyle: () => ({ getPropertyValue: () => '' }),
   window: { devicePixelRatio: 2, innerWidth: 390, addEventListener: noop, ResizeObserver: class { observe() {} } },
   localStorage: { _d: {}, getItem(k) { return this._d[k] ?? null; }, setItem(k, v) { this._d[k] = String(v); } },
   requestAnimationFrame: cb => { sandbox.rafCb = cb; }
@@ -73,6 +77,10 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   const a=townExit(ki,aly),b=townExit(ai,kau);cam.dist=140;applyCam();setTool('road');
   beginDraw(a.x,a.z);moveDraw(a.x+(b.x-a.x)*0.5,a.z+(b.z-a.z)*0.5);moveDraw(b.x,b.z);finishDraw();
   const road0=NET.km.road[1];out.roadPend=!!(PEND&&PEND.kind==='line'&&!PEND.bad);out.roadWhy=PEND&&PEND.bad;out.roadKm=PEND&&PEND.km;doConfirm();analyze();out.roadAdded=NET.km.road[1]-road0;
+  /* the same by taps: a start, a bend that is undone, an end; the action bar shows each state */
+  const ra=townExit(ki,S.towns[tIdx('jon')]),rb=townExit(tIdx('jon'),kau);setTool('road');tapTool(ra.x,ra.z);out.tap1=TRACE.length===1&&!PEND;showBar();
+  tapTool(ra.x+3,ra.z-6);undoStep();out.undo=TRACE.length===1;tapTool(rb.x,rb.z);showBar();out.tapRoad=TRACE.length===2&&!!PEND&&PEND.kind==='line';out.tapWhy=PEND&&PEND.bad||'';
+  const road1=NET.km.road[1];doConfirm();analyze();out.tapAdded=NET.km.road[1]-road1;setTool('inspect');
   act({act:'newroute',a:String(ki),b:String(ai),m:'road'});const r=S.routes[S.routes.length-1];routeEval(r);out.newRouteOk=r.ok&&r.a===ki&&r.b===ai;
   act({act:'rveh',r:String(r.id),d:'1'});act({act:'rcargo',r:String(r.id),dir:'ab',res:'grain'});act({act:'rpax',r:String(r.id)});out.routeEdit=r.n===3&&Array.isArray(r.ab)&&r.pax;
   /* place buildings around Kaunas, the way the ghost follows a finger */
@@ -83,12 +91,24 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   /* zone lots along a Vilnius street */
   let spot=null;for(const e of EDGES.values()){if(e.k!=='road')continue;spot=lotSpots(e).find(c=>lotOk(c,false)&&townAtPoint(c.x,c.z)>=0);if(spot)break}
   out.zoneN=0;if(spot){cam.dist=10;applyCam();setTool('zone');beginDraw(spot.x,spot.z);moveDraw(spot.x+0.05,spot.z+0.05);finishDraw();out.zoneN=PEND&&PEND.n||0;doConfirm()}
+  /* zoning by taps adds up, street by street, and undo takes the last street back */
+  out.zoneTaps=[];{const vil=S.towns[0];setTool('zone');let tried=0;for(const e of EDGES.values()){if(e.k!=='road'||tried>=40)continue;const c=lotSpots(e).find(q=>lotOk(q,false)&&Math.hypot(q.x-vil.x,q.z-vil.z)<6);if(!c)continue;tried++;
+    const n0=PEND&&PEND.n||0;tapTool(c.x,c.z);const n1=PEND&&PEND.n||0;if(n1>n0)out.zoneTaps.push(n1);if(out.zoneTaps.length>=2)break}
+    const nz=PEND&&PEND.n||0;undoStep();out.zoneUndo=(PEND&&PEND.n||0)<nz;showBar();setTool('inspect')}
   /* a railway spur from the Kaunas station */
   const st=S.bld.find(x=>x.t==='station'&&x.town===ki),te=st&&trackEnd(st,aly),rail0=NET.km.rail[1];
   if(te){setTool('rail');beginDraw(te.x,te.z);moveDraw(te.x+1.5,te.z+2.5);moveDraw(te.x+3,te.z+5);finishDraw();out.railWhy=PEND&&PEND.bad;doConfirm()}out.railAdded=NET.km.rail[1]-rail0;
   /* remove the pig farm again */
   const pig=placed[2];if(pig){setTool('bull');bullThing(pig);doConfirm()}out.pigGone=!!pig&&!BMAP.has(pig.id);
-  setTool('inspect');run(500,100);const tt=totals();out.day2=S.day;out.pop=tt.pop;out.funds=S.funds;out.inc=S.inc;
+  /* the build menu finds a good spot near the town it was opened from */
+  S.funds+=3000;kau.stock.timber=600;out.spots={};['farm','forestry','fishery','warehouse','school','brick','peat'].forEach(t=>{setTool('place',t,ki);showBar();out.spots[t]=!!(PEND&&PEND.kind==='place'&&PEND.ok&&PEND.jt>=0)});
+  setTool('inspect');run(500,100);const tt=totals();
+  /* dashboards: problems with fixes, goods made and used, the country's view, and the camera offset under a panel */
+  const iss=townIssues(ki),nat=natIssues(),gr=goodsRows(-1),grain=gr.find(x=>x.r==='grain');out.dash={iss:iss.length,fixes:iss.reduce((a,x)=>a+x.fix.length,0),nat:nat.length,goods:gr.length,
+    grainMade:grain?Math.round(grain.mk):0,grainUsed:grain?Math.round(grain.us):0,urgent:urgentCount(),series:S.series.length,trend:popTrend()};
+  S.towns.forEach((x,n)=>{if(!x.lock)townIssues(n)});out.alerts=S.towns.filter(x=>townAlert(x,true)>0).length;
+  navTo('build');renderPanel(true);CATS.forEach(([c])=>{act({act:'bcat',cat:c});renderPanel(false)});act({act:'bback'});navTo('nat');act({act:'iss',k:nat.length?nat[0].k:'x'});act({act:'tsort',k:'size'});act({act:'tall'});renderPanel(false);
+  {VOFF.ty=VOFF.y=120;applyCam();const g=groundAt(cw/2,ch/2-120);out.voff=!!g&&Math.hypot(g[0]-cam.x,g[1]-cam.z)<cam.dist*0.01;VOFF.ty=VOFF.y=0;applyCam()}out.day2=S.day;out.pop=tt.pop;out.funds=S.funds;out.inc=S.inc;
   out.finite=S.towns.every(x=>isFinite(x.pop)&&RES.every(q=>isFinite(x.stock[q]||0)))&&isFinite(S.funds);
   out.moved=Object.values(r.mAB||{}).reduce((a,b)=>a+b,0);out.housesNow=S.bld.filter(b=>b.t==='house').length;
   out.steady=S.towns.filter(x=>!x.lock).every(x=>x.pop>=x.pop0*0.95);out.low=S.towns.filter(x=>!x.lock&&x.pop<x.pop0*0.95).map(x=>x.n+' '+x.pop.toFixed(1)+'/'+x.pop0).join(', ');
@@ -109,8 +129,12 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   for(let q=0;q<3;q++)tick();out.planGot=S.plan?(S.plan.got.grain||0):0;S.tab='trade';renderPanel(true);renderPanel(false);
   jump('1947-01-01');tick();out.plans=(S.hist.plans||[]).length;out.card3=S.hist.cards[0];act({act:'card',o:'0'});out.collect=S.hist.collect===1&&S.plan&&S.plan.y===1947;
   out.finite2=S.towns.every(x=>isFinite(x.pop)&&x.pop>=0&&RES.every(q=>isFinite(x.stock[q]||0)))&&isFinite(S.funds);
+  /* paving: in the Industrialization era a road drawn between two towns upgrades the old dirt road it follows */
+  {const e0=S.era;S.era=2;setTool('road');const U=S.towns[tIdx('ukm')],A=S.towns[tIdx('any')];tapTool(U.x,U.z);tapTool(A.x,A.z);out.pave={up:PEND&&PEND.upKm||0,km:PEND&&PEND.km||0,bad:PEND&&PEND.bad||''};
+    S.funds+=5000;S.towns.forEach(t=>{t.stock.bricks=200});const p2=NET.km.road[2];doConfirm();analyze();out.pave.added=NET.km.road[2]-p2;setTool('inspect');S.era=e0}
   selectTown(ki,true);renderPanel(true);['routes','trade','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
-  const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}toggleDrawer(true);toggleDrawer(false);
+  const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}navTo('build');act({act:'bcat',cat:'industry'});act({act:'close'});
+  ['road','rail','zone','bull'].forEach(k=>{setTool(k);showBar()});setTool('inspect');
   [2,8,30,90,400].forEach(d=>{cam.dist=d;cam.anim=null;run(3,16)});
   out.tut=TUT.step;S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize(),SAVE_NUM);
   restore(JSON.parse(str));analyze();initScene();run(3,16);
@@ -130,10 +154,16 @@ assert(!o.roadAll.length, `dirt roads join every open settlement to Vilnius${o.r
 assert(o.linked0 >= 30 && o.railKm > 1000 && o.paved > 400, `${o.linked0} towns linked to Vilnius by ${o.railKm} km of railway and ${o.paved} km of paved highway`);
 assert(o.gates === 'de,lv,pl,pl', `border posts trade with the country across: East Prussia, Latvia, Belarus (Polish), Poland (${o.gates})`);
 assert(o.roadPend && o.roadAdded > 0.5, `road tool builds a road from Kaunas toward Alytus${o.roadWhy ? ': ' + o.roadWhy : ` (${(o.roadAdded || 0).toFixed(1)} km new)`}`);
+assert(o.tap1 && o.undo && o.tapRoad && o.tapAdded > 0.5, `a road drawn by taps: start, a bend undone, an end (${o.tapWhy || (o.tapAdded || 0).toFixed(1) + ' km new'})`);
 assert(o.newRouteOk, 'new road route Kaunas–Alytus is created and valid');
 assert(o.routeEdit, 'route editor: vehicles, cargo and commuters change');
 assert(o.placed.every(Boolean), `warehouse, school, pig farm and dairy farm can be placed near Kaunas (${o.placed.join(', ')})`);
 assert(o.zoneN > 0, `zone tool zones lots along a street (${o.zoneN})`);
+assert(o.zoneTaps.length === 2 && o.zoneTaps[1] > o.zoneTaps[0] && o.zoneUndo, `zoning by taps adds street after street, and undo takes one back (${o.zoneTaps.join(' then ')} lots)`);
+assert(Object.values(o.spots).filter(Boolean).length >= 5 && o.spots.farm && o.spots.warehouse, `the build menu finds a spot near Kaunas that a town takes in (${Object.entries(o.spots).map(([k, x]) => k + (x ? ' ✓' : ' ✗')).join(', ')})`);
+assert(o.dash.goods >= 5 && o.dash.grainMade > 0 && o.dash.grainUsed > 0 && o.dash.series > 50, `dashboards: ${o.dash.goods} goods tracked, grain ${o.dash.grainMade} made and ${o.dash.grainUsed} used a day, ${o.dash.series} weekly samples`);
+assert(o.dash.iss >= 0 && o.dash.nat >= 0 && isFinite(o.dash.trend), `problems found: ${o.dash.iss} in Kaunas with ${o.dash.fixes} fixes, ${o.dash.nat} kinds nationwide, ${o.dash.urgent} places urgent, ${o.alerts} flagged on the map`);
+assert(o.voff, 'with a panel open, the camera centres its target in the part of the map that stays visible');
 assert(o.railAdded > 0.5, `rail tool lays track from a station${o.railWhy ? ': ' + o.railWhy : ` (${(o.railAdded || 0).toFixed(1)} km)`}`);
 assert(o.pigGone, 'remove tool demolishes a building');
 assert(o.day2 > o.day1 + 500, `game time advances (day ${o.day2})`);
@@ -148,6 +178,7 @@ assert(o.card2 === 'ultimatum' && o.soviet, `accepting the Soviet ultimatum star
 assert(o.plan && o.planGot > 0, `the state plan sets targets and deliveries count (${o.planGot.toFixed(1)} grain)`);
 assert(o.plans === 1 && o.card3 === 'collect' && o.collect, `a plan year closes, and collectivization comes in 1947 (${o.card3})`);
 assert(o.finite2, 'no NaN or infinite values after the jumps through history');
+assert(o.pave.up > 1 && o.pave.added > (o.pave.up + o.pave.km) * 0.8, `a paved road from Ukmergė to Anykščiai upgrades ${(o.pave.up || 0).toFixed(1)} km of old road and builds ${(o.pave.km || 0).toFixed(1)} km${o.pave.bad ? ': ' + o.pave.bad : ''} (paved km +${(o.pave.added || 0).toFixed(1)})`);
 assert(o.roundtrip, `save and reload keep the game intact (${o.saveKB} KB)`);
 assert(o.saved, 'autosave writes to localStorage');
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
