@@ -101,6 +101,10 @@ Each polluting building spreads `pol × (1 − distance / 4 km)` over 4 km. A to
 
 Random events every 170–340 days: bumper harvests, London butter prices, British bacon demand, timber prices abroad, a Nemunas flood in Kaunas, a wet harvest, linen fashion (era 2+).
 
+## Tutorial
+
+New players get an 8-step hint card (`js/tutorial.js`): look around, open a town, see the routes, build a road, start a route, zone homes, place industry, speed up time. Each step finishes when the player does it, or on Next. It shows once per device (`localStorage['lietuva1918-tutorial']`); the Lithuania tab can start it again.
+
 ## Ministry tasks
 
 Link Alytus (600 Lt), start a new route (400), link Utena (600), give a town three foods (800), link Tauragė (600), build a warehouse (300), open a school (400), found a town (1,000), reach 500k residents (1,500), link Klaipėda (1,500), sell through the port (800), enter Industrialization (2,000), power every town (3,000), reach Modern Lithuania (5,000).

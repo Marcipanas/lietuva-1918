@@ -13,10 +13,11 @@ A 3D economy and city builder set in Lithuania from 16 February 1918, in the spi
   - Desktop Chrome or Edge: the install icon in the address bar.
   Open it once more from the home screen while online, so every file is cached. After that it starts without a connection, in flight mode too. Your save stays on that device; on iPhone the home-screen app keeps its own save, separate from Safari's.
 - **From a copy of this repository:** run `npm run serve` and open http://localhost:8080.
-- The flat 2D version (v0.3) is kept under the git tag `v0.3.0`.
+- The flat 2D version (v0.3) is kept on the branch `classic-2d`.
 
 ## How to play
 
+- **First time?** A short tutorial card walks you through the first steps. Skip it any time; the Lithuania tab can start it again.
 - **Look around:** drag to move, pinch to zoom, twist two fingers to turn, slide two fingers up or down to tilt. The compass turns north up again. With a mouse: wheel to zoom, right-drag to turn and tilt.
 - **Select** a town or building to see its people, stock and problems.
 - **Road** and **Rail:** drag where the line should run. It follows your finger, goes around lakes and buildings, bridges rivers, joins roads it touches and makes junctions where it crosses them. Drawing along an existing road costs nothing. Tap an old road to upgrade it in later eras. Railways need a **station** beside the track in each town.

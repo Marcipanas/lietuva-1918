@@ -1,6 +1,6 @@
 # Architecture
 
-Lietuva 1918 is fourteen classic scripts sharing one global scope, a stylesheet, and three.js drawing into one canvas. There is no build step. The world has no grid: roads are curves, buildings sit at any angle. This document explains how the pieces fit, so a change in one place does not break another.
+Lietuva 1918 is fifteen classic scripts sharing one global scope, a stylesheet, and three.js drawing into one canvas. There is no build step. The world has no grid: roads are curves, buildings sit at any angle. This document explains how the pieces fit, so a change in one place does not break another.
 
 ## Layers
 
@@ -12,7 +12,7 @@ terrain          terrain.js                                 hidden raster of ter
 world            world.js                                   road and rail graph, buildings, lots, analysis, 1918 map
 simulation       sim.js                                     state S, daily tick, routes, people, events, saving
 view (3D)        models.js  scene.js  agents.js             models, renderer, people and vehicles
-interaction      input.js  panels.js  ui.js                 gestures, tools, side panel, actions, loop, boot
+interaction      input.js  panels.js  tutorial.js  ui.js    gestures, tools, side panel, first-time hints, actions, loop, boot
 ```
 
 `common` to `sim` never touch the DOM, the canvas or THREE, and run headless in `tools/smoke-test.js`. The view reads the world and never changes it. The world tells the view what changed through version counters (`WV.net`, `WV.bld`, `WV.lots`, `WV.kr`) and one hook, `terrainHook(cells)`, called when forest is cleared or deposits change.

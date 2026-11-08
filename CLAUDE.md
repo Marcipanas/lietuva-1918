@@ -48,6 +48,7 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 | `js/agents.js` | Walking residents, commuters and route vehicles (visual only) | THREE |
 | `js/input.js` | Gestures and keys; the tools (`TOOL`, `PEND`, `beginDraw`, `setGhost`, `doConfirm`) | DOM |
 | `js/panels.js` | Side panel HTML as strings, with `v()`/`w()` dynamic fields | no writes |
+| `js/tutorial.js` | First-time hint card (`TUT_STEPS`); the tools report actions with `tutEvent` | DOM |
 | `js/ui.js` | Toolbar, build drawer, confirm bar, tabs, `act()` actions, main loop, `start()` boot | DOM |
 
 ## Concepts you need before changing code
