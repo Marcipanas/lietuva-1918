@@ -34,4 +34,7 @@ const seen={};order.filter(f=>!f.startsWith('vendor/')).forEach(f=>{const src=re
   if(r.status){const m=(r.stderr.match(/SyntaxError: .*/)||[r.stderr])[0];bad(`the scripts clash when loaded together: ${m}`)}}
 if(!fail)ok('no duplicate top-level names across scripts');
 
+/* the start map must be rebuilt after the map data or its generator change */
+{const hash=require('./world-hash'),m=read('js/world1918.js').match(/"h":"([0-9a-f]+)"/);
+  if(!m||m[1]!==hash(root))bad(`js/world1918.js is out of date (made from ${hash.WORLD_SRC.join(', ')}): run npm run world`);else ok('the start map is up to date')}
 if(fail){console.error(`\n${fail} problem${fail>1?'s':''} found`);process.exit(1)}

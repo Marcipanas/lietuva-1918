@@ -66,6 +66,8 @@ body.tut #hint{top:auto;bottom:calc(100% - 300px)}
 body.tooling .tl{pointer-events:none}
 .nl{translate:-50% -50%;font-family:var(--f-disp);font-weight:600;font-size:12px;letter-spacing:.3em;color:rgba(40,50,45,.5);white-space:nowrap}
 .nl.sea{font-family:var(--f-text);font-style:italic;font-weight:400;letter-spacing:.2em;font-size:13px;color:rgba(235,244,248,.75)}
+.nl.tn{font-family:var(--f-text);font-weight:500;letter-spacing:.04em;font-size:11px;color:rgba(40,45,42,.62)}
+.nl.tn::before{content:'';display:inline-block;width:5px;height:5px;margin-right:5px;border-radius:50%;background:rgba(40,45,42,.55);vertical-align:1px}
 #labels .st{translate:-50% -50%;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:#ef7b58;color:#fff;font:700 12px/1 var(--f-body);font-style:normal;box-shadow:0 2px 6px rgba(0,0,0,.3)}
 #labels .st.full{background:#f2a93b}#labels .st.lock{background:#97ada4}
 #compass{position:absolute;top:calc(12px + env(safe-area-inset-top,0px) * 0);right:max(12px,env(safe-area-inset-right,0px));z-index:4;width:40px;height:40px;border-radius:50%;

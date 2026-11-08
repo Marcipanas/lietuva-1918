@@ -1,8 +1,8 @@
 # Lietuva 1918
 
-A 3D economy and city builder set in Lithuania from 16 February 1918, in the spirit of Workers & Resources. There is no grid: draw roads and railways as free curves across the whole country, zone lots along your streets, place farms and industry at any angle, run transport routes so 48 towns and about 170 villages supply each other, and trade abroad through border posts and the port. History interrupts with decisions, from the Depression to the ultimatums of 1938 to 1940; avoid the occupation if Lithuania is strong enough, or run a Soviet republic's five-year plans.
+A 3D economy and city builder set in Lithuania from 16 February 1918, in the spirit of Workers & Resources. There is no grid: draw roads and railways as free curves across the whole country, zone lots along your streets, place farms and industry at any angle, run transport routes so 89 towns and 362 villages, each at its real place, supply each other, and trade abroad through border posts and the port. History interrupts with decisions, from the Depression to the ultimatums of 1938 to 1940; avoid the occupation if Lithuania is strong enough, or run a Soviet republic's five-year plans.
 
-<img src="docs/screenshot.png" alt="Kaunas in July 1918, where the Neris meets the Nemunas, with its station and fields" width="300">
+<img src="docs/screenshot.png" alt="Kaunas in July 1918: Laisvės alėja runs to St Michael the Archangel, between the Neris and the Nemunas" width="300">
 
 ## Play
 
@@ -22,6 +22,7 @@ A 3D economy and city builder set in Lithuania from 16 February 1918, in the spi
 - **Select** a town or building to see its people, stock and problems.
 - **Road** and **Rail:** drag where the line should run. It follows your finger, goes around lakes and buildings, bridges rivers, joins roads it touches and makes junctions where it crosses them. Drawing along an existing road costs nothing. Tap an old road to upgrade it in later eras. Railways need a **station** beside the track in each town.
 - **Towns and villages feed themselves** from their own land and keep their size without help. To grow, they need more food, homes on zoned land, and jobs.
+- **The map of 1918:** real borders, with Latvia, East Prussia, Poland and Belarus each in its own colour; the railways and paved highways of 1918; dirt roads to every village. Vilnius, Kaunas, Klaipėda, Šiauliai and Panevėžys are laid out from their real main streets, with landmarks such as Gediminas Tower, the Cathedral and the town halls. A town counts as **linked** when a railway or paved road from Vilnius reaches it.
 - **Zone:** paint along streets to zone lots. Towns build houses there while their people are fed and content.
 - **Build:** farms, fisheries, forestry, peat works, brickworks, warehouses, schools, clinics, and later power stations and factories. Near a road, a building turns to face it; the turn button rotates it. It joins a town when a road links it to the town hall within 15 km.
 - **Routes** (tab in the panel): goods move between towns only on routes. Pick the vehicles and what they carry, or leave cargo on **Auto**. Routes can also carry commuters.
@@ -38,6 +39,8 @@ No build step and no npm packages; three.js r159 is vendored in `vendor/`. Node 
 npm test               # static checks + headless smoke test (must pass before committing)
 npm run serve          # local server on port 8080
 npm run build:artifact # dist/artifact.html for publishing as a claude.ai artifact
+npm run world          # rebuild js/world1918.js, the start map, after changing the map data or generator
+npm run geo            # rewrite js/geo.js from tools/geo/*.json (see tools/geo/README.md)
 ```
 
 - `CLAUDE.md`: rules and a code map for AI coding agents (and humans).
@@ -54,6 +57,6 @@ npm run build:artifact # dist/artifact.html for publishing as a claude.ai artifa
 
 ## Notes
 
-- Map outlines are drawn by hand from coordinates and are approximate. Distances between places are true; towns are drawn about five times larger than life so they are visible on a country-sized map. Village names are typical Lithuanian names placed at random, not real villages at their real sites.
+- Map data: borders © OpenStreetMap contributors (ODbL); coast, lakes and rivers from Natural Earth (public domain); place names and positions from Euronym, © EuroGeographics (EuroGeographics Open Data Licence); today's populations of small towns from GeoNames (CC BY 4.0). Rivers are bent onto their towns and some small rivers, soils and forests are drawn by hand, so they are approximate. Distances between places are true; towns are drawn about five times larger than life so they are visible on a country-sized map, and landmarks about twice.
 - Historical dates in game events are real; where only the year is certain, the Chronicle shows the year alone. Vilnius is the capital from the start, as the Act of Independence declared, although Poland held the city from 1920 to 1939. Choices that differ from history say so.
 - three.js is © three.js authors, MIT licence (`vendor/three.LICENSE`). No licence has been chosen for the game itself yet; all rights reserved by the owner until one is added.

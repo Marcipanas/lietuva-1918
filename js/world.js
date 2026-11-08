@@ -13,7 +13,7 @@ let SPACE_DIRTY = true, BLK_DIRTY = true;
 
 const espec = e => (e.k === 'road' ? ROADT : RAILT)[e.lv];
 function edgeRT(e) { e.c = polyCum(e.p); e.L = e.c[e.c.length - 1]; }
-function bOBB(b) { const f = BT[b.t].fp; return { x: b.x, z: b.z, rot: b.rot, w: f[0], d: f[1] }; }
+function bOBB(b) { const f = b.fp || BT[b.t].fp; return { x: b.x, z: b.z, rot: b.rot, w: f[0], d: f[1] }; }
 function lotOBB(l) { return { x: l.x, z: l.z, rot: l.rot, w: LOT_W, d: LOT_D }; }
 function segBox(a, b) { return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; }
 
@@ -240,8 +240,10 @@ function afterLine(edges) {
 }
 
 /* ---------- buildings and lots ---------- */
-function addB(t, x, z, rot, lv, quiet) {
+/* fp: a footprint of its own (landmarks), instead of the type's */
+function addB(t, x, z, rot, lv, quiet, fp) {
   const b = { id: S.nid++, t, x, z, rot: rot || 0, lv: lv || 1, on: true, eff: 0, why: 'Starting', town: -1, cd: 0, k: 1 };
+  if (fp) b.fp = fp;
   S.bld.push(b); BMAP.set(b.id, b);
   const o = bOBB(b);
   space(); const bb = obbBounds(o); BH.add(b, bb[0], bb[1], bb[2], bb[3]);
@@ -287,12 +289,14 @@ function lotAt(x, z) { space(); let hit = null; LH.query(x, z, x, z, l => { if (
 function accessOf(o, k, reach) {
   space();
   reach = reach === undefined ? ACCESS : reach;
-  const bb = obbBounds(o, reach + 0.3);
+  const bb = obbBounds(o, reach + 0.3), hd = Math.hypot(o.w, o.d) / 2;
   let best = null;
   EH.query(bb[0], bb[1], bb[2], bb[3], it => {
     const e = it[0], i = it[1];
     if (e.k !== k) return;
-    const a = e.p[i - 1], b = e.p[i], d = obbSegDist(o, a[0], a[1], b[0], b[1]) - espec(e).w / 2;
+    const a = e.p[i - 1], b = e.p[i], hw = espec(e).w / 2, cd = segClosest(o.x, o.z, a[0], a[1], b[0], b[1])[3] - hd - hw;
+    if (cd > reach || (best && cd > best.d)) return;  /* too far even from the box's corners: skip the exact test */
+    const d = obbSegDist(o, a[0], a[1], b[0], b[1]) - hw;
     if (d <= reach && (!best || d < best.d)) {
       const q = segClosest(o.x, o.z, a[0], a[1], b[0], b[1]);
       best = { e, s: e.c[i - 1] + (e.c[i] - e.c[i - 1]) * q[0], d };
@@ -318,7 +322,7 @@ function validPlace(t, x, z, rot, gen) {
   });
   if (err) return bad(err);
   if (B0.need === 'river') { if (!riv) return bad('Must be built across a river'); }
-  else if (riv) return bad('Cannot build on water');
+  else if (riv || waterHit(o, 0.01)) return bad('Cannot build on water');
   space();
   const bb = obbBounds(o, 0.4);
   let hit = null, line = null;
@@ -340,7 +344,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
     case 'lake': if (!ring(0.8, tt => tt === T_LAKE)) return bad('Must be next to a lake'); break;
     case 'water': if (!ring(0.6, tt => isWaterT(tt))) return bad('Must be on a shore'); break;
-    case 'border': if (!ring(3, tt => tt === T_FOREIGN)) return bad('Must be within 3 km of the border'); break;
+    case 'border': { let c = 0; forCellsIn(o, 3, k => { if (CTY[k] > 1) c++; }); if (!c) return bad('Must be within 3 km of the border'); break; }
   }
   if (t === 'hall') for (const tw of S.towns) if (Math.hypot(tw.x - x, tw.z - z) < HALL_GAP) return bad(`Too close to ${tw.n}`);
   return { ok: true, bonus: (B0.bonus === 'fertile' && fert >= n * 0.4) || (B0.bonus === 'flaxland' && flx >= n * 0.4) };
@@ -364,7 +368,7 @@ function lotOk(c, gen) {
   const o = { x: c.x, z: c.z, rot: c.rot, w: LOT_W, d: LOT_D };
   let no = false;
   forCellsIn(o, 0, k => { const tt = TT[k], f = TF[k]; if (!(f & F_LT) || (tt !== T_LAND && tt !== T_SAND) || (!gen && (f & F_KR) && S.kr)) no = true; });
-  if (no) return false;
+  if (no || waterHit(o, 0.01)) return false;
   space();
   const bb = obbBounds(o, 0.4);
   BH.query(bb[0], bb[1], bb[2], bb[3], b => { if (!no && obbOverlap(o, bOBB(b), 0.02)) no = true; });
@@ -402,7 +406,7 @@ function zonePlan(trace, R, gen) {
 function bullPlan(trace, R) {
   space();
   const tr = asLine(trace), tc = polyCum(tr), bb = traceBox(tr, R + 0.5), b = [], lots = [], segs = [], seen = new Set();
-  BH.query(bb[0], bb[1], bb[2], bb[3], x => { if (x.t !== 'hall' && obbPolyDist(bOBB(x), tr) <= R) b.push(x); });
+  BH.query(bb[0], bb[1], bb[2], bb[3], x => { if (x.t !== 'hall' && x.t !== 'landmark' && obbPolyDist(bOBB(x), tr) <= R) b.push(x); });
   LH.query(bb[0], bb[1], bb[2], bb[3], l => { if (obbPolyDist(lotOBB(l), tr) <= R) lots.push(l); });
   EH.query(bb[0], bb[1], bb[2], bb[3], it => {
     const e = it[0];
@@ -436,7 +440,7 @@ function applyBull(plan) {
 }
 
 /* ---------- network analysis ---------- */
-const NET = { dirty: true, ver: 0, hall: [], R: null, R0: null, srcs: [], src0: [], off: [], edges: [], adj: [], comp: [], linked: new Set(),
+const NET = { dirty: true, ver: 0, hall: [], R: null, R0: null, srcs: [], src0: [], off: [], edges: [], adj: [], comp: [], grid: [], linked: new Set(), rail: new Set(),
   cache: new Map(), cacheVer: -1, km: { road: [0, 0, 0, 0], rail: [0, 0, 0] }, up: 0, pol: [] };
 /* Shortest distances over the graph of kind k from point sources {e, s, o, d0} (d0: head start, 0 if missing).
    With targets [{e, s}], it stops once nothing can beat the best way to a target. */
@@ -560,17 +564,30 @@ function analyze() {
   /* stations: where trains stop for each town */
   NET.stSrc = [];
   S.bld.forEach(b => { if (b.t !== 'station' || b.town < 0) return; const a = accessOf(bOBB(b), 'rail', 0.35); if (a) NET.stSrc.push({ e: a.e, s: a.s, o: b.town }); });
-  /* linked towns: connected parts of the graph, joined through each town's hall road and stations */
-  const up = new Map(), find = x => { let r = x; while (up.get(r) !== r) r = up.get(r); while (up.get(x) !== r) { const n = up.get(x); up.set(x, r); x = n; } return r; };
-  NODES.forEach(n => up.set(n.id, n.id));
-  EDGES.forEach(e => { const ra = find(e.a), rb = find(e.b); if (ra !== rb) up.set(ra, rb); });
-  const tu = tw.map((t, n) => n), tf = x => { while (tu[x] !== x) { tu[x] = tu[tu[x]]; x = tu[x]; } return x; };
-  const first = new Map(), join = (n, e) => { const r = find(e.a); if (first.has(r)) { const a = tf(first.get(r)), b = tf(n); if (a !== b) tu[a] = b; } else first.set(r, n); };
-  NET.hall.forEach((a, n) => { if (a) join(n, a.e); });
-  NET.stSrc.forEach(q => join(q.o, q.e));
-  NET.comp = tw.map((t, n) => act[n] ? tf(n) : -1);
+  /* comp: settlements joined by any road or railway (goods can travel between them).
+     grid: settlements joined by railways and paved roads, which also carry the power lines; linked: those in the capital's.
+     A settlement reaches the paved network when one starts within its streets (by road from the hall). */
+  const comps = good => {
+    const up = new Map(), find = x => { let r = x; while (up.get(r) !== r) r = up.get(r); while (up.get(x) !== r) { const n = up.get(x); up.set(x, r); x = n; } return r; };
+    NODES.forEach(n => up.set(n.id, n.id));
+    EDGES.forEach(e => { if (good && !(e.k === 'rail' || e.lv >= 2)) return; const ra = find(e.a), rb = find(e.b); if (ra !== rb) up.set(ra, rb); });
+    const tu = tw.map((t, n) => n), tf = x => { while (tu[x] !== x) { tu[x] = tu[tu[x]]; x = tu[x]; } return x; };
+    const first = new Map(), join = (n, id) => { const r = find(id); if (first.has(r)) { const a = tf(first.get(r)), b = tf(n); if (a !== b) tu[a] = b; } else first.set(r, n); };
+    NET.hall.forEach((a, n) => { if (!a) return; if (!good) join(n, a.e.a); else reachGood(a, (tw[n].R || 1) * 1.6 + 1.5).forEach(id => join(n, id)); });
+    NET.stSrc.forEach(q => join(q.o, q.e.a));
+    return tw.map((t, n) => act[n] ? tf(n) : -1);
+  };
+  NET.comp = comps(false); NET.grid = comps(true);
   const cap = tw.findIndex(t => t.capital);
-  NET.linked = new Set(tw.map((t, n) => n).filter(n => act[n] && NET.comp[n] === NET.comp[cap]));
+  NET.linked = new Set(tw.map((t, n) => n).filter(n => act[n] && NET.grid[n] === NET.grid[cap]));
+  /* rail: towns whose stations are on the capital's railway network */
+  {
+    const up = new Map(), find = x => { while (up.get(x) !== x) { up.set(x, up.get(up.get(x))); x = up.get(x); } return x; };
+    NODES.forEach(n => up.set(n.id, n.id));
+    EDGES.forEach(e => { if (e.k === 'rail') { const a = find(e.a), b = find(e.b); if (a !== b) up.set(a, b); } });
+    const capR = new Set(NET.stSrc.filter(q => q.o === cap).map(q => find(q.e.a)));
+    NET.rail = new Set(NET.stSrc.filter(q => act[q.o] && capR.has(find(q.e.a))).map(q => q.o));
+  }
   /* neighbours: towns whose catchments meet along a road or a railway, with the length of the way between them */
   const pairs = new Map();
   const note = (k, a, b, d) => {
@@ -607,6 +624,20 @@ function analyze() {
   NET.pol = S.bld.filter(b => BT[b.t].pol).map(b => ({ x: b.x, z: b.z, p: BT[b.t].pol }));
   NET.ver++; NET.dirty = false;
 }
+/* Nodes on railways or paved roads within lim km by road of a hall's access point {e, s}. */
+function reachGood(a, lim) {
+  const d = new Map(), out = [], todo = [[a.e.a, a.s], [a.e.b, a.e.L - a.s]];
+  while (todo.length) {
+    const [id, f] = todo.pop();
+    if (f > lim || (d.has(id) && d.get(id) <= f)) continue;
+    d.set(id, f);
+    const n = NODES.get(id);
+    let good = false;
+    for (const eid of n.e) { const e = EDGES.get(eid); if (e.k === 'rail' || e.lv >= 2) good = true; else todo.push([e.a === id ? e.b : e.a, f + e.L]); }
+    if (good) out.push(id);
+  }
+  return out;
+}
 function polAt(x, z) {
   let p = 0;
   for (const s of NET.pol) { const d = Math.hypot(s.x - x, s.z - z); if (d < POL_R) p += s.p * (1 - d / POL_R); }
@@ -625,7 +656,10 @@ function nearestTown(x, z, activeOnly, townsOnly) {
   return best;
 }
 
-/* ---------- the 1918 map ---------- */
+/* ---------- the 1918 map ----------
+   Every town and village of PLACES at its real place; the big cities laid out from their main streets with their landmarks;
+   the railways and paved highways of 1918; dirt roads joining every settlement to its neighbours. The game loads the result
+   from js/world1918.js (tools/build-world.js runs genWorld once), since generating it takes a while. */
 const isLandT = t => t === T_LAND || t === T_SAND;
 function passable(x, z) { const k = cellAt(x, z); return k >= 0 && !!(TF[k] & F_LT) && (isLandT(TT[k]) || TT[k] === T_RIVER); }
 function landNear(x, z) {
@@ -651,22 +685,37 @@ function clipLine(p) {
   }
   return out;
 }
+/* Is (x, z) within pad of a building? */
+function nearBld(x, z, pad) { space(); let hit = false; BH.query(x - pad, z - pad, x + pad, z + pad, b => { if (!hit && obbHas(bOBB(b), x, z, pad)) hit = true; }); return hit; }
+/* The parts of a polyline over dry land (no rivers) and clear of buildings, each at least min km long. */
+function clearRuns(p, min) {
+  const runs = [], pts = densify(p, 0.06);
+  let cur = [];
+  const end = () => { if (cur.length > 1 && polyLen(cur) >= min) runs.push(cur); cur = []; };
+  for (const q of pts) {
+    const k = cellAt(q[0], q[1]);
+    if (k >= 0 && (TF[k] & F_LT) && isLandT(TT[k]) && !nearBld(q[0], q[1], 0.06) && !waterHit({ x: q[0], z: q[1], rot: 0, w: 0, d: 0 }, 0.05)) cur.push(q); else end();
+  }
+  end();
+  return runs;
+}
 const dirAt = (cx, cz, a, r) => [cx + Math.sin(a) * r, cz + Math.cos(a) * r];
-function dryBox(x, z, size) { let good = true; forCellsIn({ x, z, rot: 0, w: size, d: size }, 0, k => { if (!isLandT(TT[k]) || !(TF[k] & F_LT)) good = false; }); return good; }
-/* A spot near (x, z) with dry land all around, for a town hall and its square. */
+function dryBox(x, z, size) { const o = { x, z, rot: 0, w: size, d: size }; let good = true; forCellsIn(o, 0, k => { if (!isLandT(TT[k]) || !(TF[k] & F_LT)) good = false; }); return good && !waterHit(o, 0.02); }
+/* A spot near (x, z) with dry land all around and no building, for a town hall and its square. */
 function dryNear(x, z, size) {
   size = size || 1.1;
-  if (dryBox(x, z, size)) return [x, z];
+  const free = (px, pz) => dryBox(px, pz, size) && !nearBld(px, pz, size / 2 + 0.05);
+  if (free(x, z)) return [x, z];
   for (let r = 0.25; r < 4; r += 0.25) for (let q = 0; q < 16; q++) {
     const a = q / 16 * Math.PI * 2, px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
-    if (dryBox(px, pz, size)) return [px, pz];
+    if (free(px, pz)) return [px, pz];
   }
   return landNear(x, z);
 }
-/* Houses along the new streets, nearest the centre first, then zoned lots beyond them. */
+/* Houses along the streets, nearest the centre first, then zoned lots beyond them. */
 function settle(edges, cx, cz, R, houses, lots, rnd, farm) {
   const spots = [];
-  edges.forEach(e => { if (e.k === 'road' && Math.hypot(e.p[0][0] - cx, e.p[0][1] - cz) < R + 1) lotSpots(e).forEach(c => { c.sc = Math.hypot(c.x - cx, c.z - cz) + rnd() * 0.4; spots.push(c); }); });
+  edges.forEach(e => { if (e.k === 'road' && polyClosest(e.p, e.c, cx, cz).d < R + 0.5) lotSpots(e).forEach(c => { c.sc = Math.hypot(c.x - cx, c.z - cz) + rnd() * 0.4; if (c.sc < R + 0.6) spots.push(c); }); });
   spots.sort((a, b) => a.sc - b.sc);
   let h = 0, z = 0;
   for (const c of spots) {
@@ -676,19 +725,21 @@ function settle(edges, cx, cz, R, houses, lots, rnd, farm) {
   }
   return h;
 }
-function layoutTown(t, n, pop) {
-  const rnd = rng(1000 + n * 7919);
+const homesFor = pop => Math.max(1, Math.ceil(pop / HOUSE.cap[1] - 0.01));
+const townRadius = pop => { const need = homesFor(pop); return 0.5 + Math.sqrt(need + Math.max(3, Math.ceil(need * 0.5))) * 0.36; };
+function roadsNear(cx, cz, r) { const out = []; EDGES.forEach(e => { if (e.k === 'road' && polyClosest(e.p, e.c, cx, cz).d < r) out.push(e); }); return out; }
+/* A town: the hall on its market square, and streets out from the square, gently curved. Homes come later (settleTown). */
+function layoutTown(t, n) {
+  const rnd = rng(1000 + n * 7919), pop = t.pop0;
   const [cx, cz] = dryNear(t.x, t.z);
   t.x = cx; t.z = cz;
-  const need = Math.max(1, Math.ceil(pop / HOUSE.cap[1] - 0.01)), zoneN = Math.max(3, Math.ceil(need * 0.5));
-  const R = 0.5 + Math.sqrt(need + zoneN) * 0.36, rot0 = rnd() * Math.PI * 2;
+  const need = homesFor(pop), R = townRadius(pop), rot0 = rnd() * Math.PI * 2;
   t.R = R;
   const hall = addB('hall', cx, cz, rot0, 1, true);
   hall.ti = n;
   const made = [], nR = pop > 80 ? 6 : pop > 20 ? 5 : pop > 5 ? 4 : 3, ang = [], rr = 0.45;
   for (let k = 0; k < nR; k++) ang.push(rot0 + Math.PI / nR + k * 2 * Math.PI / nR + (rnd() - 0.5) * 0.35);
-  const ring = ang.map(a => { const p = dirAt(cx, cz, a, rr); return passable(p[0], p[1]) ? addNode(p[0], p[1]) : null; });
-  /* the market square around the town hall */
+  const ring = ang.map(a => { const p = dirAt(cx, cz, a, rr); return passable(p[0], p[1]) && !nearBld(p[0], p[1], 0.05) ? addNode(p[0], p[1]) : null; });
   for (let k = 0; k < nR; k++) {
     const A = ring[k], B = ring[(k + 1) % nR];
     if (!A || !B) continue;
@@ -697,21 +748,20 @@ function layoutTown(t, n, pop) {
     const pts = [];
     for (let q = 0; q <= 8; q++) pts.push(dirAt(cx, cz, a0 + (a1 - a0) * q / 8, rr));
     const c = clipLine(pts);
-    if (c && c.length === pts.length) made.push(addEdge('road', 1, A, B, pts));
+    if (c && c.length === pts.length && !pts.some(q => nearBld(q[0], q[1], 0.03) && Math.hypot(q[0] - cx, q[1] - cz) > 0.3)) made.push(addEdge('road', 1, A, B, pts));
   }
-  /* streets out from the square, gently curved */
   const radial = [];
   for (let k = 0; k < nR; k++) {
     if (!ring[k]) continue;
     const bend = (rnd() - 0.5) * 0.5, len = R * (0.8 + rnd() * 0.3), pts = [];
     for (let r = rr; r <= len + 1e-6; r += 0.2) pts.push(dirAt(cx, cz, ang[k] + bend * (r - rr) / len, r));
-    const c = clipLine(pts);
-    if (!c || polyLen(c) < 0.45) continue;
-    const end = addNode(c[c.length - 1][0], c[c.length - 1][1]), e = addEdge('road', 1, ring[k], end, c);
+    const run = clearRuns(pts, 0.45)[0];
+    if (!run || Math.hypot(run[0][0] - pts[0][0], run[0][1] - pts[0][1]) > 0.1) continue;
+    run[0] = [ring[k].x, ring[k].z];
+    const end = addNode(run[run.length - 1][0], run[run.length - 1][1]), e = addEdge('road', 1, ring[k], end, run);
     made.push(e); radial.push({ e, a: ang[k], bend, len });
   }
-  /* ring roads for bigger towns, outermost first so each split keeps the inner part of a street */
-  const rings = need + zoneN > 50 ? [0.82, 0.45] : need + zoneN > 18 ? [0.55] : [];
+  const zoneN = Math.max(3, Math.ceil(need * 0.5)), rings = need + zoneN > 50 ? [0.82, 0.45] : need + zoneN > 18 ? [0.55] : [];
   for (const f of rings) {
     if (radial.length < 3) break;
     const r2 = rr + (R - rr) * f, nodes = [];
@@ -728,23 +778,72 @@ function layoutTown(t, n, pop) {
       const pts = [];
       for (let q = 0; q <= 12; q++) pts.push(dirAt(cx, cz, a0 + (a1 - a0) * q / 12, r2));
       pts[0] = [A.n.x, A.n.z]; pts[pts.length - 1] = [B.n.x, B.n.z];
-      const c = clipLine(pts);
-      if (c && c.length === pts.length) made.push(...buildLine('road', 1, pts, 0.08));
+      const runs = clearRuns(pts, 0.3);
+      if (runs.length === 1 && Math.abs(polyLen(runs[0]) - polyLen(pts)) < 0.15) made.push(...buildLine('road', 1, pts, 0.08));
     }
   }
   ring.forEach(nd => { if (nd) dropNode(nd); });
   afterLine(made);
-  const near = () => { const out = []; EDGES.forEach(e => { if (e.k === 'road' && Math.hypot(e.p[0][0] - cx, e.p[0][1] - cz) < R + 2) out.push(e); }); return out; };
-  let h = settle(near(), cx, cz, R + 0.6, need, zoneN, rnd, false);
-  /* rivers and lakes can leave too little room: add side streets until every home fits */
-  for (let k = 0; k < 10 && h < need; k++) {
+}
+/* A big city: its landmarks are already standing; the town hall, the real main streets, then a street grid around them. */
+function layoutCity(t, n, plan) {
+  let hall = S.bld.find(b => b.t === 'hall' && b.lm && LANDMARKS[b.lm].town === t.n);
+  if (!hall) {
+    const [cx, cz] = dryNear(t.x, t.z, 0.9);
+    hall = addB('hall', cx, cz, 0, 1, true);
+  }
+  hall.ti = n; t.x = hall.x; t.z = hall.z;
+  const R = townRadius(t.pop0) + 0.4;
+  t.R = R;
+  const made = [];
+  plan.streets.forEach(s => made.push(...buildLine('road', 2, s.map(p => ll2xz(p[0], p[1])), 0.06)));
+  afterLine(made);
+  /* the grid: streets 1 km apart, a block of houses on each side, kept away from the main streets */
+  const a = plan.a * Math.PI / 180, ux = Math.cos(a), uz = -Math.sin(a), SP = 1.0, K = Math.ceil(R / SP) + 1, grid = [];
+  for (const [dx, dz, px, pz] of [[ux, uz, -uz, ux], [-uz, ux, ux, uz]]) for (let k = -K; k < K; k++) {
+    const off = (k + 0.5) * SP, L = Math.sqrt(Math.max(0, (R + 0.3) ** 2 - off * off));
+    if (L < 0.4) continue;
+    const ox = t.x + px * off, oz = t.z + pz * off;
+    for (const run of clearRuns([[ox - dx * L, oz - dz * L], [ox + dx * L, oz + dz * L]], 0.6)) {
+      let near = 0;
+      for (const q of run) { const ne = nearestEdge(q[0], q[1], 'road', 0.4); if (ne) { const tg = polyAt(ne.e.p, ne.e.c, ne.s); if (Math.abs(tg[2] * dx + tg[3] * dz) > 0.8) near++; } }
+      if (near > run.length * 0.4) continue;
+      grid.push(...buildLine('road', 1, [run[0], run[run.length - 1]], 0.1));
+    }
+  }
+  /* streets cut off by water (across a river with no bridge, out on the spit) are dropped */
+  const ha = accessOf(bOBB(hall), 'road', ACCESS + 0.15);
+  if (ha) {
+    const seen = new Set([ha.e.a, ha.e.b]), todo = [ha.e.a, ha.e.b];
+    while (todo.length) for (const eid of NODES.get(todo.pop()).e) { const e = EDGES.get(eid); if (e.k === 'road') for (const id of [e.a, e.b]) if (!seen.has(id)) { seen.add(id); todo.push(id); } }
+    roadsNear(t.x, t.z, R + 1).forEach(e => { if (EDGES.has(e.id) && !seen.has(e.a)) removeEdge(e); });
+  }
+  afterLine(grid.filter(e => EDGES.has(e.id)));
+}
+/* Roads near a town that its hall reaches by road within lim km: homes go only where the town can reach them. */
+function townRoads(n, r, lim) {
+  const t = S.towns[n], h = S.bld.find(b => b.t === 'hall' && b.ti === n), a = h && accessOf(bOBB(h), 'road', ACCESS + 0.15), near = roadsNear(t.x, t.z, r);
+  if (!a) return near;
+  const d = new Map(), todo = [[a.e.a, a.s], [a.e.b, a.e.L - a.s]];
+  while (todo.length) {
+    const [id, f] = todo.pop();
+    if (f > lim || (d.has(id) && d.get(id) <= f)) continue;
+    d.set(id, f);
+    for (const eid of NODES.get(id).e) { const e = EDGES.get(eid); if (e.k === 'road') todo.push([e.a === id ? e.b : e.a, f + e.L]); }
+  }
+  return near.filter(e => d.has(e.a) || d.has(e.b));
+}
+/* Homes and zoned lots for a town or city, with side streets when its streets are full. */
+function settleTown(t, n) {
+  const rnd = rng(7000 + n * 613), need = homesFor(t.pop0), zoneN = Math.max(3, Math.ceil(need * 0.5)), R = t.R || 1;
+  let h = settle(townRoads(n, R + 1.5, R * 2 + 3), t.x, t.z, R + 0.6, need, zoneN, rnd, false);
+  for (let k = 0; k < 12 && h < need; k++) {
     const a = rnd() * Math.PI * 2, pts = [];
-    for (let r = rr; r <= R + 0.8; r += 0.2) pts.push(dirAt(cx, cz, a, r));
-    const c = clipLine(pts);
-    if (!c || polyLen(c) < 0.6) continue;
-    const e = buildLine('road', 1, c, 0.1);
-    afterLine(e);
-    h += settle(near(), cx, cz, R + 1, need - h, 0, rnd, false);
+    for (let r = 0.45; r <= R + 0.8; r += 0.2) pts.push(dirAt(t.x, t.z, a, r));
+    const run = clearRuns(pts, 0.6)[0];
+    if (!run) continue;
+    afterLine(buildLine('road', 1, run, 0.12));
+    h += settle(townRoads(n, R + 2, R * 2 + 4), t.x, t.z, R + 1, need - h, 0, rnd, false);
   }
 }
 /* A village: one street (sometimes a side lane), a wooden chapel by the street, and a few farmsteads. */
@@ -754,10 +853,12 @@ function layoutVillage(t, n, pop) {
   t.x = cx; t.z = cz;
   let pts = null, a = rnd() * Math.PI;
   const L = 0.8 + rnd() * 0.4, bend = (rnd() - 0.5) * 0.5;
-  for (let tries = 0; tries < 4 && !pts; tries++, a += Math.PI / 4) {
-    const half = dir => { const p = []; for (let r = 0; r <= L + 1e-6; r += 0.15) p.push(dirAt(cx, cz, a + (dir < 0 ? Math.PI : 0) + bend * r / L * dir, r)); return clipLine(p); };
-    const h1 = half(1), h2 = half(-1), p = (h2 ? h2.slice().reverse() : [[cx, cz]]).concat(h1 ? h1.slice(1) : []);
-    if (p.length > 1 && polyLen(p) >= 0.5) pts = p;
+  for (let tries = 0; tries < 8 && !pts; tries++, a += Math.PI / 8) {
+    const half = dir => { const p = []; for (let r = 0; r <= L + 1e-6; r += 0.15) p.push(dirAt(cx, cz, a + (dir < 0 ? Math.PI : 0) + bend * r / L * dir, r)); return clearRuns(p, 0.15)[0] || null; };
+    const h1 = half(1), h2 = half(-1);
+    const ok1 = h1 && Math.hypot(h1[0][0] - cx, h1[0][1] - cz) < 0.05, ok2 = h2 && Math.hypot(h2[0][0] - cx, h2[0][1] - cz) < 0.05;
+    const p = (ok2 ? h2.slice().reverse() : [[cx, cz]]).concat(ok1 ? h1.slice(1) : []);
+    if (p.length > 1 && polyLen(p) >= (tries < 4 ? 0.5 : 0.3)) pts = p;
   }
   t.R = L;
   if (!pts) return;
@@ -765,8 +866,8 @@ function layoutVillage(t, n, pop) {
   if (rnd() < 0.45) {
     const s = rnd() < 0.5 ? 1 : -1, la = a + Math.PI / 2 * s, len = 0.45 + rnd() * 0.3, side = [];
     for (let r = 0; r <= len + 1e-6; r += 0.15) side.push(dirAt(cx, cz, la + (rnd() - 0.5) * 0.08, r));
-    const c = clipLine(side);
-    if (c && polyLen(c) > 0.3) made.push(...buildLine('road', 1, c, 0.1));
+    const c = clearRuns(side, 0.3)[0];
+    if (c && Math.hypot(c[0][0] - cx, c[0][1] - cz) < 0.05) made.push(...buildLine('road', 1, c, 0.1));
   }
   afterLine(made);
   /* the chapel faces the street beside the village centre, on whichever side is clear */
@@ -785,14 +886,13 @@ function layoutVillage(t, n, pop) {
   const [hx, hz] = spot, hall = addB('hall', hx, hz, spot[2], 1, true);
   hall.ti = n;
   const need = Math.max(2, Math.ceil(pop / FARMSTEAD_CAP - 0.01));
-  const near = () => { const out = []; EDGES.forEach(e => { if (e.k === 'road' && Math.hypot(e.p[0][0] - cx, e.p[0][1] - cz) < L + 1.5) out.push(e); }); return out; };
+  const near = () => roadsNear(cx, cz, L + 1.2);
   let h = settle(near(), hx, hz, L + 0.3, need, 0, rnd, true);
-  /* not enough room along the street: lanes out to more farmsteads */
   for (let k = 0; k < 8 && h < need; k++) {
     const an = rnd() * Math.PI * 2, p = [], o = polyAt(pts, c, rnd() * c[c.length - 1]);
     for (let r = 0; r <= 0.9; r += 0.15) p.push(dirAt(o[0], o[1], an, r));
-    const cl = clipLine(p);
-    if (!cl || polyLen(cl) < 0.45) continue;
+    const cl = clearRuns(p, 0.45)[0];
+    if (!cl || Math.hypot(cl[0][0] - o[0], cl[0][1] - o[1]) > 0.1) continue;
     afterLine(buildLine('road', 1, cl, 0.1));
     h += settle(near(), hx, hz, L + 1, need - h, 0, rnd, true);
   }
@@ -804,7 +904,7 @@ function nearestTownRoad(n, x, z) {
   EDGES.forEach(e => {
     if (e.k !== 'road') return;
     const q = polyClosest(e.p, e.c, x, z);
-    if (Math.hypot(q.x - t.x, q.z - t.z) > 7) return;
+    if (Math.hypot(q.x - t.x, q.z - t.z) > (t.R || 1) + 6) return;
     if (!best || q.d < best.d) best = { x: q.x, z: q.z, d: q.d };
   });
   return best;
@@ -848,23 +948,36 @@ function placeNear(n, type) {
   }
   return null;
 }
-/* Station for town n, on the side facing another town; its platform track runs toward that town. */
+/* A station near (x, z) whose platform track runs along direction (vx, vz); null if there is no room. */
+function stationTry(n, x, z, vx, vz) {
+  const rot = Math.atan2(-vz, vx);
+  if (!validPlace('station', x, z, rot, true).ok) return null;
+  const fx = -vz, fz = vx, ax = x + fx * 0.31, az = z + fz * 0.31, p0 = [ax - vx * 0.6, az - vz * 0.6], p1 = [ax + vx * 0.6, az + vz * 0.6];
+  blk();
+  if (!lineCheck(p0[0], p0[1], p1[0], p1[1], 'rail', true).ok) return null;
+  const b = addB('station', x, z, rot, 1, true);
+  b.ti = n;
+  if (!connectToTown(b, n, -1)) { removeB(b); return null; }
+  afterLine(buildLine('rail', 1, [p0, p1], 0));
+  return b;
+}
+/* Station for town n, on the side facing another place; its platform track runs toward that place. */
 function stationFor(n, toward) {
   const old = S.bld.find(b => b.t === 'station' && b.ti === n);
   if (old) return old;
-  const t = S.towns[n], L = Math.hypot(toward.x - t.x, toward.z - t.z), ux = (toward.x - t.x) / L, uz = (toward.z - t.z) / L;
+  const t = S.towns[n], plan = CITY_PLAN[t.n];
+  if (plan && plan.station) {
+    const [x0, z0] = ll2xz(plan.station[0], plan.station[1]), a = plan.station[2] * Math.PI / 180, vx = Math.cos(a), vz = -Math.sin(a);
+    for (let r = 0; r <= 0.6; r += 0.15) for (let q = 0; q < (r ? 8 : 1); q++) {
+      const [x, z] = dirAt(x0, z0, q / 8 * Math.PI * 2, r);
+      for (const s of [1, -1]) { const b = stationTry(n, x, z, vx * s, vz * s); if (b) return b; }
+    }
+  }
+  const L = Math.hypot(toward.x - t.x, toward.z - t.z), ux = (toward.x - t.x) / L, uz = (toward.z - t.z) / L;
   for (let r = (t.R || 1) * 0.6 + 0.5; r <= 6; r += 0.25) for (const off of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2]) {
     const ca = Math.cos(off), sa = Math.sin(off), vx = ux * ca - uz * sa, vz = ux * sa + uz * ca;
-    const x = t.x + vx * r, z = t.z + vz * r, rot = Math.atan2(-vz, vx);
-    if (!validPlace('station', x, z, rot, true).ok) continue;
-    const fx = -vz, fz = vx, ax = x + fx * 0.31, az = z + fz * 0.31, p0 = [ax - vx * 0.6, az - vz * 0.6], p1 = [ax + vx * 0.6, az + vz * 0.6];
-    blk();
-    if (!lineCheck(p0[0], p0[1], p1[0], p1[1], 'rail', true).ok) continue;
-    const b = addB('station', x, z, rot, 1, true);
-    b.ti = n;
-    if (!connectToTown(b, n, -1)) { removeB(b); continue; }
-    afterLine(buildLine('rail', 1, [p0, p1], 0));
-    return b;
+    const b = stationTry(n, t.x + vx * r, t.z + vz * r, vx, vz);
+    if (b) return b;
   }
   return null;
 }
@@ -874,6 +987,15 @@ function trackEnd(st, toward) {
   const A = NODES.get(a.e.a), B = NODES.get(a.e.b);
   return Math.hypot(A.x - toward.x, A.z - toward.z) <= Math.hypot(B.x - toward.x, B.z - toward.z) ? A : B;
 }
+/* Lay a planned line: the parts near a line of the same kind are moved onto it, and only the new parts are built. */
+function buildPlanned(k, lv, p) {
+  const pts = [];
+  for (const q of densify(p, 0.05)) { const ne = nearestEdge(q[0], q[1], k, 0.3); pts.push(ne ? [ne.x, ne.z] : q); }
+  const made = [];
+  for (const run of newRuns(dedupe(pts, 0.01), k)) made.push(...buildLine(k, lv, rdp(run.p, 0.004), 0.12));
+  afterLine(made);
+  return made;
+}
 function railBetween(ia, ib) {
   const A = S.towns[ia], B = S.towns[ib], sA = stationFor(ia, B), sB = stationFor(ib, A);
   if (!sA || !sB) return false;
@@ -882,7 +1004,30 @@ function railBetween(ia, ib) {
   blk();
   const p = planPath(ea.x, ea.z, eb.x, eb.z, 'rail', true);
   if (!p) return false;
-  afterLine(buildLine('rail', 1, smoothLine(p, 'rail', true, 2), 0.1));
+  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
+  return true;
+}
+/* The last point inside Lithuania on the way from (x, z) toward a place abroad. */
+function borderPoint(x, z, tx, tz) {
+  const L = Math.hypot(tx - x, tz - z);
+  let last = null;
+  for (let s = 0; s <= L; s += 0.25) {
+    const px = x + (tx - x) * s / L, pz = z + (tz - z) * s / L;
+    if (passable(px, pz)) last = [px, pz, s]; else if (last && s - last[2] > 3) break;
+  }
+  if (!last) return null;
+  const back = Math.min(0.6, last[2]);
+  return [x + (tx - x) * (last[2] - back) / L, z + (tz - z) * (last[2] - back) / L];
+}
+function railToBorder(ia, lon, lat) {
+  const [tx, tz] = ll2xz(lon, lat), st = stationFor(ia, { x: tx, z: tz });
+  if (!st) return false;
+  const e = trackEnd(st, { x: tx, z: tz }), bp = e && borderPoint(e.x, e.z, tx, tz);
+  if (!bp) return false;
+  blk();
+  const p = planPath(e.x, e.z, bp[0], bp[1], 'rail', true);
+  if (!p) return false;
+  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
   return true;
 }
 /* The road node of town n nearest to another place. */
@@ -896,81 +1041,213 @@ function townExit(n, toward) {
   });
   return best;
 }
-function roadBetween(ia, ib) {
+function roadBetween(ia, ib, lv) {
   const A = S.towns[ia], B = S.towns[ib], na = townExit(ia, B), nb = townExit(ib, A);
   if (!na || !nb) return false;
   blk();
   const p = planPath(na.x, na.z, nb.x, nb.z, 'road', true);
   if (!p) return false;
-  afterLine(buildLine('road', 1, smoothLine(p, 'road', true, 2), 0.1));
+  buildPlanned('road', lv || 1, smoothLine(p, 'road', true, 2));
   return true;
+}
+function roadToBorder(ia, lon, lat, lv) {
+  const [tx, tz] = ll2xz(lon, lat), na = townExit(ia, { x: tx, z: tz }), bp = na && borderPoint(na.x, na.z, tx, tz);
+  if (!bp) return false;
+  blk();
+  const p = planPath(na.x, na.z, bp[0], bp[1], 'road', true);
+  if (!p) return false;
+  buildPlanned('road', lv || 1, smoothLine(p, 'road', true, 2));
+  return true;
+}
+/* Road distance between the halls of two settlements, searched no further than lim km (Infinity if further). */
+function roadDist(ia, ib, lim) {
+  const hall = n => { const h = S.bld.find(b => b.t === 'hall' && b.ti === n); return h && accessOf(bOBB(h), 'road', ACCESS + 0.15); };
+  const a = hall(ia), b = hall(ib);
+  if (!a || !b) return Infinity;
+  if (a.e === b.e) return Math.abs(a.s - b.s);
+  const d = new Map(), hk = [], hv = [];
+  const push = (id, f) => { const cur = d.get(id); if (cur !== undefined && cur <= f) return; d.set(id, f); hk.push(f); hv.push(id); };
+  push(a.e.a, a.s); push(a.e.b, a.e.L - a.s);
+  let best = Infinity;
+  while (hk.length) {
+    let m = 0;
+    for (let i = 1; i < hk.length; i++) if (hk[i] < hk[m]) m = i;
+    const f = hk[m], id = hv[m];
+    hk[m] = hk[hk.length - 1]; hv[m] = hv[hv.length - 1]; hk.pop(); hv.pop();
+    if (f > d.get(id) || f > lim || f >= best) continue;
+    if (id === b.e.a) best = Math.min(best, f + b.s);
+    if (id === b.e.b) best = Math.min(best, f + b.e.L - b.s);
+    for (const eid of NODES.get(id).e) { const e = EDGES.get(eid); if (e.k === 'road') push(e.a === id ? e.b : e.a, f + e.L); }
+  }
+  return best;
+}
+/* Dirt roads between neighbouring settlements: the relative neighbourhood graph of the settlements (two places are joined when
+   no third one is nearer to both), shortest first, skipping pairs already joined by a road not much longer than the straight line. */
+function linkSettlements() {
+  const T = S.towns, n = T.length, near = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const d = Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z);
+    if (d < 32) near.push([i, j, d]);
+  }
+  const dist = (i, j) => Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z), pairs = [];
+  for (const [i, j, d] of near) {
+    let rng = true;
+    for (let k = 0; k < n && rng; k++) if (k !== i && k !== j && dist(i, k) < d && dist(j, k) < d) rng = false;
+    if (rng) pairs.push([i, j, d]);
+  }
+  pairs.sort((p, q) => p[2] - q[2]);
+  let built = 0;
+  for (const [i, j, d] of pairs) {
+    if (roadDist(i, j, d * 1.35 + 1.5) <= d * 1.35 + 1.5) continue;
+    if (roadBetween(i, j, 1)) built++;
+  }
+  /* settlements still cut off from the capital: try their nearest neighbours */
+  const cap = T.findIndex(t => t.capital);
+  let comp = roadComps();
+  for (let i = 0; i < n; i++) {
+    if (comp(i) === comp(cap)) continue;
+    const order = T.map((t, j) => [j, dist(i, j)]).filter(q => q[0] !== i && comp(q[0]) !== comp(i)).sort((p, q) => p[1] - q[1]).slice(0, 6);
+    for (const [j] of order) if (roadBetween(i, j, 1)) { built++; comp = roadComps(); break; }
+  }
+  return built;
+}
+/* Which road network each settlement's hall stands on: comp(n) is the same for settlements joined by road. */
+function roadComps() {
+  const up = new Map(), find = x => { while (up.get(x) !== x) { up.set(x, up.get(up.get(x))); x = up.get(x); } return x; };
+  NODES.forEach(nd => up.set(nd.id, nd.id));
+  EDGES.forEach(e => { if (e.k === 'road') { const a = find(e.a), b = find(e.b); if (a !== b) up.set(a, b); } });
+  const root = S.towns.map((t, n) => { const h = S.bld.find(b => b.t === 'hall' && b.ti === n), a = h && accessOf(bOBB(h), 'road', ACCESS + 0.15); return a ? find(a.e.a) : -1 - n; });
+  return n => root[n];
 }
 function newTown(id, n, x, z, o) {
   return Object.assign({ id, n, reg: '', capital: 0, cap: STORE_BASE, orig: 0, lock: 0, kr: 0, vil: 0, R: 1, x, z, d: '', pop: 3, pop0: 3, h: 62, stock: {}, dl: {}, dem: {}, house: 0, wf: 0, jobs: 0,
     fill: 1, pm: 1, powS: 0, powD: 0, pr: 1, gS: 0, gD: 0, note: 'Content', lastWarn: -999, dev: 0, hint: '' }, o || {});
 }
-/* The region of a spot: inside the Klaipėda Region, or that of the nearest named town. */
+/* The region of a spot: inside the Klaipėda Region, or that of the nearest town with a known region. */
 function regionAt(x, z) {
   if (inKR(x, z)) return 'Mažoji Lietuva';
   let best = '', bd = 1e9;
   S.towns.forEach(t => { if (!t.reg || t.vil) return; const d = Math.hypot(t.x - x, t.z - z); if (d < bd) { bd = d; best = t.reg; } });
   return best;
 }
-/* Villages spread over the farmland, away from towns and from each other. */
-function placeVillages() {
-  const rnd = rng(4242), cand = [], gap = 14.5, names = VIL_NAMES.slice();
-  for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
-  for (let z = 3; z < MAPV - 3; z += 2.5) for (let x = 3; x < MAPU - 3; x += 2.5) cand.push([x + (rnd() - 0.5) * 2.2, z + (rnd() - 0.5) * 2.2]);
-  for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
-  const out = [], near = new SpatialHash(gap);
-  S.towns.forEach(t => near.add(t, t.x, t.z, t.x, t.z));
-  for (const [x, z] of cand) {
-    if (out.length >= names.length) break;
-    const k = cellAt(x, z);
-    if (k < 0 || !(TF[k] & F_LT) || !isLandT(TT[k]) || (TF[k] & F_BOG)) continue;
-    let clash = false;
-    near.query(x - gap, z - gap, x + gap, z + gap, t => { if (!clash && Math.hypot(t.x - x, t.z - z) < (t.vil ? gap : (t.R || 1) + 7.5)) clash = true; });
-    if (clash || !dryBox(x, z, 1.6)) continue;
-    const v = { x, z, vil: 1, n: names[out.length] };
-    out.push(v); near.add(v, x, z, x, z);
-  }
-  return out;
+let RIV_XZ = null;
+/* The river within r km of a spot, by name, or ''. */
+function riverAt(x, z, r) {
+  if (!RIV_XZ) RIV_XZ = GEO_RIV.map(q => { const p = polyXZ(q.p); return { n: q.n, p, c: polyCum(p) }; });
+  let best = '', bd = r;
+  for (const q of RIV_XZ) { const d = polyClosest(q.p, q.c, x, z).d; if (d < bd) { bd = d; best = q.n; } }
+  return best;
 }
 /* What a village is like, from the land around it. */
 function villageText(x, z) {
   let n = 0, forest = 0, fert = 0, water = 0;
   forDisk(x, z, 2, (k, d) => { n++; if (TF[k] & F_FOREST) forest++; if (TF[k] & F_FERTILE) fert++; if (d < 1.4 && isWaterT(TT[k])) water++; });
+  const riv = riverAt(x, z, 1.5);
+  if (riv) return `A village on the ${riv}, of farmers and boatmen.`;
   if (water) return 'A village of farmers and fishermen by the water.';
   if (forest > n * 0.4) return 'A forest village. People farm small clearings and cut firewood.';
   if (fert > n * 0.4) return 'A farming village on good soil.';
   return 'A farming village of a few homesteads.';
 }
-function genWorld() {
+/* A few words on a town without a written description. */
+function townText(t) {
+  const riv = riverAt(t.x, t.z, 2);
+  let lake = false;
+  forDisk(t.x, t.z, 2, k => { if (TT[k] === T_LAKE) lake = true; });
+  return `${t.pop0 >= 2 ? 'A market town' : 'A small market town'} of ${t.reg || 'Lithuania'}${riv ? ` on the ${riv}` : lake ? ', by a lake' : ''}.`;
+}
+/* Written descriptions of towns that are not among the main ones (TOWNS0, TOWNS1). */
+const TOWN_TXT = {
+  'Rietavas': 'Seat of the Oginskis princes, who lit the first electric lamps in Lithuania here in 1892.',
+  'Birštonas': 'Spa town in a loop of the Nemunas, known for its mineral springs.',
+  'Lentvaris': 'Railway junction west of Vilnius, where the line to Kaunas leaves the line to Warsaw.',
+  'Švenčionėliai': 'Railway town on the Žeimena that grew up around its station.',
+  'Garliava': 'Town on the old highway south of Kaunas.',
+  'Žiežmariai': 'Market town on the old road between Kaunas and Vilnius.',
+  'Virbalis': 'Old town on the border with East Prussia, beside Kybartai.',
+  'Šeduva': 'Market town on the railway from Radviliškis to Panevėžys.',
+  'Turmantas': 'The last station before the Latvian border, on the line to Daugavpils.',
+  'Naujoji Vilnia': 'Railway junction east of Vilnius, where the lines to Daugavpils and to Minsk part.'
+};
+const SLUG = { ą: 'a', č: 'c', ę: 'e', ė: 'e', į: 'i', š: 's', ų: 'u', ū: 'u', ž: 'z' };
+const slugOf = n => n.toLowerCase().replace(/[ąčęėįšųūž]/g, c => SLUG[c]).replace(/[^a-z]+/g, '_');
+/* The settlements of 1918: every place in PLACES, with the game's details for the main towns. */
+function settlements() {
+  const t0 = {}, t1 = {};
+  TOWNS0.forEach(d => t0[d.n] = d);
+  TOWNS1.forEach(a => t1[a[1]] = a);
+  const order = PLACES.map((p, i) => [p, i]).sort((A, B) => {
+    const rank = p => t0[p[0]] ? 0 : t1[p[0]] && !(t1[p[0]][5] || '').includes('v') ? 1 : p[3] && !t1[p[0]] ? 2 : 3;
+    return rank(A[0]) - rank(B[0]) || (t0[A[0][0]] ? TOWNS0.indexOf(t0[A[0][0]]) - TOWNS0.indexOf(t0[B[0][0]]) : 0) || B[0][4] - A[0][4] || A[1] - B[1];
+  });
+  const out = [], ids = new Set();
+  order.forEach(([[name, lon, lat, town, rs, gp], i]) => {
+    const [x, z] = ll2xz(lon, lat), kr = inKR(...landNear(x, z)) ? 1 : 0, d0 = t0[name], d1 = t1[name];
+    let o;
+    if (d0) o = { id: d0.id, reg: d0.reg, capital: d0.cap || 0, d: d0.d, pop0: d0.pop, stock: { ...d0.st }, vil: 0 };
+    else if (d1) {
+      const vil = (d1[5] || '').includes('v') ? 1 : 0, pop = d1[2];
+      o = { id: d1[0], reg: d1[3], d: d1[4], pop0: pop, vil, stock: vil ? { grain: 4, potatoes: 4, timber: 5 } : { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2) } };
+    } else if (town) {
+      const pop = Math.round(clamp(gp ? 0.8 + gp / 1000 * 0.12 : 1.4, 1, 3) * 10) / 10;
+      o = { id: slugOf(name), d: TOWN_TXT[name] || '', pop0: pop, vil: 0, stock: { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2) } };
+    } else {
+      const k = cellAt(x, z), pop = Math.round((0.4 + Math.min(0.6, (rs - 94) / 300) + (k >= 0 && TF[k] & F_FERTILE ? 0.2 : 0)) * 10) / 10;
+      o = { id: 'v' + i, d: '', pop0: pop, vil: 1, stock: { grain: 3, potatoes: 3, timber: 4 } };
+    }
+    if (ids.has(o.id)) o.id += '_' + i;
+    ids.add(o.id);
+    out.push(newTown(o.id, name, x, z, Object.assign(o, { orig: 1, kr, lock: kr, pop: kr ? 0 : o.pop0 })));
+  });
+  return out;
+}
+const FACE = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+function genWorld(log) {
+  const say = log || (() => {});
   genTerrain();
   S.nodes = []; S.edges = []; S.bld = []; S.lots = []; S.towns = [];
   rebuildIndex();
-  TOWNS0.forEach(d => {
-    const [x, z] = ll2xz(d.lon, d.lat);
-    S.towns.push(newTown(d.id, d.n, x, z, { reg: d.reg, capital: d.cap || 0, orig: 1, lock: d.lock ? 1 : 0, kr: d.lock ? 1 : 0, d: d.d, pop: d.lock ? 0 : d.pop, pop0: d.pop, stock: { ...d.st } }));
-  });
-  TOWNS1.forEach(([id, nm, lon, lat, pop, reg, d, fl]) => {
-    const [x, z] = ll2xz(lon, lat), vil = (fl || '').includes('v') ? 1 : 0, kr = (fl || '').includes('k') ? 1 : 0;
-    const st = vil ? { grain: 4, potatoes: 4, timber: 5 } : { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2) };
-    S.towns.push(newTown(id, nm, x, z, { reg, orig: 1, vil, kr, lock: kr, d, pop: kr ? 0 : pop, pop0: pop, stock: st }));
-  });
-  S.towns.forEach((t, n) => t.vil ? layoutVillage(t, n, t.pop0) : layoutTown(t, n, t.pop0));
-  HIST_RAIL.forEach(([a, b]) => railBetween(tIdx(a), tIdx(b)));
-  TOWNS0.forEach((d, n) => d.ind.forEach(type => placeNear(n, type)));
-  HIST_ROAD.forEach(([a, b]) => roadBetween(tIdx(a), tIdx(b)));
-  const rnd = rng(99);
-  placeVillages().forEach(v => {
-    const n = S.towns.length, kr = inKR(v.x, v.z) ? 1 : 0, k = cellAt(v.x, v.z), pop = Math.round((0.5 + rnd() + (TF[k] & F_FERTILE ? 0.3 : 0)) * 10) / 10;
-    const t = newTown('v' + n, v.n, v.x, v.z, { vil: 1, orig: 1, kr, lock: kr, reg: regionAt(v.x, v.z), d: villageText(v.x, v.z), pop: kr ? 0 : pop, pop0: pop, stock: { grain: 3, potatoes: 3, timber: 4 } });
-    S.towns.push(t);
-    layoutVillage(t, n, pop);
-  });
+  S.towns = settlements();
+  S.towns.forEach(t => { if (!t.reg) t.reg = regionAt(t.x, t.z); });
+  say(`${S.towns.length} settlements`);
+  /* landmarks first, at their real places: streets go around them */
+  for (const key in LANDMARKS) {
+    const L = LANDMARKS[key], [x, z] = ll2xz(L.lon, L.lat), f = FACE[L.face], ti = S.towns.findIndex(t => t.n === L.town);
+    const b = addB(L.hall ? 'hall' : 'landmark', x, z, faceRot(f[0], f[1]), 1, true, L.fp.slice());
+    b.lm = key;
+    if (L.hall) b.ti = ti;
+  }
+  S.towns.forEach((t, n) => { if (CITY_PLAN[t.n]) layoutCity(t, n, CITY_PLAN[t.n]); });
+  S.towns.forEach((t, n) => { if (!t.vil && !CITY_PLAN[t.n]) layoutTown(t, n); });
+  S.towns.forEach((t, n) => { if (t.vil) layoutVillage(t, n, t.pop0); });
+  S.towns.forEach(t => { if (!t.d) t.d = t.vil ? villageText(t.x, t.z) : townText(t); });
+  say(`laid out: ${S.edges.length} streets, ${S.bld.length} buildings`);
+  const at = s => s[0] === '@' ? s.slice(1).split(',').map(Number) : S.towns.findIndex(t => t.n === s);
+  const lines = (list, between, toBorder, what) => {
+    let bad = 0;
+    for (const line of list) for (let q = 1; q < line.length; q++) {
+      const a = at(line[q - 1]), b = at(line[q]);
+      if (a === -1 || b === -1) { say(`  ${what}: no place ${a === -1 ? line[q - 1] : line[q]}`); bad++; continue; }
+      const ok = Array.isArray(a) ? toBorder(b, a[0], a[1]) : Array.isArray(b) ? toBorder(a, b[0], b[1]) : between(a, b);
+      if (!ok) { bad++; say(`  ${what}: could not build ${line[q - 1]} – ${line[q]}`); }
+    }
+    return bad;
+  };
+  lines(RAIL1918, railBetween, railToBorder, 'railway');
+  say(`railways: ${Math.round(S.edges.filter(e => e.k === 'rail').reduce((a, e) => a + e.L, 0))} km`);
+  lines(ROAD1918, (a, b) => roadBetween(a, b, 2), (a, lo, la) => roadToBorder(a, lo, la, 2), 'highway');
+  say(`highways: ${Math.round(S.edges.filter(e => e.k === 'road' && e.lv === 2).reduce((a, e) => a + e.L, 0))} km`);
+  PL.reuse = 0.75;
+  const built = linkSettlements();
+  PL.reuse = 0.35;
+  lines(BORDER_ROADS, (a, b) => roadBetween(a, b, 1), (a, lo, la) => roadToBorder(a, lo, la, 1), 'border road');
+  say(`dirt roads: ${built} links, ${Math.round(S.edges.filter(e => e.k === 'road' && e.lv === 1).reduce((a, e) => a + e.L, 0))} km`);
+  S.towns.forEach((t, n) => { if (!t.vil) settleTown(t, n); });
+  TOWNS0.forEach(d => { const n = tIdx(d.id); d.ind.forEach(type => placeNear(n, type)); });
+  say(`homes: ${S.bld.filter(b => b.t === 'house').length}, lots: ${S.lots.length}, buildings: ${S.bld.length}`);
   NET.dirty = true;
 }
+
 /* A town founded by the player: hall, two short streets, one house and a few zoned lots. */
 function foundTown(x, z, rot, name) {
   const n = S.towns.length;

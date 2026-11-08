@@ -166,10 +166,12 @@ GTEX.colorSpace = THREE.SRGBColorSpace;
 GTEX.anisotropy = Math.min(8, R3.capabilities.getMaxAnisotropy ? R3.capabilities.getMaxAnisotropy() : 1);
 const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), bog: hx('#8a8358'), clay: hx('#ab9f6d'), sand: hx('#e3d4a4'),
   sea: hx('#3b7997'), lagoon: hx('#4b8eab'), lake: hx('#7fa98a'), foreign: hx('#b3b5a4'), autumn: hx('#b8a457') };
+/* the neighbours, each its own muted colour (by CTY code): Latvia, Belarus, Poland, East Prussia */
+const CTY_COL = ['#b3b5a4', '#93b468', '#cfa996', '#a2a8d0', '#d6c189', '#9cbfb6'], CTY_RGB = CTY_COL.map(hx);
 function hx(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
 function cellRGB(k, aut) {
   const t = TT[k], f = TF[k];
-  let c = t === T_SEA ? PAL.sea : t === T_LAGOON ? PAL.lagoon : t === T_FOREIGN ? PAL.foreign : t === T_SAND ? PAL.sand : t === T_LAKE ? PAL.lake
+  let c = t === T_SEA ? PAL.sea : t === T_LAGOON ? PAL.lagoon : t === T_SAND ? PAL.sand : t === T_LAKE ? PAL.lake : !(f & F_LT) ? CTY_RGB[CTY[k]]
     : f & F_BOG ? PAL.bog : f & F_FOREST ? PAL.forest : f & F_FERTILE ? PAL.fert : f & F_CLAY ? PAL.clay : PAL.land;
   if (aut && t !== T_SEA && t !== T_LAGOON) { const q = f & F_FOREST ? 0.22 : 0.4; c = [c[0] + (PAL.autumn[0] - c[0]) * q, c[1] + (PAL.autumn[1] - c[1]) * q, c[2] + (PAL.autumn[2] - c[2]) * q]; }
   return c;
@@ -189,8 +191,8 @@ function paintGround() {
   g.drawImage(GSRC, 0, 0, GTEX_W, GTEX_H);
   if (S.kr) {
     g.fillStyle = 'rgba(112,82,150,0.2)'; g.beginPath();
-    polyXZ(KR).forEach((p, i) => { const x = p[0] / MAPU * GTEX_W, y = p[1] / MAPV * GTEX_H; i ? g.lineTo(x, y) : g.moveTo(x, y); });
-    g.closePath(); g.fill();
+    GEO_KR.forEach(r => { polyXZ(r).forEach((p, i) => { const x = p[0] / MAPU * GTEX_W, y = p[1] / MAPV * GTEX_H; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); });
+    g.fill();
   }
   GTEX.needsUpdate = true; groundDirty = false; groundCells = []; lastGround = NOW;
 }
@@ -260,11 +262,20 @@ const GROUND = (() => {
   const outer = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2).translate(MAPU / 2, -0.05, MAPV / 2),
     snowy(new THREE.MeshLambertMaterial({ color: '#b3b5a4' }), 1, true));
   outer.renderOrder = -1; SCENE.add(outer);
+  /* the neighbours' land beyond the edge of the map, in their colours */
+  for (const c of ['lv', 'by', 'pl', 'ru']) {
+    const col = new THREE.Color(CTY_COL[CTY_ID[c]]), mat = snowy(new THREE.MeshLambertMaterial({ color: col }), 1, true);
+    GEO_C[c].forEach(r => { const g = shapeGeo(polyXZ(r)); g.translate(0, -0.03, 0); const mm = new THREE.Mesh(g, mat); mm.renderOrder = -1; SCENE.add(mm); });
+  }
   return m;
 })();
 
 /* ---------- water ---------- */
-function shapeGeo(pxz) { const g = new THREE.ShapeGeometry(new THREE.Shape(pxz.map(p => new THREE.Vector2(p[0], -p[1])))); g.rotateX(-Math.PI / 2); return g; }
+function shapeGeo(pxz, holes) {
+  const sh = new THREE.Shape(pxz.map(p => new THREE.Vector2(p[0], -p[1])));
+  (holes || []).forEach(h => sh.holes.push(new THREE.Path(h.map(p => new THREE.Vector2(p[0], -p[1])))));
+  const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); return g;
+}
 /* flat strip along a polyline, appended to {pos, uv, idx} */
 function ribbon(pts, w, y, vs, out, u0, u1) {
   u0 = u0 || 0; u1 = u1 === undefined ? 1 : u1;
@@ -293,41 +304,52 @@ function flatGeo(out) {
 }
 function decal(mat, order) { mat.depthWrite = false; mat.polygonOffset = true; mat.polygonOffsetFactor = -1 - order; mat.polygonOffsetUnits = -2 - order; return mat; }
 const WATER = (() => {
-  const sea = SEA.map(p => p.slice()), mk = c => decal(new THREE.MeshPhongMaterial({ color: c, specular: '#9cc3d6', shininess: 60 }), 1);
-  sea.forEach(p => { if (p[0] < 20) p[0] = 12; if (p[1] > 57) p[1] = 58.6; });
+  const mk = c => decal(new THREE.MeshPhongMaterial({ color: c, specular: '#9cc3d6', shininess: 60 }), 1);
   const M = { sea: mk('#3d7c99'), lagoon: mk('#4b8eab'), lake: mk('#4f97b4') };
   const add = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; m.receiveShadow = true; SCENE.add(m); return m; };
-  add(shapeGeo(polyXZ(sea)), M.sea);
-  add(shapeGeo(polyXZ(LAG)), M.lagoon);
+  /* the open sea runs on past the west and north edges of the data, out of sight */
+  const W0 = Math.min(...GEO_SEA.flatMap(w => w.o.map(p => p[0]))), N0 = Math.max(...GEO_SEA.flatMap(w => w.o.map(p => p[1])));
+  GEO_SEA.forEach(w => {
+    const o = w.o.map(p => [p[0] <= W0 + 1e-4 && p[1] > 54.8 ? 8 : p[0], p[1] >= N0 - 1e-4 && p[0] < 21.6 ? 60 : p[1]]);
+    add(shapeGeo(polyXZ(o), w.h.map(polyXZ)), M.sea);
+  });
+  GEO_LAG.forEach(w => add(shapeGeo(polyXZ(w.o), w.h.map(polyXZ)), M.lagoon));
+  GEO_LAKES.forEach(r => add(shapeGeo(polyXZ(r)), M.lake));
   LAKES.forEach(([lo, la, rx, ry, rot]) => {
     const c = ll2xz(lo, la), a = rot * Math.PI / 180, pts = [];
     for (let q = 0; q < 28; q++) { const t = q / 28 * Math.PI * 2, x = Math.cos(t) * rx, y = Math.sin(t) * ry; pts.push([c[0] + x * Math.cos(a) - y * Math.sin(a), c[1] + x * Math.sin(a) + y * Math.cos(a)]); }
     add(shapeGeo(pts), M.lake);
   });
   const out = { pos: [], uv: [], idx: [] };
-  RIV.forEach((r, n) => ribbon(chaikin(densify(polyXZ(r.p), 3), 3), RIVW[n] || 0.3, 0, 1, out));
+  GEO_RIV.forEach(r => ribbon(chaikin(densify(polyXZ(r.p), 1.5), 2), r.w, 0, 1, out));
   add(flatGeo(out), M.lake);
   return M;
 })();
-/* the border of Lithuania, dashed, where it runs over land */
-let BORDER = null, borderW = 0;
+/* Borders: Lithuania's bold and dashed, the neighbours' between themselves thin. Widths follow the zoom. */
+let BORDER = [], borderW = 0;
 function buildBorder() {
   const w = Math.max(0.18, cam.dist * 0.0035);
-  if (BORDER && Math.abs(Math.log(w / borderW)) < 0.35) return;
+  if (BORDER.length && Math.abs(Math.log(w / borderW)) < 0.35) return;
   borderW = w;
-  if (BORDER) { SCENE.remove(BORDER); BORDER.geometry.dispose(); }
-  const out = { pos: [], uv: [], idx: [] }, P = polyXZ(LT), dash = Math.max(1.2, w * 5), gap = dash * 0.6;
-  for (let i = 0; i < P.length; i++) {
-    const a = P[i], b = P[(i + 1) % P.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-    const nx = -(b[1] - a[1]) / L * 2, nz = (b[0] - a[0]) / L * 2, t1 = terrAt(mx + nx, mz + nz), t2 = terrAt(mx - nx, mz - nz);
-    if (t1 === T_SEA || t1 === T_LAGOON || t2 === T_SEA || t2 === T_LAGOON) continue;
-    for (let s = 0; s < L; s += dash + gap) {
-      const e = Math.min(L, s + dash);
-      ribbon([[a[0] + (b[0] - a[0]) * s / L, a[1] + (b[1] - a[1]) * s / L], [a[0] + (b[0] - a[0]) * e / L, a[1] + (b[1] - a[1]) * e / L]], w, 0, 1, out);
+  BORDER.forEach(m => { SCENE.remove(m); m.geometry.dispose(); });
+  BORDER = [];
+  const lt = { pos: [], uv: [], idx: [] }, other = { pos: [], uv: [], idx: [] };
+  for (const b of GEO_BORD) {
+    const own = b.a === 'lt' || b.b === 'lt', P = polyXZ(b.p), ww = own ? w : w * 0.6, dash = Math.max(1.2, ww * 5), gap = dash * (own ? 0.6 : 0.9), out = own ? lt : other;
+    let s0 = 0;
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], c = P[i], L = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      for (let s = -s0; s < L; s += dash + gap) {
+        const st = Math.max(0, s), e = Math.min(L, s + dash);
+        if (e > st) ribbon([[a[0] + (c[0] - a[0]) * st / L, a[1] + (c[1] - a[1]) * st / L], [a[0] + (c[0] - a[0]) * e / L, a[1] + (c[1] - a[1]) * e / L]], ww, 0, 1, out);
+      }
+      s0 = (s0 + L) % (dash + gap);
     }
   }
-  BORDER = new THREE.Mesh(flatGeo(out), decal(new THREE.MeshBasicMaterial({ color: '#5a4630', transparent: true, opacity: 0.75 }), 2));
-  BORDER.renderOrder = 2; SCENE.add(BORDER);
+  for (const [out, col, op] of [[lt, '#4a3422', 0.85], [other, '#5d5a52', 0.55]]) {
+    const m = new THREE.Mesh(flatGeo(out), decal(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }), 2));
+    m.renderOrder = 2; SCENE.add(m); BORDER.push(m);
+  }
 }
 
 /* ---------- roads and railways ---------- */
@@ -358,7 +380,23 @@ const LINE_MAT = {
   bridge: decal(new THREE.MeshLambertMaterial({ color: '#6b5440' }), 2.5)
 };
 let LINES = [], lineKey = '';
-function lineW(e) { const w0 = espec(e).w; return Math.max(w0, cam.dist * (e.k === 'rail' ? 0.0034 : 0.0032) * (e.lv === 3 ? 1.3 : 1)); }
+/* Lines stay visible from afar; dirt roads less so than railways and paved roads, since they are everywhere. */
+function lineW(e) { const w0 = espec(e).w; return Math.max(w0, cam.dist * (e.k === 'rail' ? 0.0034 : e.lv === 1 ? 0.0021 : 0.0032) * (e.lv === 3 ? 1.3 : 1)); }
+/* Bridges: the stretches of each line over a river, found once for each version of the network. */
+let BRIDGES = [], bridgeVer = -1;
+function bridgeRuns() {
+  if (bridgeVer === WV.net) return BRIDGES;
+  bridgeVer = WV.net; BRIDGES = [];
+  EDGES.forEach(e => {
+    let run = null;
+    for (let s = 0; s <= e.L + 0.05; s += 0.05) {
+      const q = polyAt(e.p, e.c, Math.min(s, e.L)), wet = terrAt(q[0], q[1]) === T_RIVER;
+      if (wet && !run) run = [[q[0], q[1]]]; else if (wet) run.push([q[0], q[1]]);
+      if ((!wet || s >= e.L) && run) { if (run.length > 1) BRIDGES.push({ e, p: run }); run = null; }
+    }
+  });
+  return BRIDGES;
+}
 function buildLines() {
   const wk = Math.round(Math.log(Math.max(1, cam.dist * 0.0034 / 0.055)) / 0.3);
   const key = WV.net + ':' + wk;
@@ -372,14 +410,8 @@ function buildLines() {
     const w = lineW(e);
     ribbon(e.p, w, 0, e.k === 'rail' ? 0.12 : 0.25, g.out);
     if (e.k === 'road') { g.nodes.add(e.a); g.nodes.add(e.b); g.w = Math.max(g.w, w); }
-    /* bridges where the line crosses a river */
-    let run = null;
-    for (let s = 0; s <= e.L + 0.05; s += 0.05) {
-      const q = polyAt(e.p, e.c, Math.min(s, e.L)), wet = terrAt(q[0], q[1]) === T_RIVER;
-      if (wet && !run) run = [[q[0], q[1]]]; else if (wet) run.push([q[0], q[1]]);
-      if ((!wet || s >= e.L) && run) { if (run.length > 1) ribbon(run, w * 1.45, 0, 1, br); run = null; }
-    }
   });
+  bridgeRuns().forEach(b => { if (EDGES.has(b.e.id)) ribbon(b.p, lineW(b.e) * 1.45, 0, 1, br); });
   for (const k in groups) {
     const g = groups[k];
     const m = new THREE.Mesh(flatGeo(g.out), g.mat);
@@ -724,15 +756,15 @@ function syncLabels() {
     el.className = 'tl'; el.dataset.ti = String(LBLS.length); el.innerHTML = '<i class="dot"></i><b></b><span></span>';
     LBL.appendChild(el); LBLS.push({ el, b: el.querySelector('b'), s: el.querySelector('span'), d: el.querySelector('.dot'), key: '' });
   }
-  if (!NLBL.length) NLAB.forEach(([s, lo, la]) => { const el = document.createElement('div'); el.className = 'nl' + (s === 'BALTIJOS JŪRA' ? ' sea' : ''); el.textContent = s; LBL.appendChild(el); NLBL.push({ el, p: ll2xz(lo, la) }); });
+  if (!NLBL.length) MAP_LBL.forEach(([s, lo, la, k]) => { const el = document.createElement('div'); el.className = 'nl' + (k === 's' ? ' sea' : k === 't' ? ' tn' : ''); el.textContent = s; LBL.appendChild(el); NLBL.push({ el, p: ll2xz(lo, la), k }); });
 }
 function place(el, x, y, show) {
   if (!show) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
   if (el.style.display === 'none') el.style.display = '';
   el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
 }
-/* Cities always show their names; towns until the whole country is in view; villages only up close. */
-function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : t.vil ? 38 : 230; }
+/* Cities always show their names; towns until the whole country is in view (small ones a little closer); villages only up close. */
+function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : t.vil ? 38 : t.pop0 >= 4 ? 230 : 120; }
 function updateLabels() {
   syncLabels();
   const sb = VIEW.sel && VIEW.sel.kind === 'b' ? BMAP.get(VIEW.sel.id) : null;
@@ -749,7 +781,7 @@ function updateLabels() {
     L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.capital ? ' cap' : '') + (t.vil ? ' vil' : t.pop0 < 20 && !t.capital ? ' sm' : '');
     L.d.className = 'dot' + (bad ? ' bad' : good ? ' good' : '');
   });
-  NLBL.forEach(n => { const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]); place(n.el, x, y, ok && cam.dist > 140); });
+  NLBL.forEach(n => { const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]); place(n.el, x, y, ok && (n.k === 't' ? cam.dist > 14 && cam.dist < 300 : n.k === 's' ? cam.dist > 100 : cam.dist > 60)); });
   /* problem markers over buildings */
   let i = 0;
   if (cam.dist < 18) for (const b of S.bld) {

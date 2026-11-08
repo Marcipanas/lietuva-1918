@@ -4,7 +4,7 @@ The current rules and numbers. The source of truth is `js/data.js` and `js/sim.j
 
 ## Fantasy and goal
 
-You lead the newly independent Lithuania from 16 February 1918. Forty-eight towns and about 170 villages feed themselves but are poorly connected. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History interrupts with decisions: the Depression, a German boycott, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to Vilnius and powered, and 2.2 million residents.
+You lead the newly independent Lithuania from 16 February 1918. Eighty-nine towns and 362 villages, each at its real place, feed themselves. Slow dirt roads join them all, but only the railways and the old paved highways link 38 towns to Vilnius. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History interrupts with decisions: the Depression, a German boycott, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to Vilnius by railway or paved road and powered, and 2.4 million residents.
 
 Scale: the map is the real country, about 400 × 310 km, with no grid, and distances between places are true. Towns are drawn about five times larger than life so they read well: a house lot is 0.42 km across. Population is counted in thousands (`2k` is one lot of wooden houses; a village farmstead holds 0.5k). One simulation step is one day. Speeds are 2, 5 and 12 days per second.
 
@@ -13,8 +13,8 @@ Scale: the map is the real country, about 400 × 310 km, with no grid, and dista
 | Era | Requirements to enter | Unlocks |
 |---|---|---|
 | Independence (start) | none | farms, forestry, peat, flax, brickworks, dairy, pigs, fisheries, warehouses, stations, port, schools, clinics, dirt roads, railways, horse carts, steam trains |
-| Industrialization | 800k residents, 12 towns linked to Vilnius, 150 bricks in stock, 6,000 Lt | peat power stations, linen mills, furniture factories, paved roads, trucks, brick apartments, Lv 2 upgrades; towns want linen cloth and electric light |
-| Modern Lithuania | 1,400k residents, 25 towns linked, 500 bricks, 200 linen cloth, 25,000 Lt | hydro dams, nuclear plant, electronics plants, highways, electric railways, lorries, electric trains, panel blocks, Lv 3 upgrades; towns want electronics |
+| Industrialization | 850k residents, 50 towns linked to Vilnius, 150 bricks in stock, 6,000 Lt | peat power stations, linen mills, furniture factories, paved roads, trucks, brick apartments, Lv 2 upgrades; towns want linen cloth and electric light |
+| Modern Lithuania | 1,450k residents, 70 towns linked, 500 bricks, 200 linen cloth, 25,000 Lt | hydro dams, nuclear plant, electronics plants, highways, electric railways, lorries, electric trains, panel blocks, Lv 3 upgrades; towns want electronics |
 
 ## Goods (base price in litas)
 
@@ -54,11 +54,16 @@ Placement: a building may not overlap another building or a road or track; near 
 
 ## Settlements, homes and growth
 
-- **1918 map:** the 11 original towns, 37 more towns of 1918 with real names and places (`TOWNS1`), and about 170 villages. Villages are spread over dry farmland at least 14.5 km apart and 7.5 km beyond a town's edge, with names from a list of typical Lithuanian village names placed at random (`VIL_NAMES`). A village has one street (sometimes a side lane), a wooden chapel and two to four farmsteads; 0.5k to 1.8k people.
+- **1918 map:** every town that existed in 1918 and 362 villages, at their real places (Euronym names; towns founded later, such as Elektrėnai and Visaginas, are left out). The 11 main towns (`TOWNS0`) and 44 more (`TOWNS1`) have written descriptions and their 1918 sizes; six of those were still villages then. Other towns hold 1k to 3k people, villages 0.4k to 1.2k (more on fertile soil). The Klaipėda Region's 22 settlements join in 1923.
+- **Big cities:** Vilnius, Kaunas, Klaipėda, Šiauliai and Panevėžys are laid out from their real main streets (Gedimino prospektas, Pilies and Didžioji streets; Laisvės alėja and the bridges to Aleksotas and Vilijampolė; Manto street), as paved roads, filled in with a grid of streets 1 km apart. Their stations stand where the real ones do.
+- **Landmarks** at their real places, drawn about twice life size, cost nothing and cannot be removed: Gediminas Tower, the Cathedral with its bell tower, St Anne's and the Town Hall in Vilnius; the Town Hall, the castle and St Michael the Archangel in Kaunas; the theatre in Klaipėda; the cathedral and the Hill of Crosses at Šiauliai; Trakai Island Castle (in ruins); the Tiškevičius palace in Palanga; the church of Anykščiai.
+- **Railways of 1918:** St Petersburg–Warsaw (Turmantas, Ignalina, Švenčionėliai, Vilnius, Varėna), Lentvaris–Kaunas–Kybartai, Libau–Romny (Mažeikiai, Šiauliai, Radviliškis, Kėdainiai, Jonava, Kaišiadorys), Radviliškis–Panevėžys–Rokiškis, Mažeikiai and Šiauliai to Jelgava, Tilsit–Klaipėda, Vilnius to Lida and to Minsk, the narrow gauge Švenčionys–Utena–Anykščiai–Panevėžys, and Varėna–Alytus–Šeštokai. About 1,300 km, with 44 stations.
+- **Paved highways of 1918:** St Petersburg–Warsaw (Zarasai, Utena, Ukmergė, Jonava, Kaunas, Marijampolė, Kalvarija) with its branch to Kybartai, St Petersburg–Riga–Königsberg (Joniškis, Šiauliai, Tauragė, Pagėgiai), Alytus–Varėna and Merkinė–Kapčiamiestis. About 570 km.
+- **Dirt roads** join every settlement to its neighbours (about 7,400 km), and run on to the border at the main crossings. A town is **linked** when a railway or paved road from Vilnius reaches its streets (within 1.6 × its radius + 1.5 km of the hall by road); railways and paved roads also carry the power grid. A village has one street (sometimes a side lane), a wooden chapel and two to four farmsteads.
 - **Feeding itself:** every settlement's own fields add grain and potatoes for its 1918 population (`pop0`) to its stock each day (0.05 each per thousand), and its own woodlots heat that many homes. Its base workforce works its own land, so it is never jobless. A settlement therefore keeps its size for years without the player. Growth beyond `pop0` needs food from farms or routes, homes on zoned land, and jobs.
 - **Growth:** +max(0.01k, 0.4%) a day × morale/62 × (1 + 0.3 × clinic coverage), up to the housing limit, while food is at least 99% supplied and either the town is below `pop0`, or it has at least 8 days of food in stock and its food stock is not falling. A town short of food loses 2% of the people it cannot feed each day; overcrowding removes 3% of the excess.
 - **Zoning** paints lots (0.42 km, 5 Lt each) along both sides of a street. A town builds on its own lots, every 5 days (more than one at a time in towns over 50k), while homes are at least 92% full, food is at least 99% supplied and morale is at least 45. It picks the closest, cleanest lot. Houses are paid from the town's stock: wooden houses (2k people) 10 Lt and 2 timber; brick apartments (6k, era 2) 30 Lt and 5 bricks; panel blocks (15k, era 3) 75 Lt and 12 bricks. In later eras, old houses and farmsteads are rebuilt in the new style.
-- **Layout:** towns are a market square around the town hall, three to six curving streets out of it, ring roads in bigger towns, houses nearest the square and zoned lots beyond. Where rivers or lakes leave too little room, extra streets are added until every home fits.
+- **Layout:** towns are a market square around the town hall, three to six curving streets out of it, ring roads in bigger towns, houses nearest the square and zoned lots beyond. Where rivers or lakes leave too little room, extra streets are added until every home fits. Settlements stand at least `HALL_GAP` = 4 km apart when the player founds one.
 
 ## People
 
@@ -80,12 +85,12 @@ Placement: a building may not overlap another building or a road or track; near 
 - Route capacity each way per day = vehicles × loads per trip × trips a day, where trips a day = speed / (2 × route km + 22). On roads, trucks and lorries move at 0.7× on dirt, 1× on paved and 1.25× on highway (the weakest stretch counts).
 - **Auto cargo:** a good moves only toward the town with fewer days of supply, enough to even them out, keeping 5 days for the sender and at most 25 days for the receiver. Building materials keep a buffer of 40. **Picked cargo** sends everything above 5 days of local use, up to the receiver's storage room.
 - Selling a vehicle returns half its price. Removing a route returns half the price of all its vehicles.
-- **Roads,** per km: dirt 5 Lt + 0.3 timber; paved 14 + 0.6 bricks; highway 30 + 1.2 bricks. **Railways:** 20 + 1 timber; electric 45 + 1.2 bricks. Bridges cost 4×. Drawing along an existing line costs nothing: only new stretches are built. Upgrading an existing stretch (tap it with the tool) costs 60%. Upkeep per km a day: roads 0.003 / 0.006 / 0.009 Lt by level, railways 0.009 / 0.018.
+- **Roads,** per km: dirt 5 Lt + 0.3 timber; paved 14 + 0.6 bricks; highway 30 + 1.2 bricks. **Railways:** 20 + 1 timber; electric 45 + 1.2 bricks. Bridges cost 4×. Drawing along an existing line costs nothing: only new stretches are built. Upgrading an existing stretch (tap it with the tool) costs 60%. Upkeep per km a day: dirt roads nothing (the villages keep them up), paved roads 0.006, highways 0.009, railways 0.009 / 0.018 Lt.
 - **Drawing lines:** the line follows the finger, runs straight where it can, goes around lakes, the sea and buildings, bridges rivers, joins roads it touches and makes a junction where it crosses another road. Roads and railways cross on the level.
 
 ## Money
 
-Taxes: 0.08 Lt per thousand town residents (0.04 in villages) a day × min(1.4, morale/62), halved in war. Building upkeep: 0.4 Lt × level a day (warehouses 0.3; paused buildings pay 30%). An army budget (0, 10, 25 or 50 Lt a day) and a Baltic alliance cost money every day. The start treasury is 3,000 Lt.
+Taxes: 0.08 Lt per thousand town residents (0.04 in villages) a day × min(1.4, morale/62), halved in war. Building upkeep: 0.4 Lt × level a day (warehouses 0.3; paused buildings pay 30%; stations and landmarks nothing). An army budget (0, 10, 25 or 50 Lt a day) and a Baltic alliance cost money every day. The start treasury is 3,000 Lt.
 
 ## Pollution
 
@@ -93,7 +98,7 @@ Each polluting building spreads `pol × (1 − distance / 2 km)` over 2 km. A to
 
 ## Foreign trade (js/history.js)
 
-Goods cross the border only at a **gateway**: a border post (`customs`, within 3 km of the border, by a road) or a sea port, in the town that owns it. The post's country is the nearest foreign land: north of 55.67°N Latvia; west of 22.85°E and north of 54.35°N East Prussia (Germany); elsewhere Poland. Routes bring goods to the gateway town; **deals** then sell from (or buy into) that town's stock every day.
+Goods cross the border only at a **gateway**: a border post (`customs`, within 3 km of the border, by a road) or a sea port, in the town that owns it. The post's country is the nearest foreign land within 3.5 km (`CTY`): Latvia; the Kaliningrad region, which was East Prussia (Germany); Poland; or Belarus, whose land by Lithuania was Polish between the wars, so it trades with Poland. Routes bring goods to the gateway town; **deals** then sell from (or buy into) that town's stock every day.
 
 | Market | Gateway | Buys (× base price) | Sells (× base price) |
 |---|---|---|---|
@@ -147,11 +152,11 @@ New players get an 8-step hint card (`js/tutorial.js`): look around, open a town
 
 ## Ministry tasks
 
-Link Alytus (600 Lt), start a new route (400), link Utena (600), give a town three foods (800), link Tauragė (600), build a warehouse (300), open a school (400), found a town (1,000), reach 800k residents (1,500), link Klaipėda (1,500), sell through the port (800), sell abroad through a border post or port (600), enter Industrialization (2,000), power every town (3,000; villages do not need power), reach Modern Lithuania (5,000).
+Start a new route (400 Lt), bring the railway to Marijampolė (800; it came in 1924), give a town three foods (800), bring the railway to Telšiai (800; it came in 1926), build a warehouse (300), link Biržai by rail or paved road (600), open a school (400), found a town (1,000), reach 800k residents (1,500), link Klaipėda to the railways of Lithuania after 1923 (1,500; done in 1932 through Telšiai), sell through the port (800), sell abroad through a border post or port (600), enter Industrialization (2,000), power every town (3,000; villages do not need power), reach Modern Lithuania (5,000).
 
 ## Balance notes
 
-- Tested with the smoke test and scripted runs from 1918 to 1990 on both paths (`tools/smoke-test.js` jumps through the key cards). With no player input, the 1918 population of about 620k holds steady, and the towns with starting farms grow to about 730k by 1920; income settles near +30 Lt a day.
+- Tested with the smoke test and scripted runs (`tools/smoke-test.js` jumps through the key cards). With no player input, the 1918 population of about 680k (730k with the Klaipėda Region) holds steady, and the towns with starting farms grow to about 820k by 1920; income starts near +20 Lt a day and settles near +28.
 - Without the player, the state plan is never met, so Party trust stays low; plan targets are about a third of a farm per good at the start.
 - Reaching security 80 by 1940 takes a deliberate effort: about 15 years of a 25 Lt army budget plus treaties, or steady exports to Britain.
 - Not yet tested by hand: the late game (era 3), large networks of 20 or more routes, nuclear-scale power, and how hard the plan feels.

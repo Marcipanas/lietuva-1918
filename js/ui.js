@@ -111,7 +111,7 @@ function showCard(){const el=$('card'),id=S.hist.cards[0];if(id===cardShown&&!el
 let last=0,acc=0,pT=0;
 function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=dt*TPS[S.speed];let n=0;
   if(S.hist.cards.length)acc=0;
-  while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)save();if(S.hist.cards.length){acc=0;save();break}}if(NET.dirty)analyze();showCard();
+  while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)autosave();if(S.hist.cards.length){acc=0;save();break}}if(NET.dirty)analyze();showCard();
   updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);tutTick()}requestAnimationFrame(frame)}
 /* the opening view: Vilnius from the south-west, slightly tilted */
