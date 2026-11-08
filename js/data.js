@@ -39,7 +39,8 @@ const BT={
   brick:{n:'Brickworks',cat:'industry',era:1,fp:[0.55,0.5],w:14,in:{peat:3},out:{bricks:5},need:'clay',pol:2,cost:{lt:600,timber:40},d:'Must sit on clay ground.'},
   warehouse:{n:'Warehouse',cat:'transport',era:1,fp:[0.8,0.6],store:1,cost:{lt:500,timber:50},d:'Raises the town’s storage by 400 of every good. Upgrades hold more.'},
   station:{n:'Railway station',cat:'transport',era:1,fp:[0.65,0.3],need:'rail',noUp:1,ic:'rail',cost:{lt:300,timber:20},d:'Joins a town to the railway. Place it next to a track, with a road to town.'},
-  port:{n:'Sea port',cat:'transport',era:1,fp:[1,0.8],need:'coast',noUp:1,ic:'anchor',cost:{lt:3000,timber:100},d:'Exports sell for 40% more. The only place to import metal.'},
+  customs:{n:'Border post',cat:'transport',era:1,fp:[0.4,0.3],need:'border',noUp:1,ic:'gate',cost:{lt:400,timber:20},d:'Lets its town trade with the country across the nearest border. Build it within 3 km of the border, by a road.'},
+  port:{n:'Sea port',cat:'transport',era:1,fp:[1,0.8],need:'coast',noUp:1,ic:'anchor',cost:{lt:3000,timber:100},d:'Trades by sea with Britain and Germany. Sells to local merchants for 40% more.'},
   school:{n:'School',cat:'civic',era:1,fp:[0.5,0.4],w:3,svc:'school',ic:'school',cost:{lt:600,timber:40},d:'One school per 50k residents raises output in the whole town by up to 10%.'},
   clinic:{n:'Clinic',cat:'civic',era:1,fp:[0.45,0.4],w:3,svc:'clinic',ic:'clinic',cost:{lt:700,timber:40},d:'One clinic per 70k residents lifts morale and growth.'},
   power:{n:'Peat power station',cat:'power',era:2,fp:[0.9,0.9],w:14,in:{peat:4},pow:30,pol:4,ic:'bolt',cost:{lt:1800,bricks:60},d:'Burns peat. Linked towns share one grid.'},
@@ -187,7 +188,11 @@ Object.assign(ICON,{
   cart:'<path d="M3 13h13V8H3zM16 10h3l2 3h-5"/><circle cx="7" cy="16.5" r="2"/><circle cx="16" cy="16.5" r="2"/>',
   plus:'<path d="M12 5v14M5 12h14"/>', minus:'<path d="M5 12h14"/>',
   fire:'<path d="M12 21c-4 0-6.5-2.6-6.5-6 0-3.5 3-5.5 3.5-9 2 1.5 3 3 3 5 1-1 1.5-2.5 1.5-4 3 2 5 5.2 5 8 0 3.4-2.5 6-6.5 6z"/>',
-  turn:'<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'
+  turn:'<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
+  gate:'<path d="M4 20V7M4 10h17v4H4"/><path d="M9 10l-3 4M14 10l-3 4M19 10l-3 4"/>',
+  globe:'<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/>',
+  shield:'<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/>',
+  plan:'<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5v3h6v-3M8.5 11h7M8.5 14.5h7M8.5 18h4"/>'
 });
 function bIcon(t){const T0=BT[t];if(t==='house')return 'house';if(T0.ic)return T0.ic;if(T0.store)return 'box';if(T0.pow)return 'bolt';return T0.out?RI[Object.keys(T0.out)[0]].ic:'factory'}
 function bCol(t){const T0=BT[t];if(T0.pow)return '#ffd84d';if(T0.out)return `var(--r-${Object.keys(T0.out)[0]})`;if(T0.svc)return '#9fd3e8';return 'var(--ink)'}

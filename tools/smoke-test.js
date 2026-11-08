@@ -87,7 +87,24 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   out.finite=S.towns.every(x=>isFinite(x.pop)&&RES.every(q=>isFinite(x.stock[q]||0)))&&isFinite(S.funds);
   out.moved=Object.values(r.mAB||{}).reduce((a,b)=>a+b,0);out.housesNow=S.bld.filter(b=>b.t==='house').length;
   out.steady=S.towns.filter(x=>!x.lock).every(x=>x.pop>=x.pop0*0.95);out.low=S.towns.filter(x=>!x.lock&&x.pop<x.pop0*0.95).map(x=>x.n+' '+x.pop.toFixed(1)+'/'+x.pop0).join(', ');
-  selectTown(ki,true);renderPanel(true);['routes','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
+  /* foreign trade: a border post in Kybartai, and a deal selling grain to Germany */
+  const ky=S.towns.find(x=>x.id==='kyb'),kyi=S.towns.indexOf(ky);cam.dist=8;cam.x=ky.x;cam.z=ky.z;applyCam();ky.stock.timber=200;ky.stock.grain=140;S.funds+=2000;
+  const post=(()=>{setTool('place','customs');for(let rr=0.4;rr<4;rr+=0.2)for(let q=0;q<24;q++){const an=q/24*Math.PI*2;setGhost(ky.x+Math.sin(an)*rr,ky.z+Math.cos(an)*rr);
+    if(PEND&&PEND.ok&&PEND.ti===kyi&&!missing(PEND.cost,ky)){const n=S.bld.length;doConfirm();return S.bld.length===n+1?S.bld[S.bld.length-1]:null}}return null})();
+  setTool('inspect');analyze();out.post=!!post&&post.town===kyi&&post.gate==='de';out.postWhy=post?post.gate+' town '+post.town:'not placed';
+  addDeal('de','grain','out',5,kyi);S.speed=0;const f0=S.funds;for(let q=0;q<3;q++)tick();const dl=S.deals[0];out.deal=dl.done>0&&dl.val>0;out.dealWhy=dl.why||dl.done.toFixed(1)+' a day for '+dl.val.toFixed(0)+' Lt';
+  S.tab='trade';renderPanel(true);renderPanel(false);
+  /* history: the Klaipėda trial card in December 1934 pauses the game; letting it go ahead closes the German market */
+  const jump=ds=>{HEV.forEach((e,i)=>{if(e.d<ds)S.ev[i]=1});S.day=Math.round((Date.parse(ds)-START)/864e5)-1};
+  jump('1934-12-24');S.speed=2;tick();out.card1=S.hist.cards[0];out.paused=S.speed===0;act({act:'card',o:'0'});out.trial=!S.mkt.de.open&&S.speed===2&&S.hist.picks.trial===0;
+  /* the Soviet ultimatum, accepted as in 1940: a planned economy with deliveries to the Union */
+  jump('1940-06-14');tick();out.card2=S.hist.cards[0];act({act:'card',o:'0'});out.soviet=S.hist.path==='soviet'&&!S.mkt.gb.open&&S.mkt.su.open&&!S.deals.length;
+  jump('1946-01-01');tick();out.plan=!!S.plan&&S.plan.y===1946&&Object.keys(S.plan.tgt).length>=5;
+  const sti=S.towns.findIndex((x,n)=>!x.lock&&townGates(n).has('rail'));if(sti>=0){S.towns[sti].stock.grain=140;addDeal('su','grain','out',4,sti)}
+  for(let q=0;q<3;q++)tick();out.planGot=S.plan?(S.plan.got.grain||0):0;S.tab='trade';renderPanel(true);renderPanel(false);
+  jump('1947-01-01');tick();out.plans=(S.hist.plans||[]).length;out.card3=S.hist.cards[0];act({act:'card',o:'0'});out.collect=S.hist.collect===1&&S.plan&&S.plan.y===1947;
+  out.finite2=S.towns.every(x=>isFinite(x.pop)&&x.pop>=0&&RES.every(q=>isFinite(x.stock[q]||0)))&&isFinite(S.funds);
+  selectTown(ki,true);renderPanel(true);['routes','trade','nat','chron','sel'].forEach(tb=>{S.tab=tb;renderPanel(true);renderPanel(false)});
   const wh=S.bld.find(x=>x.t==='warehouse');if(wh){selectBuilding(wh,true);renderPanel(true)}toggleDrawer(true);toggleDrawer(false);
   [2,8,30,90,400].forEach(d=>{cam.dist=d;cam.anim=null;run(3,16)});
   out.tut=TUT.step;S.speed=0;const snap={day:S.day,b:S.bld.length,r:S.routes.length,f:Math.round(S.funds),e:S.edges.length,l:S.lots.length},str=JSON.stringify(serialize());
@@ -114,6 +131,13 @@ assert(o.finite, 'no NaN or infinite values in towns or treasury');
 assert(o.pop > o.pop0, `towns grow (${Math.round(o.pop0)}k to ${Math.round(o.pop)}k residents, ${o.housesNow} house lots, income ${o.inc.toFixed(1)} Lt a day)`);
 assert(o.steady, `towns and villages keep their 1918 size without help${o.low ? ' (shrank: ' + o.low + ')' : ''}`);
 assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`);
+assert(o.post, `a border post in Kybartai trades with Germany (${o.postWhy})`);
+assert(o.deal, `a deal sells grain to Germany (${o.dealWhy})`);
+assert(o.card1 === 'trial' && o.paused && o.trial, `the Klaipėda trial card pauses the game, and holding the trial closes the German market (${o.card1})`);
+assert(o.card2 === 'ultimatum' && o.soviet, `accepting the Soviet ultimatum starts Soviet rule and closes Western markets (${o.card2})`);
+assert(o.plan && o.planGot > 0, `the state plan sets targets and deliveries count (${o.planGot.toFixed(1)} grain)`);
+assert(o.plans === 1 && o.card3 === 'collect' && o.collect, `a plan year closes, and collectivization comes in 1947 (${o.card3})`);
+assert(o.finite2, 'no NaN or infinite values after the jumps through history');
 assert(o.roundtrip, `save and reload keep the game intact (${o.saveKB} KB)`);
 assert(o.saved, 'autosave writes to localStorage');
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);

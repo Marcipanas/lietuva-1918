@@ -293,6 +293,16 @@ function M_elec() {
   m.cb(-0.4, 0.62, 0.5, 0.2, 0, 0.1, '#d4dde3', '#9fb0bc');
   return { geo: m.geometry(), h: 0.27 };
 }
+/* border post: a customs house, a flagpole and a striped barrier across the road */
+function M_customs() {
+  const m = new MB();
+  m.pad(0, 0.12, 0.8, 0.36, 0.002, '#b9ae8c');
+  m.cb(-0.12, -0.12, 0.42, 0.26, 0, 0.12, '#d9cba6', '#b9ab88').gable(-0.12, -0.12, 0.42, 0.26, 0.12, 0.09, '#6b4f3c', '#d9cba6').boxWins(-0.12, -0.12, 0.42, 0.26, 0.02, 0.1, 1, 3, 1, MC.glass);
+  m.cb(0.3, 0.2, 0.03, 0.03, 0, 0.08, '#5a4434').cb(0.07, 0.2, 0.44, 0.02, 0.07, 0.085, '#f3efe6');
+  for (let q = 0; q < 4; q++) m.cb(-0.1 + q * 0.11, 0.2, 0.05, 0.021, 0.07, 0.086, '#c1272d');
+  m.cyl(0.3, -0.25, 0.006, 0, 0.3, '#d9d4c7', null, 5);
+  return { geo: m.geometry(), h: 0.3, flag: [0.3, -0.25, 0.3] };
+}
 /* village chapel: a wooden church with a bell tower, a roadside cross and a few graves */
 function M_chapel() {
   const m = new MB(), wood = '#8f6b4c', wood2 = '#7a5a3f', roof = '#4f4a43';
@@ -307,7 +317,7 @@ function M_chapel() {
   for (const [x, z] of [[-0.33, -0.2], [-0.33, -0.06], [-0.24, -0.32], [0.3, -0.25]]) m.cb(x, z, 0.008, 0.008, 0, 0.06, '#d9d4c7').cb(x, z, 0.035, 0.008, 0.035, 0.045, '#d9d4c7');
   return { geo: m.geometry(), h: 0.68 };
 }
-const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), chapel: M_chapel, farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
+const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), chapel: M_chapel, customs: M_customs, farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
   fishery: M_fishery, forestry: M_forestry, brick: M_brick, warehouse: M_warehouse, station: M_station, port: M_port, school: M_school, clinic: M_clinic,
   power: M_power, linen: M_factory('#cdb99a'), furniture: M_factory('#9b7652'), hydro: M_hydro, nuclear: M_nuclear, elec: M_elec };
 const MODELS = {};

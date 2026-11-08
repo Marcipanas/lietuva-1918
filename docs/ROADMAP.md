@@ -2,36 +2,14 @@
 
 Ordered by value for the game right now. Each item has enough of a spec for an agent to start. Items marked **Decision** need the owner's call first.
 
-## 1. Foreign trade (next)
+## 1. Trade and history: next steps
 
-Interwar Lithuania lived on exports: butter, bacon, eggs, flax, timber and live animals, mostly to Britain and Germany. It imported coal, metal, machinery, fuel and manufactured goods. Today the game has an abstract **Sell/Buy** button in every town. Replace it with trade that has geography, partners and history.
-
-**Markets** (data in a new `MARKETS` table in data.js):
-
-| Market | Reached through | Buys well | Sells | Notes |
-|---|---|---|---|---|
-| United Kingdom | sea port | dairy, meat, flax | metal, machinery later | the biggest buyer in the 1930s |
-| Germany | land border at Kybartai (rail) and Tilsit/Panemunė (road), or by sea | timber, flax, meat, grain | metal, coal, machinery | trade closed or taxed in 1934–1935 (see events) |
-| Latvia | land border north (Joniškis, Biržai, Zarasai) | grain, potatoes | fish, timber | small but close |
-| Sweden, Denmark, Netherlands | sea port | timber, flax | metal | |
-| Poland | land border south | | | closed until diplomatic relations in March 1938 |
-| Soviet Union | via Latvia | | | mostly closed; optional |
-
-**Mechanics**
-- **Border crossings:** fixed points on the border (lon/lat in geo.js). A new *Customs post* building (1×1) must sit next to a crossing tile, with a road or railway reaching it from a town. Ports already work this way.
-- **Export and import routes:** a route whose far end is a market, `{a: townIndex, b: -1 - marketIndex, mode, …}`, carried by the same vehicles. Cargo leaving a town is sold at that market's price; cargo coming back is bought. `routeEval` uses the path from the town to the crossing.
-- **Prices:** each market has a price multiplier per good, a demand level that drops as you sell (price ×(1 − sold/quota)), recovering about 3% a month, and a tariff.
-- **Contracts:** markets occasionally offer fixed deals, e.g. "UK: 600 dairy within a year at +25%", with a penalty for missing them. Shown as ministry-style cards.
-- **Instant Sell/Buy** stays as a middleman option at worse prices (×0.7 when selling, ×1.8 when buying), so real trade routes pay off.
-- **Trade balance:** track exports and imports per year in the Lithuania tab. A surplus could later strengthen the litas, lowering import prices.
-
-**History** (verify each date before shipping):
-- 1929–1933 Great Depression: export prices fall by about 40%, recovering through 1935.
-- 1934–1935 German boycott of Lithuanian farm goods, after the Neumann-Sass trial over Nazi activity in Klaipėda: the Germany market closes, then reopens with a trade agreement.
-- March 1938: Lithuania and Poland establish diplomatic relations after the Polish ultimatum; the southern border opens.
-- 1939 onward is dark history (Klaipėda annexed by Germany in March 1939, then occupation in 1940). **Decision:** does the game keep history after 1938, or switch to an alternate history where the republic continues?
-
-**Acceptance:** a scripted test builds a customs post at Kybartai, creates an export route from Kaunas, and earns money; trade figures appear in the Lithuania tab; the Sell button pays less than a route does.
+Done in v0.5: markets abroad (Britain, Germany, Latvia, Poland, the Union), border posts and ports as gateways, daily deals, the Depression and the German boycott, decision cards from 1930 to 1974, security, the Soviet path with yearly plans, Union projects and Party trust, and a neutral alternative after 1940. Next:
+- **Contracts:** markets offer fixed deals ("Britain: 600 dairy within a year at +25%"), shown as cards, with a penalty for missing them.
+- **Trade balance:** exports and imports per year and per market in the Lithuania tab, and a chart over time.
+- **More cards** where history offered real choices: the wars of independence (1919–1920), the 1926 coup, land reform details, the neutral path after 1945 (Marshall Plan or not), the 1990s (privatisation, the litas in 1993, joining the EU and NATO).
+- **The Soviet path, deeper:** plan targets per town, a Union supply quota for metal and fuel, the Kaunas Sea flooding villages when the dam is built, rural electrification.
+- **Playtest:** how hard the plan feels, whether security 80 by 1940 is fair, and how much the Depression hurts.
 
 ## 2. Gameplay depth, smaller items
 
@@ -44,7 +22,7 @@ Interwar Lithuania lived on exports: butter, bacon, eggs, flax, timber and live 
 
 ## 3. The 3D world: next steps
 
-Done in v0.4: no grid, curved roads and railways with automatic junctions, buildings at any angle, a three.js view with a rotating and tilting camera, shadows, seasons, a field patchwork, animated people, vehicles, smoke, animals and boats. Next, roughly in order of value:
+Done in v0.4: no grid, curved roads and railways with automatic junctions, buildings at any angle, a three.js view with a rotating and tilting camera, shadows, seasons, a field patchwork, animated people, vehicles, smoke, animals and boats. Done in v0.5: half-size towns, 48 towns and about 170 villages with chapels and farmsteads, view culling and far house blocks. Next, roughly in order of value:
 - **Gentle hills.** Lithuania is flat but not perfectly: a height field (uplands of Žemaitija and Aukštaitija, river valleys) under the ground, roads and buildings following it.
 - **Better water:** moving reflections, shores, the Curonian Spit dunes.
 - **Street detail when close:** fences, gardens, lamp posts, people at stations; window lights at dusk, electric light from the Industrialization era.

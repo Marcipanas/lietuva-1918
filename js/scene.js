@@ -743,9 +743,9 @@ function updateLabels() {
     place(L.el, x, y, on);
     if (!on) return;
     const bad = !t.lock && (t.note === 'Hungry' || t.note === 'Cold homes'), good = !t.lock && t.note === 'Thriving';
-    const key = t.n + '|' + (t.lock ? '1923' : popStr(t.pop)) + '|' + sel + bad + good + t.lock;
+    const lockTxt = S.hist.lost ? 'Germany' : '1923', key = t.n + '|' + (t.lock ? lockTxt : popStr(t.pop)) + '|' + sel + bad + good + t.lock;
     if (key === L.key) return;
-    L.key = key; L.b.textContent = t.n.toUpperCase(); L.s.textContent = t.lock ? '1923' : popStr(t.pop);
+    L.key = key; L.b.textContent = t.n.toUpperCase(); L.s.textContent = t.lock ? lockTxt : popStr(t.pop);
     L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.capital ? ' cap' : '') + (t.vil ? ' vil' : t.pop0 < 20 && !t.capital ? ' sm' : '');
     L.d.className = 'dot' + (bad ? ' bad' : good ? ' good' : '');
   });

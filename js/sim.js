@@ -3,8 +3,9 @@
 let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
-  S={v:5,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
-    towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'sel',cam:null};
+  S={v:5,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
+    towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'sel',cam:null};
+  S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
   genWorld();analyze();
   HIST_ROUTES.forEach(([a,b,m,vt,n])=>addRoute(tIdx(a),tIdx(b),m,vt,n,true));
@@ -28,7 +29,8 @@ function restore(o){const tf=o.tf;S=o;delete S.tf;
   genTerrain();tfApply(tf);rebuildIndex();NET.dirty=true}
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize()))}catch(e){}}
 function load(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);return o&&o.v===5&&o.edges&&o.towns?o:null}catch(e){return null}}
-function log(t,k){S.log.unshift({d:S.day,t,k:k||''});if(S.log.length>100)S.log.length=100}
+/* yo: only the year of this event is known, so the chronicle shows the year alone */
+function log(t,k,yo){S.log.unshift({d:S.day,t,k:k||'',yo:yo?1:0});if(S.log.length>150)S.log.length=150}
 
 /* ---------- seasons ---------- */
 const SNOW=[1,1,0.85,0.1,0,0,0,0,0,0,0.3,0.8],AUT=[0,0,0,0,0,0,0,0.15,0.6,1,0.5,0],HEAT=[1,1,0.8,0.35,0,0,0,0,0.1,0.45,0.8,1];
@@ -36,20 +38,22 @@ function seasonOf(day){const d=dOf(day),m=d.getUTCMonth(),f=(d.getUTCDate()-1)/3
 
 /* ---------- money, storage and trade ---------- */
 function townPort(ti){return S.bld.some(b=>b.t==='port'&&b.town===ti)}
+/* a building type the player may build now: its era has come, or a Union project unlocked it early */
+function unlocked(t){return BT[t].era<=S.era||!!(S.hist&&S.hist.unl[t])}
 function canPay(cost,t){for(const k in cost){if(k==='lt'){if(S.funds<cost.lt)return false}else if(!t||(t.stock[k]||0)<cost[k])return false}return true}
 function missing(cost,t){for(const k in cost){const have=k==='lt'?S.funds:(t?t.stock[k]||0:0);if(have<cost[k])return k==='lt'?`Need ${fmt(cost[k]-have)} more Lt`:`Need ${Math.ceil(cost[k]-have)} more ${rname(k)} in ${t?t.n:'a town'}`}return ''}
 function pay(cost,t){for(const k in cost){if(k==='lt')S.funds-=cost.lt;else t.stock[k]-=cost[k]}}
 function upCost(b){const T0=BT[b.t];return b.lv===1?{lt:Math.round(T0.cost.lt*1.2),bricks:20}:{lt:Math.round(T0.cost.lt*2.5),bricks:40,metal:10}}
 function sellVal(ti,r){return 25*S.prices[r]*(townPort(ti)?1.4:1)}
 function buyVal(ti,r){return 25*S.prices[r]*(townPort(ti)?1.25:1.6)}
-function canBuyHere(ti,r){return !RI[r].port||townPort(ti)}
+function canBuyHere(ti,r){return !RI[r].port||townPort(ti)||S.bld.some(b=>b.t==='customs'&&b.town===ti)}
 function room(t,r){return Math.max(0,(t.cap||STORE_BASE)-(t.stock[r]||0))}
 
 /* ---------- transport routes: vehicles carry goods (and commuters) between two towns ---------- */
 function addRoute(a,b,mode,vt,n,free){if(a<0||b<0||a===b)return null;const r={id:S.rid++,a,b,mode,vt,n,ab:'auto',ba:'auto',pax:false};S.routes.push(r);if(!free)S.stats.routesMade++;routeEval(r);return r}
 function routePath(r){return pairPath(r.mode,r.a,r.b)}
 function routeEval(r){const p=routePath(r),V=VT[r.vt],A=S.towns[r.a],B0=S.towns[r.b];r.ok=false;r.why='';r.len=0;r.cap=0;r.trip=0;
-  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){r.why='Klaipėda has not joined yet';return}
+  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){r.why=`${(A.lock?A:B0).n} is not part of Lithuania`;return}
   if(!p){r.why=r.mode==='rail'?'No railway between their stations':'No road between them';return}
   if(V.elec&&p.lv<2){r.why='Electric trains need electric railway all the way';return}
   const sf=r.mode==='road'&&r.vt!=='cart'?ROADT[p.lv].spd:1,trips=V.spd*sf/(2*p.len+TRIP_OVERHEAD);r.len=p.len;r.trip=1/trips;r.cap=r.n*V.cap*trips;r.ok=true}
@@ -81,6 +85,7 @@ function useInputs(b,e,st,dem,fill){const T0=BT[b.t];if(!T0.in)return 1;const im
   ir=clamp(ir,0,1);for(const r in T0.in)st[r]=(st[r]||0)-T0.in[r]*im*e*ir;return ir}
 function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
 const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall',locked:'Klaipėda joins Lithuania in 1923'};
+function naTxt(na){return na==='locked'&&S.hist.lost?'The Klaipėda Region belongs to Germany':NA_TXT[na]||'Not connected'}
 let BYT=[];
 function phase1(ti){const t=S.towns[ti];let house=0,jobs=0,cap=STORE_BASE,sch=0,cli=0,pol=0,hn=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(b.t==='house'){house+=houseCap(b);pol+=polAt(b.x,b.z);hn++}else if(T0.w&&b.on)jobs+=T0.w;
@@ -92,13 +97,13 @@ function phase1b(ti){const t=S.towns[ti],st=t.stock;t.edu=Math.min(1,t.nsch*50*t
     const ir=useInputs(b,t.fill,st,t.dem,t.fill);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(T0.powNeed&&b.on)t.powD+=T0.powNeed*LV[b.lv]*t.fill;if(T0.svc){b.eff=b.on?t.fill:0;b.why=b.on?(t.fill<0.9?'Short of workers':'Running'):'Paused'}});
   if(S.era>=2&&!t.vil)t.powD+=t.pop*(S.era>=3?0.06:0.03)}
-function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill;
+function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill,hp=histProd();
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.out)return;if(!b.on){b.eff=0;b.why='Paused';return}
-    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill),mod=(b.t==='farm'||b.t==='potato'?S.mod.farm:1)*(b.k||1);let full=false;
+    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill),mod=(b.t==='farm'||b.t==='potato'?S.mod.farm:1)*(b.k||1)*hp;let full=false;
     for(const r in T0.out){const made=T0.out[r]*LV[b.lv]*e0*ir*t.pm*mod,sp=room(t,r);if(sp<made*0.5)full=true;st[r]=(st[r]||0)+Math.min(made,sp)}
     b.eff=e0*ir;b.why=full?'Storage full':why(b,fill,p,ir)});
   /* the settlement's own fields and woodlots: they feed its 1918 population and heat their homes, so it never shrinks below that size */
-  const base=t.pop0||0;['grain','potatoes'].forEach(r=>{st[r]=(st[r]||0)+Math.min(base*0.05,room(t,r))});
+  const base=t.pop0||0,sub=histSub(t);['grain','potatoes'].forEach(r=>{st[r]=(st[r]||0)+Math.min(base*0.05*sub,room(t,r))});
   const need=t.pop*0.1;FOOD.forEach(r=>{t.dem[r]=(t.dem[r]||0)+need*0.3});
   t.ate={};let rem=need,pool=FOOD.filter(r=>(st[r]||0)>1e-4);
   while(rem>1e-6&&pool.length){const share=rem/pool.length,next=[];pool.forEach(r=>{const take=Math.min(share,st[r]);st[r]-=take;rem-=take;t.ate[r]=(t.ate[r]||0)+take;if(st[r]>1e-4)next.push(r)});pool=next}
@@ -110,8 +115,8 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   const eat=(r,per)=>{const nd=t.pop*per;t.dem[r]=(t.dem[r]||0)+nd;const got=Math.min(st[r]||0,nd);st[r]=(st[r]||0)-got;return nd?got/nd:1};
   const gm=era>=2?eat('textiles',0.012):1,em=era>=3?eat('electronics',0.004):1;
   let h=58,note='Content';const unemp=Math.max(0,t.wf-Math.min(t.wf,t.jobs)-t.comOut-Math.min(t.pop,base)*0.5);
-  h+=Math.max(0,t.vari-1)*4;h+=6*t.med;
-  if(unemp>t.wf*0.25+1){h-=6;note='Unemployment'}
+  h+=Math.max(0,t.vari-1)*4;h+=6*t.med;h+=histMood(t);
+  if(unemp>t.wf*0.25+1&&S.hist.path!=='soviet'){h-=6;note='Unemployment'}
   if(t.pol>0.3){h-=Math.min(15,t.pol*5);note='Polluted'}
   if(era>=2&&!t.vil){if(pr>=0.95)h+=6;else if(pr<0.8){h-=8;note='Blackouts'}}
   if(era>=3){h+=em>=0.99?8:-8*(1-em);if(em<0.99)note='Want electronics'}
@@ -126,7 +131,7 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0);
   if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&fbal>=-0.01)))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
-  S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf);
+  S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();
   BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
   if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Food is running out in ${t.n}. People are leaving.`,'warn')}
   else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Homes in ${t.n} are cold. Send peat or timber.`,'warn')}
@@ -143,11 +148,6 @@ function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.f
 
 /* ---------- history, chance and ministry tasks ---------- */
 function unlockKla(){S.kr=false;S.towns.forEach(t=>{if(t.kr&&t.lock){t.lock=0;t.pop=t.pop0;t.h=62}});NET.dirty=true;WV.kr++}
-const HEV=[
-  {d:'1922-02-15',t:'The Land Reform Law parcels out the great manor estates. Grain and potato farms produce 15% more.',fx:()=>{S.mod.farm=1.15}},
-  {d:'1922-10-02',t:'The litas becomes the national currency.'},
-  {d:'1923-02-16',t:'The Klaipėda Region is transferred to Lithuania. The country gains its sea port. Link Klaipėda by road or rail and route goods to it.',fx:unlockKla},
-  {d:'1927-03-01',t:'Dairy co-operatives unite as Pienocentras. Lithuanian butter fetches more abroad.',fx:()=>{S.prices.dairy=RI.dairy.p*1.5}}];
 function pick(a){return a[Math.floor(Math.random()*a.length)]}
 function activeIdx(){return S.towns.map((t,n)=>n).filter(n=>!S.towns[n].lock)}
 const REV=[
@@ -170,6 +170,7 @@ const OBJ=[
   {id:'p800',t:'Reach 800k residents',r:1500,ok:()=>totals().pop>=800},
   {id:'kla',t:'Link Klaipėda after it joins in 1923',r:1500,ok:()=>NET.linked.has(tIdx('kla'))},
   {id:'port',t:'Sell goods through the port',r:800,ok:()=>S.stats.portSales>0},
+  {id:'trade',t:'Sell goods abroad through a border post or a port',r:600,ok:()=>S.deals.some(d=>d.dir==='out'&&d.done>0)},
   {id:'era2',t:'Enter the Industrialization era',r:2000,ok:()=>S.era>=2},
   {id:'lit',t:'Power every town',r:3000,ok:()=>S.era>=2&&S.towns.every(t=>t.lock||t.vil||t.pr>=0.95)},
   {id:'era3',t:'Reach Modern Lithuania',r:5000,ok:()=>S.era>=3}];
@@ -178,19 +179,19 @@ function checkObj(){OBJ.forEach(o=>{if(!S.obj[o.id]&&o.ok()){S.obj[o.id]=1;S.fun
 function tick(){
   if(NET.dirty)analyze();
   S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);
-  RES.forEach(r=>{const base=RI[r].p;let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
-  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=NA_TXT[b.na]||'Not connected'}});
+  RES.forEach(r=>{const base=RI[r].p*depAt(r);let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
+  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b.na)}});
   act.forEach(n=>{before[n]={...S.towns[n].stock};phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.comp[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
   act.forEach(n=>{const t=S.towns[n],c=NET.comp[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
   act.forEach(n=>phase2(n,sea));
-  runRoutes();
+  runRoutes();runDeals();
   act.forEach(n=>{const t=S.towns[n];if(t.pop>=t.house*0.92&&t.fed>=0.99&&t.h>=45){if(++t.dev>=5){t.dev=0;develop(n)}}else if(t.pop<t.house*0.85)t.hint=''});
   act.forEach(n=>{const t=S.towns[n];RES.forEach(r=>{const d=(t.stock[r]||0)-(before[n][r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2})});
   S.funds-=NET.up;S.routes.forEach(r=>{S.funds-=r.n*VT[r.vt].up});
   S.inc=S.inc*0.9+(S.funds-f0)*0.1;
-  const today=ymd(S.day);HEV.forEach((e,i)=>{if(!S.ev[i]&&today>=e.d){S.ev[i]=1;if(e.fx)e.fx();log(e.t,'hist')}});
+  histTick();
   if(S.day>=S.nextRnd){S.nextRnd=S.day+170+Math.floor(Math.random()*170);const r=pick(REV)();if(r)log(r[0],r[1])}
   if(S.day%10===0)checkObj();
   const t=totals();

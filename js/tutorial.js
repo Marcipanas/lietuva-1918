@@ -12,7 +12,7 @@ const TUT_STEPS = [
   { t: 'Start a route', d: 'A road alone moves nothing. Open a town, find its new neighbour under Neighbours and tap Road route.', done: () => S.stats.routesMade > 0 },
   { t: 'Room for homes', d: 'Towns grow into zoned lots. Choose Zone and paint along a street.', done: () => !!TUT.ev.zone },
   { t: 'Farms and industry', d: 'Choose Build to place farms, forestry camps and brickworks. Each needs a road to a town hall within 15 km.', done: () => !!TUT.ev.build },
-  { t: 'Time and tasks', d: 'Speed up time with 2× or 4×. The Lithuania tab lists ministry tasks that pay rewards. Good luck!', done: () => S.speed >= 2, last: true }
+  { t: 'Time and history', d: 'Speed up time with 2× or 4×. On key dates history stops the clock and asks you to choose. The Lithuania tab lists ministry tasks that pay rewards. Good luck!', done: () => S.speed >= 2, last: true }
 ];
 function tutRead() { try { return localStorage.getItem(TUT_KEY); } catch (e) { return 'done'; } }
 function tutWrite(v) { try { localStorage.setItem(TUT_KEY, String(v)); } catch (e) { /* storage blocked: the tutorial just shows again */ } }

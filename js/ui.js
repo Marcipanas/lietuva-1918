@@ -10,8 +10,8 @@ const TOOLS=[['inspect','cursor','Select'],['road','road','Road'],['rail','rail'
 function renderTools(){$('tools').innerHTML=TOOLS.map(([k,i,l])=>{const on=k==='build'?TOOL.k==='place'||!$('drawer').hidden:TOOL.k===k;
   const lab=k==='build'&&TOOL.k==='place'?BT[TOOL.bt].n.split(' ')[0]:l;return `<button data-tool="${k}" aria-pressed="${on}" title="${l}">${ic(k==='build'&&TOOL.k==='place'?bIcon(TOOL.bt):i)}<span>${lab}</span></button>`}).join('')}
 function toggleDrawer(force){const d=$('drawer'),open=force!==undefined?force:d.hidden;
-  if(open)d.innerHTML=CATS.map(([c,cn])=>{const items=Object.entries(BT).filter(([t,T0])=>T0.cat===c&&T0.era<=S.era+1);if(!items.length)return '';
-    return `<div class="dcat">${cn}</div>`+items.map(([t,T0])=>{const lk=T0.era>S.era;return `<button class="bcard${lk?' lock':''}${TOOL.bt===t&&TOOL.k==='place'?' on':''}" data-bt="${t}" ${lk?'disabled':''} style="--c:${bCol(t)}">${ic(bIcon(t))}<b>${T0.n}</b><small>${lk?ERAS[T0.era].n+' era':costTxt(T0.cost)}</small></button>`}).join('')}).join('');
+  if(open)d.innerHTML=CATS.map(([c,cn])=>{const items=Object.entries(BT).filter(([t,T0])=>T0.cat===c&&(T0.era<=S.era+1||unlocked(t)));if(!items.length)return '';
+    return `<div class="dcat">${cn}</div>`+items.map(([t,T0])=>{const lk=!unlocked(t);return `<button class="bcard${lk?' lock':''}${TOOL.bt===t&&TOOL.k==='place'?' on':''}" data-bt="${t}" ${lk?'disabled':''} style="--c:${bCol(t)}">${ic(bIcon(t))}<b>${T0.n}</b><small>${lk?ERAS[T0.era].n+' era':costTxt(T0.cost)}</small></button>`}).join('')}).join('');
   d.hidden=!open;renderTools()}
 function showConfirm(){const c=$('confirm'),p=PEND;if(!p){c.hidden=true;return}let h='',ok=!p.bad;const town=p.ti>=0&&S.towns[p.ti]?S.towns[p.ti]:null;
   if(p.bad)h=`<div class="ct">${p.kind==='place'?BT[p.t].n:p.kind==='bull'?'Remove':'Can’t build here'}</div><div class="cd">${p.bad}</div>`;
@@ -29,10 +29,10 @@ function select(s){VIEW.sel=s;S.tab='sel';S.confirmDemo=null;renderPanel(true);i
 function selectTown(ti,focus){VIEW.sel={kind:'t',ti};S.tab='sel';S.confirmDemo=null;if(focus){const t=S.towns[ti];focusAt(t.x,t.z,Math.min(cam.dist,Math.max(3.5,(t.R||1)*3)))}openSide(true);renderPanel(true)}
 function selectBuilding(b,focus){VIEW.sel={kind:'b',id:b.id};S.tab='sel';S.confirmDemo=null;if(focus)focusAt(b.x,b.z,Math.min(cam.dist,4));openSide(true);renderPanel(true)}
 function selTitle(){const s=VIEW.sel;if(!s)return 'Start';if(s.kind==='t')return S.towns[s.ti].n;const b=BMAP.get(s.id);return b?bName(b):'Start'}
-function renderTabs(){const T0=[['sel',selTitle()],['routes','Routes'],['nat','Lithuania'],['chron','Chronicle']];
+function renderTabs(){const T0=[['sel',selTitle()],['routes','Routes'],['trade',S.hist.path==='soviet'?'Plan':'Trade'],['nat','Lithuania'],['chron','Chronicle']];
   $('tabs').innerHTML=T0.map(([k,l])=>`<button role="tab" aria-selected="${S.tab===k}" data-act="tab" data-tab="${k}">${l}${k==='chron'?`<span class="cnt" id="logcnt">${S.log.length}</span>`:k==='routes'?`<span class="cnt">${S.routes.length}</span>`:''}</button>`).join('')}
 function renderPanel(force){V={};W={};const s=VIEW.sel;let html;
-  if(S.tab==='nat')html=natPanel();else if(S.tab==='chron')html=chronPanel();else if(S.tab==='routes')html=routesPanel();
+  if(S.tab==='nat')html=natPanel();else if(S.tab==='chron')html=chronPanel();else if(S.tab==='routes')html=routesPanel();else if(S.tab==='trade')html=tradePanel();
   else if(!s)html=startPanel();else if(s.kind==='t')html=townPanel(s.ti);else{const b=BMAP.get(s.id);html=b?buildingPanel(b):startPanel()}
   const st=html.replace(/(<span data-v="[^"]*"(?: data-\w+)?>)[^<]*(<\/span>)/g,'$1$2').replace(/(<i data-w="[^"]*") style="[^"]*"/g,'$1'),body=$('pbody');
   if(force||st!==lastStruct){const sel=[...body.querySelectorAll('select')].map(x=>[x.id,x.value]);body.innerHTML=html;lastStruct=st;renderTabs();sel.forEach(([id,val])=>{const x=$(id);if(x)x.value=val})}
@@ -41,6 +41,7 @@ function renderPanel(force){V={};W={};const s=VIEW.sel;let html;
   body.querySelectorAll('[data-sign]').forEach(el=>{const t=el.textContent;el.classList.toggle('neg',t.startsWith('−'));el.classList.toggle('zero',t.startsWith('0.0'))});
   body.querySelectorAll('[data-stat]').forEach(el=>el.classList.toggle('bad',!(el.textContent==='Running')));
   body.querySelectorAll('[data-stat2]').forEach(el=>el.classList.toggle('bad',el.textContent.startsWith('Polluted')));
+  body.querySelectorAll('[data-stat3]').forEach(el=>el.classList.toggle('bad',!/^[+−]/.test(el.textContent)));
   body.querySelectorAll('[data-chk]').forEach(el=>el.parentElement.classList.toggle('ok',el.textContent==='✓'))}
 function updateTop(){$('t-date').textContent=dateStr(S.day);$('t-funds').textContent=fmt(S.funds)+' Lt';const i=$('t-inc');i.textContent=fd(S.inc)+'/d';i.classList.toggle('neg',S.inc<0);
   $('t-pop').textContent=popStr(totals().pop);$('t-era').textContent=ERAS[S.era].n;const sea=seasonOf(S.day);$('t-sea').innerHTML=ic(sea.snow>0.45?'snow':sea.aut>0.45?'tree':'grain');
@@ -82,16 +83,35 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'rdel':S.confirmRoute=r?r.id:null;break;case 'rkeep':S.confirmRoute=null;break;
     case 'rdel2':if(r){S.funds+=r.n*VT[r.vt].cost*0.5;S.routes.splice(S.routes.indexOf(r),1);if(VIEW.route===r.id)VIEW.route=null;toast('Route removed')}S.confirmRoute=null;break;
     case 'tutorial':tutStart(true);if(window.innerWidth<960)openSide(false);return;
+    case 'card':{if(!pickCard(+d.o))return;showCard();break}
+    case 'def':S.hist.def=+d.q;toast(S.hist.def?`The army gets ${S.hist.def} Lt a day`:'No money for the army');break;
+    case 'dcreate':{const m=$('ndM').value,dir=$('ndD').value,rs=$('ndR').value,q=+$('ndQ').value,ti2=+$('ndT').value;
+      if(!mktPrice(m,rs,dir))return toast(`${MARKETS[m].n} does not ${dir==='out'?'buy':'sell'} ${rname(rs)}`);
+      if(![...townGates(ti2)].some(g=>MARKETS[m].gate.includes(g)))return toast(`${S.towns[ti2].n} needs ${GATE_N[MARKETS[m].gate[0]]} to trade with ${MARKETS[m].n}`);
+      const old=S.deals.find(x=>x.m===m&&x.r===rs&&x.dir===dir&&x.ti===ti2);if(old)old.q+=q;else addDeal(m,rs,dir,q,ti2);toast('Deal added');break}
+    case 'dq':{const x=S.deals.find(y=>y.id===+d.d);if(x)x.q=Math.max(1,x.q+(+d.q>0?(x.q>=10?5:1):(x.q>10?-5:-1)));break}
+    case 'ddel':S.deals=S.deals.filter(y=>y.id!==+d.d);toast('Deal ended');break;
     case 'reset':S.confirmReset=true;break;case 'cancelr':S.confirmReset=false;break;
     case 'reset2':{const sp=S.speed;newGame();S.speed=sp;analyze();initScene();VIEW.sel=null;VIEW.route=null;clearPreview();camHome();toast('A new republic: 16 February 1918');break}
     case 'confirm':return doConfirm();case 'cancelp':return clearPreview();case 'rotg':return rotateGhost();
   }
   save();renderPanel(true);updateTop()}
 
+/* ---------- decision cards: history waits for the player ---------- */
+function cardDate(w){if(w.length===4)return w;const d=new Date(w+'T00:00:00Z');return d.getUTCDate()+' '+['January','February','March','April','May','June','July','August','September','October','November','December'][d.getUTCMonth()]+' '+d.getUTCFullYear()}
+let cardShown='';
+function showCard(){const el=$('card'),id=S.hist.cards[0];if(id===cardShown&&!el.hidden===!!id)return;cardShown=id||'';
+  if(!id){el.hidden=true;document.body.classList.remove('carded');return}
+  const c=CARDS[id],sec=Math.round(S.hist.sec);
+  el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${c.txt}</p><div class="opts">${c.opts.map((o,i)=>{const r=o.risk,ok=r&&sec>=r.sec;
+    return `<button class="opt" data-card="${i}"><b>${o.t}</b><span>${o.d}</span>${r?`<em class="${ok?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}</button>`}).join('')}</div></div>`;
+  el.hidden=false;document.body.classList.add('carded')}
+
 /* ---------- loop & boot ---------- */
 let last=0,acc=0,pT=0;
 function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=dt*TPS[S.speed];let n=0;
-  while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)save()}if(NET.dirty)analyze();
+  if(S.hist.cards.length)acc=0;
+  while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)save();if(S.hist.cards.length){acc=0;save();break}}if(NET.dirty)analyze();showCard();
   updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);tutTick()}requestAnimationFrame(frame)}
 /* the opening view: Vilnius from the south-west, slightly tilted */
@@ -111,6 +131,7 @@ function start(data){const saved=data&&data.save?data.save:load();let fresh=fals
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
   renderTools();renderPanel(true);updateTop();
   $('tut').addEventListener('click',e=>{const b=e.target.closest('[data-tut]');if(!b)return;if(b.dataset.tut==='next')tutNext();else tutEnd()});
+  $('card').addEventListener('click',e=>{const b=e.target.closest('[data-card]');if(b)act({act:'card',o:b.dataset.card})});
   if(!tutStart(false)&&fresh)hint('Vilnius, 16 February 1918. Pinch to zoom, twist two fingers to turn, slide them up or down to tilt. Goods move on routes: open the Routes tab.');
   requestAnimationFrame(frame)}
 try{window.claude?.hot?.snapshot?.(()=>({save:serialize()}))}catch(e){}

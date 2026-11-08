@@ -304,14 +304,14 @@ const bad = why => ({ ok: false, why });
 function inKR(x, z) { return !!(flagsAt(x, z) & F_KR); }
 function validPlace(t, x, z, rot, gen) {
   const B0 = BT[t];
-  if (!gen && B0.era > S.era) return bad(`Unlocks in the ${ERAS[B0.era].n} era`);
+  if (!gen && !unlocked(t)) return bad(`Unlocks in the ${ERAS[B0.era].n} era`);
   const o = { x, z, rot, w: B0.fp[0], d: B0.fp[1] };
   let n = 0, fert = 0, flx = 0, bog = 0, clay = 0, riv = 0, err = '';
   forCellsIn(o, 0, k => {
     n++;
     const tt = TT[k], f = TF[k];
     if (!(f & F_LT)) { err = err || 'Outside Lithuania'; return; }
-    if (!gen && (f & F_KR) && S.kr) { err = err || 'The Klaipėda Region joins Lithuania in 1923'; return; }
+    if (!gen && (f & F_KR) && S.kr) { err = err || (S.hist.lost ? 'The Klaipėda Region belongs to Germany' : 'The Klaipėda Region joins Lithuania in 1923'); return; }
     if (tt === T_RIVER) riv++;
     else if (tt !== T_LAND && tt !== T_SAND) { err = err || 'Cannot build on water'; return; }
     if (f & F_FERTILE) fert++; if (f & F_FLAX) flx++; if (f & F_BOG) bog++; if (f & F_CLAY) clay++;
@@ -340,6 +340,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
     case 'lake': if (!ring(0.8, tt => tt === T_LAKE)) return bad('Must be next to a lake'); break;
     case 'water': if (!ring(0.6, tt => isWaterT(tt))) return bad('Must be on a shore'); break;
+    case 'border': if (!ring(3, tt => tt === T_FOREIGN)) return bad('Must be within 3 km of the border'); break;
   }
   if (t === 'hall') for (const tw of S.towns) if (Math.hypot(tw.x - x, tw.z - z) < HALL_GAP) return bad(`Too close to ${tw.n}`);
   return { ok: true, bonus: (B0.bonus === 'fertile' && fert >= n * 0.4) || (B0.bonus === 'flaxland' && flx >= n * 0.4) };
@@ -546,7 +547,8 @@ function analyze() {
     const lock = S.kr && inKR(b.x, b.z), q = lock ? null : own(bOBB(b), b.t !== 'house');
     if (!q || q.o < 0) { b.town = -1; b.cd = 0; b.na = lock ? 'locked' : q ? 'far' : 'noroad'; return; }
     b.town = q.o; b.cd = q.d;
-    if (b.t === 'forestry') { let c = 0; forDisk(b.x, b.z, 1.6, k => { if (TF[k] & F_FOREST) c++; }); b.k = clamp(c / 20, 0.3, 1.4); }
+    if (b.t === 'customs') b.gate = borderOf(b.x, b.z);
+    else if (b.t === 'forestry') { let c = 0; forDisk(b.x, b.z, 1.6, k => { if (TF[k] & F_FOREST) c++; }); b.k = clamp(c / 20, 0.3, 1.4); }
     else if (BT[b.t].bonus) {
       const bit = BT[b.t].bonus === 'fertile' ? F_FERTILE : F_FLAX;
       let c = 0, n = 0;
