@@ -172,7 +172,8 @@ const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), b
   sea: hx('#3b7997'), lagoon: hx('#4b8eab'), lake: hx('#7fa98a'), foreign: hx('#b3b5a4'), autumn: hx('#b8a457') };
 /* Who holds the land, each in its own muted colour: Latvia, Belarus, Poland, Germany (and East Prussia), the Allies, Soviet Russia.
    Neighbours' land takes its holder's colour; land of today's Lithuania held by someone else is washed in it. */
-const OWN_COL = { lt: '#93b468', lv: '#cfa996', by: '#a2a8d0', pl: '#d6c189', de: '#9cbfb6', ru: '#9cbfb6', al: '#c7a2c4' }, OWN_RGB = {};
+/* holders' colours: Soviet rule, from the Red Army of 1919 to Soviet Belarus and Russia, shares one */
+const OWN_COL = { lt: '#93b468', lv: '#cfa996', pl: '#d6c189', de: '#9cbfb6', al: '#c7a2c4', ra: '#c98a80', by: '#c98a80', ru: '#c98a80' }, OWN_RGB = {};
 function hx(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
 for (const k in OWN_COL) OWN_RGB[k] = hx(OWN_COL[k]);
 const mixRGB = (a, b, q) => [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q, a[2] + (b[2] - a[2]) * q];
@@ -266,11 +267,14 @@ const GROUND = (() => {
   const outer = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2).translate(MAPU / 2, -0.05, MAPV / 2),
     snowy(new THREE.MeshLambertMaterial({ color: '#b3b5a4' }), 1, true));
   outer.renderOrder = -1; SCENE.add(outer);
-  /* the neighbours' land beyond the edge of the map, in their holders' colours (outerColours) */
-  for (const c of ['lv', 'by', 'pl', 'ru']) {
-    const mat = snowy(new THREE.MeshLambertMaterial({ color: OWN_COL[c] }), 1, true);
+  /* the neighbours' land beyond the edge of the map, in their holders' colours (outerColours); Masuria (ep) lies on top of
+     today's Poland and is drawn in front of it */
+  for (const c of ['lv', 'by', 'pl', 'ru', 'ep']) {
+    const mat = snowy(new THREE.MeshLambertMaterial({ color: OWN_COL[c] || OWN_COL.de }), 1, true);
+    if (c === 'ep') { mat.polygonOffset = true; mat.polygonOffsetFactor = -1; mat.polygonOffsetUnits = -2; }
     OUTER[c] = mat;
-    GEO_C[c].forEach(r => { const g = shapeGeo(polyXZ(r)); g.translate(0, -0.03, 0); const mm = new THREE.Mesh(g, mat); mm.renderOrder = -1; SCENE.add(mm); });
+    const rings = c === 'ep' ? GEO_EP.map(w => [polyXZ(w.o), w.h.map(polyXZ)]) : GEO_C[c].map(r => [polyXZ(r), []]);
+    rings.forEach(([o, h]) => { const g = shapeGeo(o, h); g.translate(0, -0.03, 0); const mm = new THREE.Mesh(g, mat); mm.renderOrder = -1; SCENE.add(mm); });
   }
   return m;
 })();
@@ -341,8 +345,8 @@ const sideOwner = q => q.c ? S.own[q.c] : q.r ? S.own[RGN_KEY[q.r]] : 'lt';
 function borderPieces() {
   const out = [], grid = new Map();
   const landCell = (x, z) => { const k = cellAt(x, z); return k >= 0 && TT[k] !== T_SEA && TT[k] !== T_LAGOON ? k : -1; };
-  /* the part of Lithuania nearest a point, within 6 km */
-  const ltNear = (x, z) => { for (let r = 0.5; r <= 6; r += 0.5) { let best = -1, bd = 1e9; forDisk(x, z, r, (k, d) => { if ((TF[k] & F_LT) && d < bd) { bd = d; best = k; } }); if (best >= 0) return { r: RGN[best] }; } return { r: 0 }; };
+  /* the part of Lithuania nearest a point, within 15 km (the lagoon is wide where the border crosses it) */
+  const ltNear = (x, z) => { for (let r = 0.5; r <= 15; r += r < 6 ? 0.5 : 1.5) { let best = -1, bd = 1e9; forDisk(x, z, r, (k, d) => { if ((TF[k] & F_LT) && d < bd) { bd = d; best = k; } }); if (best >= 0) return { r: RGN[best] }; } return { r: 0 }; };
   const gk = (x, z) => (Math.floor(x / 0.5) + 2000) * 8192 + Math.floor(z / 0.5) + 2000;
   let line = 0;
   /* a piece repeats one already kept when a piece of another line lies within 0.3 km */
@@ -372,12 +376,29 @@ function borderPieces() {
       s += L;
     }
   };
-  for (const b of GEO_BORD) walk(polyXZ(b.p), (x, z) => [b.a === 'lt' ? ltNear(x, z) : { c: b.a }, b.b === 'lt' ? ltNear(x, z) : { c: b.b }]);
+  /* today's Poland is two lands here: the Suwałki region (pl) and Masuria (ep), East Prussia's until 1945 */
+  const plSide = (x, z, nx, nz) => { for (const f of [0.6, -0.6, 1.2, -1.2]) { const k = cellAt(x + nx * f, z + nz * f); if (k >= 0 && (CTY[k] === CTY_ID.pl || CTY[k] === CTY_ID.ep)) return { c: CTY_KEY[CTY[k]] }; } return { c: 'pl' }; };
+  const side = (c, x, z, nx, nz) => c === 'lt' ? ltNear(x, z) : c === 'pl' ? plSide(x, z, nx, nz) : { c };
+  for (const b of GEO_BORD) walk(polyXZ(b.p), (x, z, nx, nz) => [side(b.a, x, z, nx, nz), side(b.b, x, z, nx, nz)]);
+  /* a line between two parts of Lithuania: look a little further out on both sides until they differ, so a winding line
+     (an eldership's edge along a stream) is not lost where both near cells fall on one side */
   const inner = (x, z, nx, nz) => {
-    const ka = landCell(x + nx * 0.6, z + nz * 0.6), kb = landCell(x - nx * 0.6, z - nz * 0.6);
-    return ka >= 0 && kb >= 0 && (TF[ka] & F_LT) && (TF[kb] & F_LT) ? [{ r: RGN[ka] }, { r: RGN[kb] }] : null;
+    for (const f of [0.35, 0.7, 1.05]) {
+      const ka = landCell(x + nx * f, z + nz * f), kb = landCell(x - nx * f, z - nz * f);
+      if (ka < 0 || kb < 0 || !(TF[ka] & F_LT) || !(TF[kb] & F_LT)) return null;
+      if (RGN[ka] !== RGN[kb]) return [{ r: RGN[ka] }, { r: RGN[kb] }];
+    }
+    return null;
   };
   [GEO_KRW, GEO_PAL, GEO_V39, GEO_V40].forEach(g => g.forEach(w => [w.o, ...w.h].forEach(r => walk(polyXZ(r), inner))));
+  /* the old border of East Prussia, where Masuria meets the Suwałki region */
+  const old = (x, z, nx, nz) => {
+    const ka = landCell(x + nx * 0.6, z + nz * 0.6), kb = landCell(x - nx * 0.6, z - nz * 0.6);
+    if (ka < 0 || kb < 0) return null;
+    const a = CTY[ka], b = CTY[kb];
+    return (a === CTY_ID.ep && b === CTY_ID.pl) || (a === CTY_ID.pl && b === CTY_ID.ep) ? [{ c: CTY_KEY[a] }, { c: CTY_KEY[b] }] : null;
+  };
+  GEO_EP.forEach(w => [w.o, ...w.h].forEach(r => walk(polyXZ(r), old)));
   return out;
 }
 function buildBorder() {
@@ -861,17 +882,25 @@ function syncLabels() {
   }
 }
 /* Map names as they stood on the day, in Lithuanian like the rest of the map */
-const OWN_LT = { de: 'Vokietija', al: 'Antantės valdžia', pl: 'Lenkija', lv: 'Latvija', by: 'Sovietų Sąjunga', ru: 'Sovietų Sąjunga' };
+const OWN_LT = { de: 'Vokietija', al: 'Antantės valdžia', pl: 'Lenkija', lv: 'Latvija', ra: 'Raudonoji armija', by: 'Sovietų Sąjunga', ru: 'Sovietų Sąjunga' };
+/* a neighbour's land held by someone else: "occupied by Germany" as the label's second line */
+const OCC_LT = { de: 'Vokietijos užimta', ra: 'Raudonosios armijos užimta', pl: 'Lenkijos užimta' };
 function nlText(n) {
   if (n.k === 'r') {
     const o = S.own[n.rg], d = ymd(S.day);
     if (o === 'lt' || (n.rg === 'vr2' && o === S.own.vr)) return '';
     if (n.rg === 'kr') return (o === 'de' && d < '1920-02-15' ? 'MAŽOJI LIETUVA' : REGIONS.kr.lt) + '\n' + OWN_LT[o];
     if (o === 'pl' && d >= '1920-10-12' && d < '1922-03-24') return 'VIDURIO LIETUVA\nLenkijos valdoma';
+    if (o === 'ra' || (o === 'pl' && d < '1920-10-12')) return REGIONS[n.rg].lt + '\n' + (o === 'ra' ? 'Raudonosios armijos užimtas' : 'Lenkijos užimtas');
     return REGIONS[n.rg].lt + '\n' + OWN_LT[o];
   }
-  if (n.s === 'BALTARUSIJA') return S.own.by === 'pl' ? 'LENKIJA' : n.s;
-  if (n.s === 'RYTŲ PRŪSIJA') return S.own.ru === 'ru' ? 'KALININGRADO SRITIS' : n.s;
+  const d = ymd(S.day), occ = (o, own) => o === own ? n.s : n.s + '\n' + OCC_LT[o];
+  if (n.s === 'LATVIJA') return occ(S.own.lv, 'lv');
+  if (n.s === 'LENKIJA') return occ(S.own.pl, 'pl');
+  /* Belarus: German-held, then Soviet and Polish in turn; part of Poland from the Peace of Riga to 1939 */
+  if (n.s === 'BALTARUSIJA') return S.own.by === 'pl' && d >= '1921-03-18' ? 'LENKIJA' : occ(S.own.by, 'by');
+  if (n.s === 'RYTŲ PRŪSIJA') return S.own.ru !== 'ru' ? n.s : d >= '1946-07-04' ? 'KALININGRADO SRITIS' : n.s + '\n' + OWN_LT.ru;
+  if (n.s === 'MOZŪRIJA') return n.s + '\n' + OWN_LT[S.own.ep];
   return n.s;
 }
 function place(el, x, y, show) {

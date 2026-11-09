@@ -20,7 +20,8 @@ unzip -o -q dl/pip/geonamescache-3.0.2-py3-none-any.whl 'geonamescache/data/citi
 python3 -I -c "import json,sys;d=json.load(open('dl/pip/geonamescache/data/cities500.json'));json.dump([v for v in d.values() if v['countrycode']=='LT'],open('dl/gn/lt500.json','w'),ensure_ascii=False)"
 # Today's municipalities and elderships that the borders of 1920-1940 followed (build_regions.py)
 mkdir -p dl/adm
-for id in 968952 977316 1016307 967318 966363 966362 1076928 3413482 3415040 1527478 3442772 3413458 3499966 3440694 3440692 3440696 3440689 3440690 3440691 3440695 3456495 3442766 3413103 5585192 3413102 3413100 3413101 3409582 3413311 3413312 3413308 3423468 3423473 3423474 1531649 1531648 3409510; do
+# and the Warmian-Masurian Voivodeship: the part of today's Poland that was East Prussia until 1945
+for id in 223408 968952 977316 1016307 967318 966363 966362 1076928 3413482 3415040 1527478 3442772 3413458 3499966 3440694 3440692 3440696 3440689 3440690 3440691 3440695 3456495 3442766 3413103 5585192 3413102 3413100 3413101 3409582 3413311 3413312 3413308 3423468 3423473 3423474 1531649 1531648 3409510; do
   p=$(printf '%09d' "$id"); curl -fsSL -o "dl/adm/$id.geojson" \
     "https://raw.githubusercontent.com/missinglink/osm-boundaries/master/data/$(echo "$p" | cut -c1-3)/$(echo "$p" | cut -c4-6)/$(echo "$p" | cut -c7-9)/$p.geojson"
 done

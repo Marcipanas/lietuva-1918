@@ -3,7 +3,7 @@
 let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
-  S={v:6,day:0,funds:3000,inc:0,era:1,speed:1,own:startOwners(),evv:2,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
+  S={day:0,funds:3000,inc:0,era:1,speed:1,own:startOwners(),nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
     towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'nat',cam:null,series:[]};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
@@ -15,6 +15,7 @@ function newGame(){
     {d:0,t:'Every town and village feeds and heats its people from its own fields and woodlots, so it keeps its size without help. To grow it needs more food, homes and work.',k:''},
     {d:0,t:'Dirt roads join every town and village. Railways and the old paved highways link the main towns to Vilnius. Bring them to the rest.',k:''},
     {d:0,t:'People are happier with more kinds of food on the table: grain, potatoes, dairy, meat and fish. In winter every home burns peat or timber.',k:''},
+    {d:0,t:'Borders move with history. Vilnius will change hands several times from 1919, and the Klaipėda Region and the Palanga coast are not yet Lithuanian. Nothing can be built where others hold the land.',k:''},
     {d:0,t:'The Council of Lithuania signs the Act of Independence in Vilnius. The new state must build an economy almost from nothing.',k:'hist'}];
 }
 /* Saved games and the 1918 start map (js/world1918.js) share one compact form: coordinates in 10 m steps, lines as steps from
@@ -44,24 +45,26 @@ const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];
 const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg']);
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
   o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
-/* Fields added after a save format was fixed get their defaults here, so older saves of the same format keep loading. */
-function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;S.series=S.series||[];
+/* A save of this version back into S: the world is decoded, and what the save leaves out (DAILY, the 1918 descriptions) is
+   filled in. Saves of older versions are never loaded (SAVE_KEY carries the version). */
+function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;
   const desc=new Map(typeof WORLD1918!=='undefined'&&WORLD1918?WORLD1918.towns.map(a=>[a[0],a[7]]):[]);
   S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};t.mk={};t.us={};t.gr=0;if(t.d===undefined)t.d=desc.get(t.id)||''});
-  if(!S.own)oldOwners();if(S.evv!==2)oldEvents();decWorld(W);settleOwners()}
-/* Saves from before 0.8 kept the old map of Lithuania: Palanga and the Vilnius region Lithuanian, Klaipėda by the old flags.
-   Their history goes on from where it was: every event up to today counts as passed, whatever the list held then. */
-function oldOwners(){const today=ymd(S.day),kr=S.kr?(S.hist.lost?'de':today>='1920-02-15'?'al':'de'):'lt';
-  S.own=Object.assign(startOwners(),{kr,pal:'lt',vr:'lt',vr2:'lt',by:today>='1939-09-17'?'by':today>='1920-10-09'?'pl':'by',ru:today>='1946-07-04'?'ru':'de'});delete S.kr}
-function oldEvents(){const today=ymd(S.day);S.ev={};HEV.forEach(e=>{if(e.d<=today)S.ev[e.id]=1});S.evv=2}
+  decWorld(W);settleOwners()}
 const SAVE_NUM=(k,v)=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*1e4)/1e4:v;
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize(),SAVE_NUM))}catch(e){}lastSave=Date.now()}
 /* the frame loop saves at most every 20 seconds: the map makes a save of a few hundred KB */
 let lastSave=0;
 function autosave(){if(Date.now()-lastSave>20000)save()}
-function load(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);return o&&o.v===6&&o.edges&&o.towns?o:null}catch(e){return null}}
+function load(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);return o&&o.edges&&o.towns&&o.hist?o:null}catch(e){return null}}
+/* A new version starts a new game: saves of older versions are removed, so they do not fill the browser's storage.
+   Returns true if one was found. The first-time tutorial keeps its own key. */
+function dropOldSaves(){let found=false;try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);
+  if(k&&k.startsWith('lietuva1918')&&k!==SAVE_KEY&&!k.endsWith('-tutorial')){localStorage.removeItem(k);found=true}}}catch(e){}return found}
 /* yo: only the year of this event is known, so the chronicle shows the year alone */
-function log(t,k,yo){S.log.unshift({d:S.day,t,k:k||'',yo:yo?1:0});if(S.log.length>150)S.log.length=150}
+/* The chronicle keeps every line of history; other news is trimmed to the latest 150. */
+function log(t,k,yo){S.log.unshift({d:S.day,t,k:k||'',yo:yo?1:0});
+  if(S.log.length>150+S.log.filter(e=>e.k==='hist').length)for(let i=S.log.length-1;i>=0;i--)if(S.log[i].k!=='hist'){S.log.splice(i,1);break}}
 
 /* ---------- seasons ---------- */
 const SNOW=[1,1,0.85,0.1,0,0,0,0,0,0,0.3,0.8],AUT=[0,0,0,0,0,0,0,0.15,0.6,1,0.5,0],HEAT=[1,1,0.8,0.35,0,0,0,0,0.1,0.45,0.8,1];
@@ -84,7 +87,7 @@ function room(t,r){return Math.max(0,(t.cap||STORE_BASE)-(t.stock[r]||0))}
 function addRoute(a,b,mode,vt,n,free){if(a<0||b<0||a===b)return null;const r={id:S.rid++,a,b,mode,vt,n,ab:'auto',ba:'auto',pax:false};S.routes.push(r);if(!free)S.stats.routesMade++;routeEval(r);return r}
 function routePath(r){return pairPath(r.mode,r.a,r.b)}
 function routeEval(r){const p=routePath(r),V=VT[r.vt],A=S.towns[r.a],B0=S.towns[r.b];r.ok=false;r.why='';r.len=0;r.cap=0;r.trip=0;
-  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){const X=A.lock?A:B0;r.why=`${X.n} belongs to ${OWNERS[S.own[X.rg]]||'another country'}`;return}
+  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){const X=A.lock?A:B0;r.why=`${X.n} ${heldBy(X.rg,S.own[X.rg])}`;return}
   if(!p){r.why=r.mode==='rail'?'No railway between their stations':'No road between them';return}
   if(V.elec&&p.lv<2){r.why='Electric trains need electric railway all the way';return}
   const sf=r.mode==='road'&&r.vt!=='cart'?ROADT[p.lv].spd:1,trips=V.spd*sf/(2*p.len+TRIP_OVERHEAD);r.len=p.len;r.trip=1/trips;r.cap=r.n*V.cap*trips;r.ok=true}
@@ -182,12 +185,15 @@ function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.f
 /* ---------- history, chance and ministry tasks ---------- */
 /* ---------- who holds which land ----------
    S.own: the holder of each part of today's Lithuania (REGIONS) and of each neighbour's land (lv, by, pl, ru). */
-function heldTxt(rg){const R0=REGIONS[rg],o=S.own[rg];return !R0?'Outside Lithuania':o==='al'?`${R0.n} is under Allied rule`:`${R0.n} belongs to ${OWNERS[o]}`}
+/* "belongs to Poland", "is held by the Red Army": how a part of Lithuania stands with its holder */
+function heldBy(rg,o){return o==='al'?'is under Allied rule':o==='ra'||o==='pl'||(o==='de'&&rg!=='kr')?`is held by ${OWNERS[o]}`:`belongs to ${OWNERS[o]||'another country'}`}
+function heldTxt(rg){const R0=REGIONS[rg];return R0?`${R0.n} ${heldBy(rg,S.own[rg])}`:'Outside Lithuania'}
 /* Each settlement's part of the country, from where it stands; its lock follows the holder. */
 function settleOwners(){S.towns.forEach(t=>{t.rg=rgnAt(...landNear(t.x,t.z))});splitAtRegions();
   S.towns.forEach(t=>{t.lock=t.rg&&S.own[t.rg]!=='lt'?1:0});fixCapital();NET.dirty=true;WV.own++}
-/* Kaunas is the temporary capital while Vilnius is held by others. */
-function fixCapital(){const V0=S.towns[tIdx('vil')],K=S.towns[tIdx('kau')],want=V0&&!V0.lock?V0:K;if(!want)return;S.towns.forEach(t=>{if(t.capital&&t!==want)t.capital=0});want.capital=1}
+/* Kaunas is the temporary capital while others hold Vilnius, and while the government sits there (S.hist.kaunas: it moved
+   in January 1919 and stays until Vilnius is back for good). */
+function fixCapital(){const V0=S.towns[tIdx('vil')],K=S.towns[tIdx('kau')],want=V0&&!V0.lock&&!(S.hist&&S.hist.kaunas)?V0:K;if(!want)return;S.towns.forEach(t=>{if(t.capital&&t!==want)t.capital=0});want.capital=1}
 function capital(){return S.towns.find(t=>t.capital)||S.towns[0]}
 /* Hand a part of Lithuania or a neighbour's land to a new holder. Returns what Lithuania lost or gained there:
    {n settlements, pop thousands, b buildings}. Towns keep what they had and wait, locked, until the land comes back. */

@@ -15,7 +15,7 @@
 
 ## Sources and licences
 
-- Country borders, and today's municipalities and elderships used for the borders of 1920 to 1940: OpenStreetMap, © OpenStreetMap contributors, ODbL. Via the [osm-boundaries](https://github.com/missinglink/osm-boundaries) extracts.
+- Country borders, today's municipalities and elderships used for the borders of 1920 to 1940, and the Warmian-Masurian Voivodeship for the old border of East Prussia: OpenStreetMap, © OpenStreetMap contributors, ODbL. Via the [osm-boundaries](https://github.com/missinglink/osm-boundaries) extracts.
 - Coast, lakes and rivers: [Natural Earth](https://www.naturalearthdata.com/) 1:10m, public domain.
 - Place names and positions: [Euronym](https://github.com/eurostat/euronym) by Eurostat, from EuroGeographics data under the EuroGeographics Open Data Licence. © EuroGeographics.
 - Today's populations (only to size the smaller towns): GeoNames, CC BY 4.0, via the geonamescache package.
@@ -34,8 +34,12 @@
 
 - **Klaipėda Region** (`kr`, from `build_geo.py`): part of Germany until the Allies took it over on 15 February 1920; Lithuanian from 16 February 1923; German again from 22 March 1939.
 - **Palanga strip** (`pal`): Courland's coast since 1819, from Nemirseta to the Latvian border, about 8 km inland and short of Kretinga. Latvia handed it over on 30 March 1921, after James Young Simpson's award (183 km² by the encyclopedia VLE; this outline has 209).
-- **Vilnius region** (`v39`, `v40`): Polish from October 1920. The 1923 line ran west of the Grodno–Vilnius–Daugavpils railway, and today's district boundaries mostly follow it, so the region is built from whole municipalities and elderships. Towns checked against sources: Vievis, Semeliškės, Aukštadvaris and Onuškis were in independent Lithuania (Pinkas HaKehillot Lita), so were Kernavė, Musninkai and Salakas; Perloja, on the right bank of the Merkys, stayed Lithuanian (VLE). The line is approximate where an eldership was split (Varėna along the Merkys, Šalčininkai between Šalčininkėliai and the town).
+- **Vilnius region** (`v39`, `v40`): Soviet in 1919 and 1920, Polish in between and from October 1920 (the game uses the 1923 line for all of it). The 1923 line ran west of the Grodno–Vilnius–Daugavpils railway, and today's district boundaries mostly follow it, so the region is built from whole municipalities and elderships. Towns checked against sources: Vievis, Semeliškės, Aukštadvaris and Onuškis were in independent Lithuania (Pinkas HaKehillot Lita), so were Kernavė, Musninkai and Salakas; Perloja, on the right bank of the Merkys, stayed Lithuanian (VLE). The line is approximate where an eldership was split (Varėna along the Merkys, Šalčininkai between Šalčininkėliai and the town).
   - `v39`: what Lithuania got back in October 1939 (6,909 km² by VLE; this outline has 7,284): the counties of Vilnius, Valkininkai and Švenčionėliai.
   - `v40`: what the Byelorussian SSR kept until 6 November 1940 (about 2,600 km²; this outline has 2,608): Švenčionys, Adutiškis, Mielagėnai, Tverečius, Rimšė, Šalčininkai, Dieveniškės, Marcinkonys, Rudnia, Druskininkai.
 
 Each region is widened by about a kilometre where it meets the land outside Lithuania, so no raster cell along today's border is left out by the simplified outlines. Inside Lithuania its lines are exact.
+
+Outside Lithuania one line of the old maps is gone from today's: the border of East Prussia with the Suwałki region, which splits today's Poland on the map.
+
+- **Masuria** (`ep`): the part of today's Poland that was East Prussia, and German, until 1945. It is today's Warmian-Masurian Voivodeship (OpenStreetMap relation 223408), whose border with Podlaskie keeps the old line: checked against 18 villages on both sides, from Żytkiejmy, Gołdap, Olecko and Prostki (German) to Wiżajny, Filipów, Raczki and Grajewo (Russian, then Polish). West of 20.3° the voivodeship also takes in Lubawa, Polish between the wars, so it is cut there, off the map.

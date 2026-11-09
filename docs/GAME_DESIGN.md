@@ -4,7 +4,7 @@ The current rules and numbers. The source of truth is `js/data.js` and `js/sim.j
 
 ## Fantasy and goal
 
-You lead the newly independent Lithuania from 16 February 1918, inside the borders of the day: the Klaipėda Region is German and the Palanga coast is Courland's, so the new state has no sea coast. Eighty-nine towns and 362 villages, each at its real place, feed themselves. Slow dirt roads join them all, but only the railways and the old paved highways link 38 towns to Vilnius. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History moves the borders and interrupts with decisions: volunteers against the Red Army, Żeligowski's march on Vilnius, the litas, the Klaipėda revolt, the Depression, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to the capital by railway or paved road and powered, and 2.4 million residents (fewer if Lithuania is smaller, see Eras).
+You lead the newly independent Lithuania from 16 February 1918, inside the borders of the day: the Klaipėda Region is German and the Palanga coast is Courland's, so the new state has no sea coast, and German troops hold all the land around it. Vilnius changes hands several times from January 1919 and is Polish for most of the years between the wars. Eighty-nine towns and 362 villages, each at its real place, feed themselves. Slow dirt roads join them all, but only the railways and the old paved highways link 38 towns to Vilnius. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History moves the borders and interrupts with decisions: volunteers against the Red Army, Żeligowski's march on Vilnius in 1920, the litas, the Klaipėda revolt, the Depression, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to the capital by railway or paved road and powered, and 2.4 million residents (fewer if Lithuania is smaller, see Eras).
 
 Scale: the map is the real country, about 400 × 310 km, with no grid, and distances between places are true. Towns are drawn about five times larger than life so they read well: a house lot is 0.42 km across. Population is counted in thousands (`2k` is one lot of wooden houses; a village farmstead holds 0.5k). One simulation step is one day. Speeds are 2, 5 and 12 days per second.
 
@@ -114,20 +114,28 @@ Goods cross the border only at a **gateway**: a border post (`customs`, within 3
 
 ## Borders (js/history.js, S.own)
 
-The map starts with the borders of 16 February 1918 and history moves them. Four parts of today's Lithuania changed hands (`REGIONS`; outlines in `tools/geo`): the **Klaipėda Region**, the **Palanga coast**, and the **Vilnius region** in two parts (what came back in October 1939, and what Soviet Belarus kept until November 1940). The neighbours' land changes hands too: the Belarusian side is Polish from October 1920 and Soviet from September 1939; East Prussia becomes the Kaliningrad region in 1946.
+The map starts with the borders of 16 February 1918 and history moves them. Four parts of today's Lithuania changed hands (`REGIONS`; outlines in `tools/geo`): the **Klaipėda Region**, the **Palanga coast**, and the **Vilnius region** in two parts (what came back in October 1939, and what Soviet Belarus kept until November 1940). The neighbours' land changes hands too. In 1918 German troops hold all of it. Today's Poland is two lands on the map, split on the old border of East Prussia: the Suwałki region, and Masuria, German until 1945.
 
 - Land others hold is washed in its holder's colour, with its name and holder on the map. Lithuania's border of the day is the bold dashed line.
 - Nothing can be built there, no line can be planned through it, and roads and railways there carry nothing for Lithuania. Its settlements lock with everything built there and its deals end; routes to them stop. When the land comes back, they work again at least at their 1918 size.
-- While others hold Vilnius, **Kaunas is the temporary capital**: "linked" counts towns joined to Kaunas.
+- **Kaunas is the temporary capital** from 2 January 1919, when the government left Vilnius, until Vilnius is back for good (October 1939, or a choice that did not happen): "linked" counts towns joined to Kaunas. In August to October 1920, when Lithuania held Vilnius again, the government stayed in Kaunas, as it did.
 - The eras and the goal ask less of a smaller Lithuania: residents and linked towns needed scale with the share of the 1918 residents (and of the towns) living in the land held now, against the land held at the start, between 0.6 and 1.3. Losing the Vilnius region drops Industrialization from 850k to 640k residents and 50 to 44 linked towns.
 
 | Part | 16 Feb 1918 | Then (as it happened) |
 |---|---|---|
 | Klaipėda Region | Germany | the Allies from 15 Feb 1920; Lithuania from 16 Feb 1923; Germany from 22 Mar 1939; Soviet Lithuania from 28 Jan 1945 |
-| Palanga coast | Courland (Latvia) | Lithuania from 30 Mar 1921 |
-| Vilnius region | Lithuania | Poland from 8 Oct 1920 (Central Lithuania until 24 Mar 1922); Soviet from 17 Sep 1939; back to Lithuania 28 Oct 1939 (Vilnius, Trakai, Eišiškės, Švenčionėliai, Ignalina) and 6 Nov 1940 (Švenčionys, Šalčininkai, Druskininkai) |
+| Palanga coast | Courland, held by Germany | Latvia from 18 Nov 1918; Lithuania from 30 Mar 1921 |
+| Vilnius region | Lithuania | the Red Army from 5 Jan 1919; Poland from 19 Apr 1919; the Red Army from 14 Jul 1920; Lithuania from 26 Aug 1920; Poland from 8 Oct 1920 (Central Lithuania until 24 Mar 1922); Soviet from 17 Sep 1939; back to Lithuania 28 Oct 1939 (Vilnius, Trakai, Eišiškės, Švenčionėliai, Ignalina) and 6 Nov 1940 (Švenčionys, Šalčininkai, Druskininkai) |
 
-In reality the Red Army took Vilnius in January 1919 and Poland held it from April 1919 to July 1920. The game keeps the city in Lithuanian hands until the crisis of October 1920, so a new player does not lose the starting capital in the first minutes.
+| Neighbour's land | 16 Feb 1918 | Then |
+|---|---|---|
+| Latvia | Germany (Courland) | Latvia from 18 Nov 1918 |
+| Belarus | Germany (Ober Ost) | the Red Army from 5 Jan 1919; Poland from 19 Apr 1919; the Red Army from 14 Jul 1920; Poland from 9 Oct 1920 (part of Poland from the Peace of Riga, 18 Mar 1921); Soviet Belarus from 17 Sep 1939 |
+| Suwałki region (today's Poland) | Germany (Ober Ost) | Poland from 23 Aug 1919; Germany from 12 Oct 1939; Poland from 23 Oct 1944 |
+| Masuria (today's Poland) | Germany (East Prussia) | Poland from 2 Aug 1945 |
+| Kaliningrad region | Germany (East Prussia) | the Soviet Union from 2 Aug 1945, named the Kaliningrad region on 4 Jul 1946 |
+
+Simplified: Lithuania's administration of the Suwałki region in 1919 and in the summer of 1920 is not shown, all of Belarus on the map changes hands at once, the 1919 and 1920 front lines through the Vilnius region follow the 1923 line, and the Red Army's push into the rest of Lithuania in 1919 is not on the map.
 
 ## History (js/history.js)
 
@@ -137,13 +145,20 @@ Dated events go to the Chronicle. **Decision cards** stop the clock until the pl
 |---|---|---|
 | 1918-07-11 | The Council elects Wilhelm of Urach king (taken back in November) | none |
 | 1918-11-11 | Armistice; first government | none |
+| 1918-11-18 | Latvia declares independence | Latvia and the Palanga coast to Latvia |
 | 1918-12-29 | **Card:** defend the new state | call for volunteers (1,500 Lt, security +15) or leave defence to others (did not happen; −5) |
+| 1919-01-02 | The government moves to Kaunas | Kaunas is the temporary capital |
+| 1919-01-05 | The Red Army takes Vilnius | the Vilnius region and Belarus to the Red Army |
+| 1919-04-19 | The Polish army takes Vilnius | the Vilnius region and Belarus to Poland |
+| 1919-08-23 | The Sejny uprising | the Suwałki region to Poland |
 | 1919-11-22 | Bermontians beaten at Radviliškis | none |
 | 1920-02-15 | The Allies take over the Klaipėda Region | its holder changes |
 | 1920-05-15 | Constituent Assembly meets | none |
 | 1920-07-12 | Moscow Peace Treaty | 1,000 Lt (three million gold roubles) |
+| 1920-07-14 | The Red Army takes Vilnius | the Vilnius region and Belarus to the Red Army |
+| 1920-08-26 | The Red Army hands Vilnius to Lithuania | the Vilnius region back; the government stays in Kaunas |
 | 1920-10-07 | Suwałki Agreement | none |
-| 1920-10-08 | **Card:** Żeligowski marches on Vilnius | hold the line at Širvintos (Vilnius region to Poland, Kaunas the temporary capital, +5, morale −5 for 3 years) or defend Vilnius (did not happen; 2,500 Lt; needs 35, else lost anyway, −10, morale −8) |
+| 1920-10-08 | **Card:** Żeligowski marches on Vilnius | hold the line at Širvintos (Vilnius region to Poland, Kaunas stays the temporary capital, +5, morale −5 for 3 years) or defend Vilnius (did not happen; 2,500 Lt; needs 35, and the government returns to Vilnius; else lost anyway, −10, morale −8) |
 | 1920-10-12 | Republic of Central Lithuania | Polish market closed until 1938 |
 | 1920-11-21 | Širvintos and Giedraičiai | none |
 | 1921-03-30 | Palanga joins | the coast: a sea port can be built |
@@ -167,8 +182,13 @@ Dated events go to the Chronicle. **Decision cards** stop the clock until the pl
 | 1939-09-01 | War in Europe | Britain and Poland closed; in the union, war |
 | 1939-09-17 | The Red Army invades Poland | the Belarusian side and a Polish Vilnius region become Soviet; in the union, Soviet occupation |
 | 1939-10-10 | **Card:** Soviet bases | accept (−30, Soviet trade, Vilnius back on 28 October if others held it) or refuse (needs 70, else occupation at once) |
+| 1939-10-12 | The Soviets hand the Suwałki region to Germany | its holder changes (no Chronicle line) |
+| 1944-10-23 | The Red Army takes Suwałki | its holder changes (no Chronicle line) |
+| 1945-08-02 | Potsdam | Masuria to Poland, the north of East Prussia to the Soviet Union |
 | 1940-06-14 | **Card:** Soviet ultimatum | accept (occupation, the Soviet path) or resist (needs 80 and no bases; else occupation with heavy losses) |
 | 1946-07-04 | Kaliningrad region | East Prussia's label changes |
+
+The Chronicle keeps every line of history for the whole game; other news is trimmed to the latest 150.
 
 **The Soviet path** (as it happened): 1940-08-03 annexation (Western markets close, only the Union remains); 1940-11-06 the rest of the Vilnius region; 1941-06-14 deportations; 1941-06-22 German occupation and the Holocaust (war: output ×0.6, taxes halved, no plan); 1944-07-13 Soviet return; 1945-01-28 Klaipėda back; 1945-05-09 war ends; 1947 card: collectivization (at once: village fields −15% until 1955, then +15%; or slowly: Party trust −15, food plan ×1.2); 1948-05-22 and 1949-03-25 deportations; 1953-03-05 Stalin dies; Union projects as cards in 1955 (hydro dam near Kaunas by 1960), 1960 (power station near Kaišiadorys by 1962), 1974 (nuclear plant near Zarasai by 1983); 1988-06-03 Sąjūdis; 1989-08-23 Baltic Way; 1990-03-11 independence restored; 1990-04-18 to 07-02 Soviet blockade; 1991-09-06 recognition; 1993-08-31 last troops leave; 2004-05-01 European Union.
 

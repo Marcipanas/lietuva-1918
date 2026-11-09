@@ -16,9 +16,14 @@ Run: python3 -I tools/geo/build_regions.py <download dir> tools/geo/geo.json too
     Tverečius, Daugėliškis, Rimšė, Šalčininkai, Dieveniškės, Marcinkonys, Rudnia, Druskininkai.
 Each region is widened by about a kilometre where it meets the land outside Lithuania, so that no cell along today's border
 is left out by the simplified outlines; inside Lithuania its lines are exact. The Klaipėda Region comes widened the same way
-(kr): GEO_KR stays the outline the 1918 map was built with."""
+(kr): GEO_KR stays the outline the 1918 map was built with.
+
+Outside Lithuania, one line of the old maps is gone from today's: the border of East Prussia with the Suwałki region, which
+splits today's Poland on the map. Its south (ep) was German until 1945. Today's Warmian-Masurian Voivodeship keeps that line
+in its border with Podlaskie (checked against 18 villages on both sides, from Żytkiejmy and Wiżajny to Prostki and Grajewo);
+west of 20.3 degrees it also takes in Lubawa, which was Polish between the wars, so it is cut there (off the map)."""
 import json, sys
-from shapely.geometry import shape, Polygon
+from shapely.geometry import shape, Polygon, box
 from shapely.ops import unary_union
 
 DL, GEO, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -61,6 +66,9 @@ def widen(g, others):
     """Grow g by about a kilometre into the land outside Lithuania, never into the rest of Lithuania or another region."""
     return g.union(g.buffer(0.012).difference(LT)).difference(unary_union([core] + others)).buffer(0)
 R = {'kr': widen(KR, [PAL, V39, V40]), 'pal': widen(PAL, [KR, V39, V40]), 'v39': widen(V39, [KR, PAL, V40]), 'v40': widen(V40, [KR, PAL, V39])}
+WARMIA_MASURIA = 223408
+PLN = unary_union([Polygon(r) for r in G['land_pl']]).buffer(0)
+EP = adm(WARMIA_MASURIA).intersection(PLN).intersection(box(20.3, 53.0, 24.0, 55.0)).buffer(0)
 r4 = lambda c: [round(c[0], 4), round(c[1], 4)]
 def polys(g):
     """[{o: outer ring, h: holes}] in [lon, lat]"""
@@ -74,5 +82,7 @@ def polys(g):
 km2 = lambda g: round(g.area * 63.6 * 111.3)
 print('inside Lithuania: v39', km2(V39), 'km2, v40', km2(V40), 'km2, pal', km2(PAL), 'km2')
 res = {k: polys(g) for k, g in R.items()}
+res['ep'] = polys(EP)
+print('East Prussia\'s part of today\'s Poland on the map: ep', km2(EP.intersection(box(20.75, 53.765, 27.04, 56.55))), 'km2')
 json.dump(res, open(OUT, 'w'), ensure_ascii=False)
 print('wrote', OUT, {k: [(len(w['o']), len(w['h'])) for w in v] for k, v in res.items()})
