@@ -3,11 +3,11 @@
 let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
-  S={v:6,day:0,funds:3000,inc:0,era:1,speed:1,kr:true,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
+  S={v:6,day:0,funds:3000,inc:0,era:1,speed:1,own:startOwners(),evv:2,nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
     towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'nat',cam:null,series:[]};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
-  if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else genWorld();
+  if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else{genWorld();settleOwners()}
   analyze();
   HIST_ROUTES.forEach(([a,b,m,vt,n])=>addRoute(tIdx(a),tIdx(b),m,vt,n,true));
   S.log=[
@@ -36,18 +36,24 @@ function decWorld(o){S.nodes=o.nodes.map(a=>({id:a[0],x:a[1],z:a[2]}));const N=n
 function encStartMap(){return Object.assign({gid:S.gid,nid:S.nid,lid:S.lid,towns:S.towns.map(t=>[t.id,t.n,t.reg,(t.capital?1:0)|(t.orig?2:0)|(t.lock?4:0)|(t.kr?8:0)|(t.vil?16:0),
   r2(t.R),r2(t.x),r2(t.z),t.d,t.pop0,t.stock])},encWorld())}
 function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
-  S.towns=W.towns.map(a=>{const f=a[3];return newTown(a[0],a[1],a[5],a[6],{reg:a[2],capital:f&1,orig:f&2?1:0,lock:f&4?1:0,kr:f&8?1:0,vil:f&16?1:0,R:a[4],d:a[7],pop0:a[8],pop:f&4?0:a[8],stock:{...a[9]}})});
-  decWorld(W)}
+  S.towns=W.towns.map(a=>{const f=a[3];return newTown(a[0],a[1],a[5],a[6],{reg:a[2],capital:f&1,orig:f&2?1:0,kr:f&8?1:0,vil:f&16?1:0,R:a[4],d:a[7],pop0:a[8],pop:a[8],stock:{...a[9]}})});
+  decWorld(W);settleOwners()}
 /* Towns are saved without what every day recomputes (dem, ate, and the made, used and growth figures the dashboards show),
    without empty stock, and without the 1918 descriptions, which come back from the start map. */
 const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
-const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us']);
+const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg']);
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
   o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
 /* Fields added after a save format was fixed get their defaults here, so older saves of the same format keep loading. */
 function restore(o){const W={nodes:o.nodes,edges:o.edges,bld:o.bld,lots:o.lots,tf:o.tf};S=o;delete S.tf;S.series=S.series||[];
   const desc=new Map(typeof WORLD1918!=='undefined'&&WORLD1918?WORLD1918.towns.map(a=>[a[0],a[7]]):[]);
-  S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};t.mk={};t.us={};t.gr=0;if(t.d===undefined)t.d=desc.get(t.id)||''});decWorld(W)}
+  S.towns.forEach(t=>{t.dem=t.dem||{};t.ate=t.ate||{};t.stock=t.stock||{};t.dl=t.dl||{};t.mk={};t.us={};t.gr=0;if(t.d===undefined)t.d=desc.get(t.id)||''});
+  if(!S.own)oldOwners();if(S.evv!==2)oldEvents();decWorld(W);settleOwners()}
+/* Saves from before 0.8 kept the old map of Lithuania: Palanga and the Vilnius region Lithuanian, Klaipėda by the old flags.
+   Their history goes on from where it was: every event up to today counts as passed, whatever the list held then. */
+function oldOwners(){const today=ymd(S.day),kr=S.kr?(S.hist.lost?'de':today>='1920-02-15'?'al':'de'):'lt';
+  S.own=Object.assign(startOwners(),{kr,pal:'lt',vr:'lt',vr2:'lt',by:today>='1939-09-17'?'by':today>='1920-10-09'?'pl':'by',ru:today>='1946-07-04'?'ru':'de'});delete S.kr}
+function oldEvents(){const today=ymd(S.day);S.ev={};HEV.forEach(e=>{if(e.d<=today)S.ev[e.id]=1});S.evv=2}
 const SAVE_NUM=(k,v)=>typeof v==='number'&&!Number.isInteger(v)?Math.round(v*1e4)/1e4:v;
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(serialize(),SAVE_NUM))}catch(e){}lastSave=Date.now()}
 /* the frame loop saves at most every 20 seconds: the map makes a save of a few hundred KB */
@@ -78,7 +84,7 @@ function room(t,r){return Math.max(0,(t.cap||STORE_BASE)-(t.stock[r]||0))}
 function addRoute(a,b,mode,vt,n,free){if(a<0||b<0||a===b)return null;const r={id:S.rid++,a,b,mode,vt,n,ab:'auto',ba:'auto',pax:false};S.routes.push(r);if(!free)S.stats.routesMade++;routeEval(r);return r}
 function routePath(r){return pairPath(r.mode,r.a,r.b)}
 function routeEval(r){const p=routePath(r),V=VT[r.vt],A=S.towns[r.a],B0=S.towns[r.b];r.ok=false;r.why='';r.len=0;r.cap=0;r.trip=0;
-  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){r.why=`${(A.lock?A:B0).n} is not part of Lithuania`;return}
+  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){const X=A.lock?A:B0;r.why=`${X.n} belongs to ${OWNERS[S.own[X.rg]]||'another country'}`;return}
   if(!p){r.why=r.mode==='rail'?'No railway between their stations':'No road between them';return}
   if(V.elec&&p.lv<2){r.why='Electric trains need electric railway all the way';return}
   const sf=r.mode==='road'&&r.vt!=='cart'?ROADT[p.lv].spd:1,trips=V.spd*sf/(2*p.len+TRIP_OVERHEAD);r.len=p.len;r.trip=1/trips;r.cap=r.n*V.cap*trips;r.ok=true}
@@ -109,8 +115,8 @@ function useInputs(b,e,st,dem,fill,us){const T0=BT[b.t];if(!T0.in)return 1;const
   for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const q=(st[r]||0)/need;if(q<ir){ir=q;b.lack=r}}}
   ir=clamp(ir,0,1);for(const r in T0.in){const q=T0.in[r]*im*e*ir;st[r]=(st[r]||0)-q;us[r]=(us[r]||0)+q}return ir}
 function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
-const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall',locked:'Klaipėda joins Lithuania in 1923'};
-function naTxt(na){return na==='locked'&&S.hist.lost?'The Klaipėda Region belongs to Germany':NA_TXT[na]||'Not connected'}
+const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall'};
+function naTxt(b){return b.na==='locked'?heldTxt(rgnAt(b.x,b.z)):NA_TXT[b.na]||'Not connected'}
 let BYT=[];
 function phase1(ti){const t=S.towns[ti];let house=0,jobs=0,cap=STORE_BASE,sch=0,cli=0,pol=0,hn=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(b.t==='house'){house+=houseCap(b);pol+=polAt(b.x,b.z);hn++}else if(T0.w&&b.on)jobs+=T0.w;
@@ -174,7 +180,29 @@ function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.f
     t.hint='No room to grow: zone more land along its streets';return}}
 
 /* ---------- history, chance and ministry tasks ---------- */
-function unlockKla(){S.kr=false;S.towns.forEach(t=>{if(t.kr&&t.lock){t.lock=0;t.pop=t.pop0;t.h=62}});NET.dirty=true;WV.kr++}
+/* ---------- who holds which land ----------
+   S.own: the holder of each part of today's Lithuania (REGIONS) and of each neighbour's land (lv, by, pl, ru). */
+function heldTxt(rg){const R0=REGIONS[rg],o=S.own[rg];return !R0?'Outside Lithuania':o==='al'?`${R0.n} is under Allied rule`:`${R0.n} belongs to ${OWNERS[o]}`}
+/* Each settlement's part of the country, from where it stands; its lock follows the holder. */
+function settleOwners(){S.towns.forEach(t=>{t.rg=rgnAt(...landNear(t.x,t.z))});splitAtRegions();
+  S.towns.forEach(t=>{t.lock=t.rg&&S.own[t.rg]!=='lt'?1:0});fixCapital();NET.dirty=true;WV.own++}
+/* Kaunas is the temporary capital while Vilnius is held by others. */
+function fixCapital(){const V0=S.towns[tIdx('vil')],K=S.towns[tIdx('kau')],want=V0&&!V0.lock?V0:K;if(!want)return;S.towns.forEach(t=>{if(t.capital&&t!==want)t.capital=0});want.capital=1}
+function capital(){return S.towns.find(t=>t.capital)||S.towns[0]}
+/* Hand a part of Lithuania or a neighbour's land to a new holder. Returns what Lithuania lost or gained there:
+   {n settlements, pop thousands, b buildings}. Towns keep what they had and wait, locked, until the land comes back. */
+function setOwner(rg,own){const was=S.own[rg],out={n:0,pop:0,b:0};if(was===own)return out;S.own[rg]=own;
+  if(REGIONS[rg]){const lose=was==='lt',gain=own==='lt';
+    if(lose||gain){splitAtRegions();
+      S.towns.forEach((t,n)=>{if(t.rg!==rg)return;out.n++;out.pop+=Math.max(t.pop,t.pop0);out.b+=S.bld.filter(b=>b.town===n&&b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark').length;
+        if(gain){t.lock=0;t.pop=Math.max(t.pop,t.pop0);t.h=Math.max(t.h,55);t.lastWarn=S.day}else t.lock=1});
+      S.deals=S.deals.filter(d=>S.towns[d.ti]&&!S.towns[d.ti].lock);fixCapital()}}
+  NET.dirty=true;WV.own++;return out}
+/* The eras ask less of a smaller Lithuania: the share of the 1918 residents and towns that live in the land it holds now,
+   against the land it held at the start. */
+function landShare(){let p=0,p0=0,n=0,n0=0;const st=startOwners();
+  S.towns.forEach(t=>{const base=!t.rg||st[t.rg]==='lt';if(base){p0+=t.pop0;if(!t.vil)n0++}if(!t.lock){p+=t.pop0;if(!t.vil)n++}});
+  return {pop:clamp(p0?p/p0:1,0.6,1.3),towns:clamp(n0?n/n0:1,0.6,1.3)}}
 function pick(a){return a[Math.floor(Math.random()*a.length)]}
 function activeIdx(){return S.towns.map((t,n)=>n).filter(n=>!S.towns[n].lock)}
 const REV=[
@@ -191,11 +219,11 @@ const OBJ=[
   {id:'food3',t:'Give a town three kinds of food',r:800,ok:()=>S.towns.some(t=>!t.lock&&t.vari>=3)},
   {id:'tel',t:'Bring the railway to Telšiai (it came in 1926)',r:800,ok:()=>NET.rail.has(tIdx('tel'))},
   {id:'wh',t:'Build a warehouse',r:300,ok:()=>S.bld.some(b=>b.t==='warehouse')},
-  {id:'bir',t:'Link Biržai to Vilnius by rail or paved road',r:600,ok:()=>NET.linked.has(tIdx('bir'))},
+  {id:'bir',t:'Link Biržai to the capital by rail or paved road',r:600,ok:()=>NET.linked.has(tIdx('bir'))},
   {id:'school',t:'Open a school',r:400,ok:()=>S.bld.some(b=>b.t==='school')},
   {id:'town',t:'Found a new town',r:1000,ok:()=>S.towns.some(t=>!t.orig)},
   {id:'p800',t:'Reach 800k residents',r:1500,ok:()=>totals().pop>=800},
-  {id:'kla',t:'Link Klaipėda to the railways of Lithuania after it joins in 1923 (done in 1932, through Telšiai)',r:1500,ok:()=>NET.rail.has(tIdx('kla'))},
+  {id:'kla',t:'Link Klaipėda to the railways of Lithuania once the region is Lithuanian (it was done in 1932, through Telšiai)',r:1500,ok:()=>NET.rail.has(tIdx('kla'))},
   {id:'port',t:'Sell goods through the port',r:800,ok:()=>S.stats.portSales>0},
   {id:'trade',t:'Sell goods abroad through a border post or a port',r:600,ok:()=>S.deals.some(d=>d.dir==='out'&&d.done>0)},
   {id:'era2',t:'Enter the Industrialization era',r:2000,ok:()=>S.era>=2},
@@ -207,7 +235,7 @@ function tick(){
   if(NET.dirty)analyze();
   S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);
   RES.forEach(r=>{const base=RI[r].p*depAt(r);let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
-  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b.na)}});
+  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b)}});
   act.forEach(n=>{before[n]={...S.towns[n].stock};before[n].pop=S.towns[n].pop;phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
@@ -227,15 +255,16 @@ function tick(){
   /* a weekly sample of residents and treasury for the trend charts; halved in resolution when it grows long */
   if(S.day%7===0){const L0=S.series||(S.series=[]);L0.push([S.day,Math.round(t.pop*10)/10,Math.round(S.funds)]);if(L0.length>520)S.series=L0.filter((x,i)=>i%2===0||i===L0.length-1)}
   [750,1000,1500,2000,2500].forEach(x=>{if(t.pop>=x&&!S.ms['p'+x]){S.ms['p'+x]=1;log(`${popStr(x)} people now live in Lithuania's towns and villages.`,'good')}});
-  if(!S.won&&S.era===3&&t.pop>=GOAL_POP&&t.linked===t.towns&&t.lit){S.won=true;log(`Every town is linked and lit, and ${popStr(GOAL_POP)} people live in the towns and villages. The plan is fulfilled.`,'good')}
+  if(!S.won&&S.era===3&&t.pop>=goalPop()&&t.linked===t.towns&&t.lit){S.won=true;log(`Every town is linked and lit, and ${popStr(goalPop())} people live in the towns and villages. The plan is fulfilled.`,'good')}
 }
+function goalPop(){return Math.round(GOAL_POP*landShare().pop/10)*10}
 /* National totals. towns and linked count towns only; villages are counted apart. */
 function totals(){const t={pop:0,towns:0,vils:0,vpop:0,linked:0,lit:true,stock:{},dl:{}};RES.forEach(r=>{t.stock[r]=0;t.dl[r]=0});
   S.towns.forEach((x,n)=>{if(x.lock)return;t.pop+=x.pop;if(x.vil){t.vils++;t.vpop+=x.pop}else{t.towns++;if(NET.linked.has(n))t.linked++;if(x.pr<0.95)t.lit=false}
     RES.forEach(r=>{t.stock[r]+=x.stock[r]||0;t.dl[r]+=x.dl[r]||0})});return t}
-function eraReq(){const n=S.era+1;if(n>3)return null;const R0=ERAS[n].req,t=totals(),L0=[];
-  L0.push({t:`${popStr(R0.pop)} residents`,ok:t.pop>=R0.pop,q:popStr(t.pop)});
-  L0.push({t:`${R0.linked} towns linked to Vilnius by rail or paved road`,ok:t.linked>=R0.linked,q:t.linked+' of '+t.towns});
+function eraReq(){const n=S.era+1;if(n>3)return null;const R0=ERAS[n].req,t=totals(),L0=[],sh=landShare(),pop=Math.round(R0.pop*sh.pop/10)*10,lk=Math.round(R0.linked*sh.towns);
+  L0.push({t:`${popStr(pop)} residents`,ok:t.pop>=pop,q:popStr(t.pop)});
+  L0.push({t:`${lk} towns linked to ${capital().n} by rail or paved road`,ok:t.linked>=lk,q:t.linked+' of '+t.towns});
   if(R0.bricks)L0.push({t:`${R0.bricks} bricks in stock`,ok:t.stock.bricks>=R0.bricks,q:fmt(t.stock.bricks)});
   if(R0.textiles)L0.push({t:`${R0.textiles} linen cloth in stock`,ok:t.stock.textiles>=R0.textiles,q:fmt(t.stock.textiles)});
   L0.push({t:`${fmt(R0.lt)} Lt to invest`,ok:S.funds>=R0.lt,q:fmt(S.funds)});return L0}

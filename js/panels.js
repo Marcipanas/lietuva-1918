@@ -18,7 +18,7 @@ const fixBtn=f=>`<button class="btn sm${f.b?' ghost':''}" ${attrs(f.a)}>${f.a.ac
 
 /* ---------- the sheet header ---------- */
 function sheetHead(){const s=VIEW.sel;let eb='',tt='',x='',back='';
-  if(S.tab==='sel'&&s&&s.kind==='t'&&S.towns[s.ti]){const t=S.towns[s.ti];eb=(t.capital?'Capital':townPort(s.ti)?'Sea port':t.vil?'Village':'Town')+(t.reg?' · '+t.reg:'');tt=t.n;
+  if(S.tab==='sel'&&s&&s.kind==='t'&&S.towns[s.ti]){const t=S.towns[s.ti];eb=(t.capital?(t.id==='vil'?'Capital':'Temporary capital'):townPort(s.ti)?'Sea port':t.vil?'Village':'Town')+(t.reg?' · '+t.reg:'');tt=t.n;
     x=`<button class="ib" data-act="focus" data-ti="${s.ti}" aria-label="Show on map">${ic('target')}</button>`}
   else if(S.tab==='sel'&&s&&s.kind==='b'&&BMAP.get(s.id)){const b=BMAP.get(s.id),t=b.town>=0?S.towns[b.town]:null;
     eb=b.lm&&LANDMARKS[b.lm]?'Landmark · '+LANDMARKS[b.lm].town:t?t.n+(b.cd?' · '+Math.round(b.cd)+' km by road':''):'No town';tt=bName(b)}
@@ -77,11 +77,21 @@ function marketTiles(ti){const t=S.towns[ti],port=townPort(ti),cap=t.cap||STORE_
     <div class="ta">${v(ti+'s'+r,fmt(s))}<small>${v(ti+'d'+r,fd(t.dl[r]||0)+'/d','sign')}</small></div><div class="sbar">${w(ti+'f'+r,Math.round(Math.min(1,s/cap)*100))}</div>
     ${S.hist.path==='soviet'?'':`<div class="tb"><button class="btn sm ghost" data-act="sell" data-ti="${ti}" data-r="${r}">Sell ${v(ti+'sv'+r,'+'+fmt(sellVal(ti,r)))}</button>${canBuyHere(ti,r)
       ?`<button class="btn sm ghost" data-act="buy" data-ti="${ti}" data-r="${r}">Buy ${v(ti+'bv'+r,'−'+fmt(buyVal(ti,r)))}</button>`:`<span class="note">Import via a port or border post</span>`}</div>`}</div>`});return h+'</div>'}
+/* Short names of who holds land, for lists and map labels */
+const OWN_SHORT={de:'Germany',al:'Allies',lv:'Latvia',pl:'Poland',by:'USSR',ru:'USSR',lt:'Lithuania'};
+/* A settlement in land others hold: who holds it and since when. It keeps what it had and comes back with its land. */
+function lockHTML(t){const o=S.own[t.rg],y=dOf(S.day).getUTCFullYear(),wait='<p class="note">Nothing can be built here while others hold it. What you built stays, and works again if the land comes back.</p>';
+  if(t.rg==='kr'){if(o==='al')return `<p class="lede">Under Allied rule since 15 February 1920, after Germany gave the region up at Versailles. Lithuania and the Allies argue over its future.</p>
+      <p class="note">Its railway runs only to Tilsit in Germany. If the region joins Lithuania, link its port by a railway from Telšiai, as built in 1932, or by a paved road.</p>${wait}`;
+    return y>=1939?`<p class="lede">Part of Germany since March 1939.</p>${wait}`
+      :`<p class="lede">Part of Germany: the north of East Prussia, the land Lithuanians call Lithuania Minor. The peace treaty after the war will decide its future.</p>${wait}`}
+  if(t.rg==='pal')return `<p class="lede">Palanga has belonged to Courland since 1819, and so now to Latvia. Lithuania claims it as its only piece of open sea coast.</p>${wait}`;
+  if(o==='pl')return `<p class="lede">Held by Poland since October 1920. Lithuania never accepts the loss and keeps no relations with Poland.</p>${wait}`;
+  if(o==='by')return `<p class="lede">Held by the Soviet Union since September 1939, as part of Soviet Belarus.</p>${wait}`;
+  return `<p class="lede">${heldTxt(t.rg)}.</p>${wait}`}
 function townPanel(ti){const t=S.towns[ti];
-  if(t.lock)return S.hist.lost?`<p class="lede">Part of Germany since March 1939.</p>`
-    :`<p class="lede">Under Allied administration since 1920. On 16 February 1923 the region is transferred to Lithuania, bringing the country its only sea port.</p>
-    <p class="note">Its railway runs only to Tilsit in Germany. Plan a railway from Telšiai, as built in 1932, or a paved road, to link the port once the region joins. You can’t build inside the region until then.</p>`;
-  const iss=townIssues(ti),link=t.capital?'The capital':NET.rail.has(ti)?'Linked by rail':NET.linked.has(ti)?'Linked by paved road':t.vil?'Village':'Not linked to Vilnius';
+  if(t.lock)return lockHTML(t);
+  const iss=townIssues(ti),link=t.capital?(t.id==='vil'?'The capital':'The temporary capital'):NET.rail.has(ti)?'Linked by rail':NET.linked.has(ti)?'Linked by paved road':t.vil?'Village':'Not linked to '+capital().n;
   let h=`<div class="tsum"><div class="tpop"><b>${v(ti+'p',popStr(t.pop))}</b><span>residents · ${v(ti+'gr',trendTxt((t.gr||0)*30))}</span></div>
     <div class="tmor"><span>Morale ${v(ti+'h',Math.round(t.h)+'%')}</span><div class="mbar">${w(ti+'hb',Math.round(t.h))}</div></div>
     <span class="chip"${sc(ti+'nc',t.note==='Thriving'||t.note==='Content'?'good':t.note==='Hungry'||t.note==='Cold homes'||t.note==='Blackouts'?'bad':'warn')}>${v(ti+'n',t.note||'Content')}</span>
@@ -117,7 +127,7 @@ function buildingPanel(b){const T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
   const p=Math.round(b.eff*100);let up='';
   if(!T0.noUp){if(b.lv>=3)up=`<span class="note">Fully modernized</span>`;else if(S.era<b.lv+1)up=`<span class="note">Lv ${b.lv+1} in the ${ERAS[b.lv+1].n} era</span>`;
     else up=`<button class="btn" data-act="up" data-id="${b.id}">${ic('up')}Modernize to Lv ${b.lv+1} <span class="bv">${costTxt(upCost(b))}</span></button>`}
-  const status=b.town<0?naTxt(b.na):null,staffed=T0.w||T0.pow;
+  const status=b.town<0?naTxt(b):null,staffed=T0.w||T0.pow;
   /* the town's problems that hold this building back, with their fixes */
   const key=b.why==='Storage full'?'full':b.why==='Short of workers'?'staff':b.lack&&b.why&&b.why.startsWith('Missing ')?'in:'+b.lack:'',iss=key&&b.on?townIssues(b.town).filter(x=>x.k===key):[];
   return `${T0.d?`<p class="lede">${T0.d}</p>`:''}
@@ -171,8 +181,8 @@ function townsBlock(){const sort=VIEW.tsort||'need',heatOn=seasonOf(S.day).heat>
   if(sort==='need')L0.sort((a,b)=>al(b)-al(a)||S.towns[b].pop-S.towns[a].pop);else if(sort==='size')L0.sort((a,b)=>S.towns[b].pop-S.towns[a].pop);else L0.sort((a,b)=>S.towns[a].n.localeCompare(S.towns[b].n,'lt'));
   const show=VIEW.tall?L0:L0.slice(0,10),vils=S.towns.map((t,n)=>n).filter(n=>S.towns[n].vil&&!S.towns[n].lock),vp=vils.filter(n=>al(n)>0);
   const row=n=>{const t=S.towns[n],a=al(n);return `<li><button class="trow" data-act="seltown" data-ti="${n}"><i class="dot"${sc('td'+n,a>=2?'bad':a===1?'warn':a<0?'good':'off')}></i><b>${t.n}</b>
-    <span class="tp">${t.lock?(S.hist.lost?'Germany':'1923'):v('tw'+n,popStr(t.pop))}</span><span class="ts">${t.lock?'':v('tn'+n,t.note||'')}</span>${NET.linked.has(n)||t.capital?ic('rail','on'):ic('rail','off')}</button></li>`};
-  return `<div class="sec"><h3>Towns<span>${S.towns.filter((t,n)=>!t.vil&&NET.linked.has(n)).length} of ${L0.length} linked to Vilnius</span></h3>
+    <span class="tp">${t.lock?OWN_SHORT[S.own[t.rg]]||'':v('tw'+n,popStr(t.pop))}</span><span class="ts">${t.lock?'':v('tn'+n,t.note||'')}</span>${NET.linked.has(n)||t.capital?ic('rail','on'):ic('rail','off')}</button></li>`};
+  return `<div class="sec"><h3>Towns<span>${S.towns.filter((t,n)=>!t.vil&&NET.linked.has(n)).length} of ${L0.filter(n=>!S.towns[n].lock).length} linked to ${capital().n}</span></h3>
     <div class="seg" role="group" aria-label="Sort towns">${[['need','Needs help'],['size','Largest'],['name','A to Z']].map(([k,l])=>`<button data-act="tsort" data-k="${k}" aria-pressed="${sort===k}">${l}</button>`).join('')}</div>
     <ul class="tlist">${show.map(row).join('')}</ul>
     ${L0.length>10?`<button class="btn sm ghost wide" data-act="tall">${VIEW.tall?'Show fewer':'Show all '+L0.length+' towns'}</button>`:''}
@@ -186,7 +196,7 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
   h+=goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day');
   h+=townsBlock();
   h+=S.won?`<div class="goal"><b>Plan fulfilled</b><span>Every town is linked and lit, and ${popStr(t.pop)} people live in them.</span></div>`
-    :`<div class="goal"><b>Goal: light up Lithuania</b><span>Reach the Modern era with every town linked to Vilnius by rail or paved road and powered, and ${popStr(GOAL_POP)} residents.</span></div>`;
+    :`<div class="goal"><b>Goal: light up Lithuania</b><span>Reach the Modern era with every town linked to the capital by rail or paved road and powered, and ${popStr(goalPop())} residents.</span></div>`;
   const open=OBJ.filter(o=>!S.obj[o.id]).slice(0,4),nd=OBJ.length-OBJ.filter(o=>!S.obj[o.id]).length;
   h+=`<div class="sec"><h3>Ministry tasks<span>${nd} of ${OBJ.length} done</span></h3><ul class="objs">${open.map(o=>`<li>${ic('star')}<span>${o.t}</span><b>+${fmt(o.r)} Lt</b></li>`).join('')}</ul></div>`;
   h+=`<div class="ebox" id="era"><div><div class="eyebrow">Current era</div><div class="enow">${ERAS[S.era].n}</div></div><div class="eras">${[1,2,3].map(n=>`<div class="es${n<=S.era?' done':''}${n===S.era?' now':''}" style="--ec:${ERAS[n].c}"><i></i><b>${ERAS[n].n}</b></div>`).join('')}</div>`;
@@ -202,13 +212,18 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li>Workers fill local jobs first, then walk to towns within ${WALK_KM} km by road, or ride routes set to carry commuters.</li>
     <li>Factories and kilns pollute homes within ${POL_R} km. Schools raise output; clinics lift morale and growth.</li>
     <li>Buildings join a town when a road links them to its town hall within ${TERRITORY} km. Villages have few workers, so workplaces join a village only when no town is near.</li>
-    <li>Dirt roads join every town and village. A town is linked to Vilnius when a railway or a paved road from Vilnius reaches its streets. Railways and paved roads also carry the power grid.</li>
+    <li>Dirt roads join every town and village. A town is linked to the capital when a railway or a paved road from it reaches its streets: Vilnius, or Kaunas while others hold Vilnius. Railways and paved roads also carry the power grid.</li>
+    <li>The map shows the borders of the day. Land a neighbour holds, like the Klaipėda Region until 1923, can’t be built on, and nothing travels through it. Its towns wait, with all you built there, until it comes back.</li>
     <li>On the map: one finger moves it, two fingers zoom, turn and tilt. With a tool, tap to act; hold and drag to draw or paint.</li>
     <li>Keys: R road, T rail, Z zone, X remove, B build, Esc cancel, Enter build, Backspace undo, Space pause, [ and ] turn, Page Up and Down tilt, N north up.</li>
     <li><button class="link sm" data-act="tutorial">Show the tutorial again</button></li></ul></details>`;
   h+=S.confirmReset?`<div class="row"><span class="note">Start again from 1918? This game will be lost.</span><button class="btn sm" data-act="reset2">Start again</button><button class="btn sm ghost" data-act="cancelr">Keep playing</button></div>`
     :`<div class="row"><button class="btn sm ghost" data-act="reset">New game</button></div>`;return h}
-function chronPanel(){return `<ul class="chron">${S.log.map(e=>`<li class="${e.k}"><time>${e.yo?dOf(e.d).getUTCFullYear():dateStr(e.d)}</time><p>${e.t}</p></li>`).join('')}</ul>`}
+/* The decisions taken so far, each marked as history went or not, then the chronicle itself */
+function chronPanel(){const D=decisions(),as=D.filter(x=>x.as===1).length,off=D.filter(x=>x.as===0).length;
+  const dec=D.length?`<details class="more" data-k="decisions"${D.length<=3?' open':''}><summary>Your decisions<span>${as} as in history${off?`, ${off} not`:''}</span></summary><ul class="decs">${D.map(x=>
+    `<li${sc('dc'+x.id,x.as===1?'good':x.as===0?'warn':'off')}><time>${x.when.length===4?x.when:dateStr(Math.round((Date.parse(x.when)-START)/864e5))}</time><b>${x.t}</b><span>${x.o}${x.failed?' (failed)':''}</span><em>${x.as===1?'As in history':x.as===0?'Not as in history':'History was mixed'}</em></li>`).join('')}</ul></details>`:'';
+  return dec+`<ul class="chron">${S.log.map(e=>`<li class="${e.k}"><time>${e.yo?dOf(e.d).getUTCFullYear():dateStr(e.d)}</time><p>${e.t}</p></li>`).join('')}</ul>`}
 
 /* ---------- foreign trade, and the Soviet plan ---------- */
 const MKT_ORDER=['gb','de','lv','pl','su'];
@@ -248,5 +263,5 @@ function planPanel(){const h=S.hist,p=S.plan;let o=`<h3 class="ph">${p?p.name+':
   return o}
 function secBlock(){const h=S.hist;if(h.path==='soviet')return `<div class="sec"><h3>Soviet rule<span>since 1940</span></h3><p class="note">Party trust ${v('trs',Math.round(h.trust))} of 100. Fulfil the plan and Moscow invests; fail it and inspectors come.</p></div>`;
   return `<div class="sec"><h3>Security<span>${h.path==='neutral'?'a neutral state':'can turn back ultimatums'}</span></h3><div class="secb"><b>${v('sec',Math.round(h.sec))}</b><span>of 100</span><div class="mbar">${w('secw',Math.round(h.sec))}</div></div>
-    <p class="note">Allies, an army and trade with Britain make Lithuania harder to bully. Refusing the ultimatums of 1938 to 1940 works only with enough security.</p>
+    <p class="note">Allies, an army and trade with Britain make Lithuania harder to bully. Holding Vilnius in 1920 and refusing the ultimatums of 1938 to 1940 work only with enough security.</p>
     <div class="row"><span class="note">Army budget</span>${[0,10,25,50].map(q=>`<button class="chipb${h.def===q?' on':''}" data-act="def" data-q="${q}">${q?q+' Lt a day':'None'}</button>`).join('')}</div>${h.ally?`<p class="note">Baltic alliance: ${h.ally} Lt a day.</p>`:''}</div>`}

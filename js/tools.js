@@ -371,8 +371,9 @@ function rotateGhost() {
 /* cells near the border, the coast, a lake or any water, worked out once: the quick test before the exact one */
 const NEARM = {};
 function nearMask(kind) {
+  if (NEARM.v !== WV.own) { for (const q in NEARM) delete NEARM[q]; NEARM.v = WV.own; }
   if (NEARM[kind]) return NEARM[kind];
-  const src = kind === 'border' ? k => CTY[k] > 1 : kind === 'coast' ? k => TT[k] === T_SEA || TT[k] === T_LAGOON : kind === 'lake' ? k => TT[k] === T_LAKE : k => isWaterT(TT[k]);
+  const src = kind === 'border' ? k => CTY[k] > 1 || heldOff(k) : kind === 'coast' ? k => TT[k] === T_SEA || TT[k] === T_LAGOON : kind === 'lake' ? k => TT[k] === T_LAKE : k => isWaterT(TT[k]);
   const reach = Math.ceil((kind === 'border' ? 3 : kind === 'lake' ? 0.8 : kind === 'coast' ? 0.7 : 0.6) / CELL) + 1, d = new Uint8Array(GW * GH).fill(255), q = [];
   for (let k = 0; k < GW * GH; k++) if (src(k)) { d[k] = 0; q.push(k); }
   for (let h = 0; h < q.length; h++) {
@@ -388,7 +389,7 @@ function nearMask(kind) {
 }
 function quickNeed(need, x, z) {
   const f = flagsAt(x, z);
-  if (!(f & F_LT) || ((f & F_KR) && S.kr)) return false;
+  if (!(f & F_LT) || heldOffAt(x, z)) return false;
   if (need === 'border' || need === 'coast' || need === 'lake' || need === 'water') { const k = cellAt(x, z); return k >= 0 && nearMask(need)[k] === 1; }
   if (need === 'clay') { let c = 0; forDisk(x, z, 0.6, k => { if (TF[k] & F_CLAY) c++; }); return c > 0; }
   if (need === 'bog') return !!(f & F_BOG);
@@ -455,7 +456,9 @@ function findGhost(initial) {
     if (d > FIND_R) { const jt = PEND && PEND.jt >= 0 ? S.towns[PEND.jt] : null; toast(`The nearest good spot is ${Math.round(d)} km away${jt ? ', by ' + jt.n : ''}.`); }
   } else {
     setGhost(from[0], from[1]);
-    if (!initial) toast(`No spot for a ${BT[t].n.toLowerCase()} near here.${VIEW.need ? ' The lit ground suits it.' : ''} Try another town.`);
+    /* the search above went 260 km out: no coast at all means others hold all of it (before 1921, or after losing it) */
+    if (BT[t].need === 'coast') toast('Lithuania holds no sea coast now, so a sea port can’t be built.');
+    else if (!initial) toast(`No spot for a ${BT[t].n.toLowerCase()} near here.${VIEW.need ? ' The lit ground suits it.' : ''} Try another town.`);
   }
 }
 

@@ -190,8 +190,8 @@ let cardShown='';
 function showCard(){const el=$('card'),id=S.hist.cards[0];if(id===cardShown&&!el.hidden===!!id)return;cardShown=id||'';
   if(!id){el.hidden=true;document.body.classList.remove('carded');return}
   const c=CARDS[id],sec=Math.round(S.hist.sec);
-  el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${c.txt}</p><div class="opts">${c.opts.map((o,i)=>{const r=o.risk,ok=r&&sec>=r.sec;
-    return `<button class="opt" data-card="${i}"><b>${o.t}</b><span>${o.d}</span>${r?`<em class="${ok?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}</button>`}).join('')}</div></div>`;
+  el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${cardTxt(c.txt)}</p><div class="opts">${c.opts.map((o,i)=>{const r=o.risk,ok=r&&sec>=r.sec;
+    return `<button class="opt${o.h?' hist':''}" data-card="${i}"><b>${o.t}</b><span>${cardTxt(o.d)}</span>${r?`<em class="${ok?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}</button>`}).join('')}</div></div>`;
   el.hidden=false;document.body.classList.add('carded')}
 
 /* ---------- loop & boot ---------- */
@@ -204,8 +204,8 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)autosave();if(S.hist.cards.length){acc=0;save();break}}if(NET.dirty)analyze();showCard();
   VOFF.ty=coverBottom()/2;updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick()}requestAnimationFrame(frame)}
-/* the opening view: Vilnius from the south-west, slightly tilted */
-function camHome(){const v0=S.towns[0];camLoad({x:v0.x+0.2,z:v0.z+0.3,dist:6,yaw:-0.35,pitch:0.74})}
+/* the opening view: the capital from the south-west, slightly tilted */
+function camHome(){const v0=capital();camLoad({x:v0.x+0.2,z:v0.z+0.3,dist:6,yaw:-0.35,pitch:0.74})}
 function start(data){const saved=data&&data.save?data.save:load();let fresh=false;
   if(saved){try{restore(saved)}catch(e){newGame();fresh=true}}else{newGame();fresh=true}
   analyze();S.routes.forEach(routeEval);if(S.cam&&isFinite(S.cam.dist))camLoad(S.cam);else camHome();initScene();

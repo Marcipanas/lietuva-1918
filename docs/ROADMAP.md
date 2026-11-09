@@ -4,10 +4,12 @@ Ordered by value for the game right now. Each item has enough of a spec for an a
 
 ## 1. Trade and history: next steps
 
-Done in v0.5: markets abroad (Britain, Germany, Latvia, Poland, the Union), border posts and ports as gateways, daily deals, the Depression and the German boycott, decision cards from 1930 to 1974, security, the Soviet path with yearly plans, Union projects and Party trust, and a neutral alternative after 1940. Next:
+Done in v0.5: markets abroad (Britain, Germany, Latvia, Poland, the Union), border posts and ports as gateways, daily deals, the Depression and the German boycott, decision cards from 1930 to 1974, security, the Soviet path with yearly plans, Union projects and Party trust, and a neutral alternative after 1940. Done in v0.8: the borders of the day (the Klaipėda Region, the Palanga coast and the Vilnius region change hands), Kaunas as the temporary capital, cards for the volunteers of 1918, Żeligowski in 1920, the Hymans plan, the litas and the Klaipėda revolt, a union-with-Poland path, and a list of decisions in the Chronicle. Next:
 - **Contracts:** markets offer fixed deals ("Britain: 600 dairy within a year at +25%"), shown as cards, with a penalty for missing them.
 - **Trade balance:** exports and imports per year and per market in the Lithuania view, and a chart over time.
-- **More cards** where history offered real choices: the wars of independence (1919–1920), the 1926 coup, land reform details, the neutral path after 1945 (Marshall Plan or not), the 1990s (privatisation, the litas in 1993, joining the EU and NATO).
+- **More cards** where history offered real choices: the Bermontians (1919), the 1926 coup, land reform details, Germany's offer in September 1939 to take Vilnius by force (Lithuania stayed neutral), the neutral path after 1945 (Marshall Plan or not), the 1990s (privatisation, the litas in 1993, joining the EU and NATO).
+- **The occupations of 1919–1920 on the map**, as an option for players who want them: Vilnius Soviet from January 1919 and Polish from April 1919, back in August 1920 (decision 29).
+- **Neighbours under Soviet rule:** after 1940 Latvia keeps its own name and colour, and Soviet Belarus and the Kaliningrad region keep colours of their own. They could share one Soviet colour until 1991, and Latvia's label could follow.
 - **The Soviet path, deeper:** plan targets per town, a Union supply quota for metal and fuel, the Kaunas Sea flooding villages when the dam is built, rural electrification.
 - **Playtest:** how hard the plan feels, whether security 80 by 1940 is fair, and how much the Depression hurts.
 
@@ -34,7 +36,7 @@ Done in v0.7: a phone-first layout (status bar, five views at the bottom, a shee
 
 Done in v0.4: no grid, curved roads and railways with automatic junctions, buildings at any angle, a three.js view with a rotating and tilting camera, shadows, seasons, a field patchwork, animated people, vehicles, smoke, animals and boats. Done in v0.5: half-size towns, 48 towns and about 170 villages with chapels and farmsteads, view culling and far house blocks. Done in v0.6: real borders and neighbours, every town and 362 villages at their real places, the railways and highways of 1918, dirt roads between all settlements, city plans from the real main streets, 13 landmarks. Next, roughly in order of value:
 - **More landmarks and better river data:** Gates of Dawn, Kaunas Cathedral, Biržai castle, Kretinga monastery, Panevėžys; real river courses inside the cities (Natural Earth is bent onto towns but still rough), smaller streams.
-- **Interwar history of the network:** the railways built 1924–1940 (Kazlų Rūda–Šeštokai, Kužiai–Telšiai–Kretinga) and the Žemaičių plentas (1939) as events or as cheaper tasks, and Vilnius's region as Polish 1920–1939 as a choice.
+- **Interwar history of the network:** the railways built 1924–1940 (Kazlų Rūda–Šeštokai, Kužiai–Telšiai–Kretinga) and the Žemaičių plentas (1939) as events or as cheaper tasks. Without the Vilnius region, interwar Lithuania had to build its own lines around it.
 - **Performance with 451 settlements:** a tick is about 8 ms headless; spread `phase2` over days for villages, and merge the dirt road ribbons into chunks so zooming does not rebuild them all.
 - **Gentle hills.** Lithuania is flat but not perfectly: a height field (uplands of Žemaitija and Aukštaitija, river valleys) under the ground, roads and buildings following it.
 - **Better water:** moving reflections, shores, the Curonian Spit dunes.
