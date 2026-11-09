@@ -448,6 +448,8 @@ function histTick() {
     if (e.when && !e.when()) continue;
     const more = e.fx ? e.fx() : '';
     if (e.t) log(typeof more === 'string' && more ? e.t + ' ' + more : e.t, 'hist', e.y);
+    /* events that change the map or the markets also show on screen, by their first sentence */
+    if (e.t && e.fx && NOTES.length < 3) { const i = e.t.indexOf('. '); NOTES.push(i > 0 ? e.t.slice(0, i + 1) : e.t); }
     if (e.card) queueCard(e.card);
   }
   /* security: an army and allies make the country harder to bully */

@@ -49,14 +49,14 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 | `js/sim.js` | Game state `S`, daily `tick()`, routes, labour and commuting, food (with each settlement's own fields), heating, pollution, growth on lots, who holds the land (`setOwner`, `settleOwners`, `capital`, `landShare`), random events, ministry tasks, the chronicle (`log`, which keeps every history line), save and load (`dropOldSaves`) | no |
 | `js/history.js` | Markets abroad (`MARKETS`), gateways (`townGates`, `borderOf`), trade deals (`runDeals`), the timeline (`HEV`) with the border changes, decision cards (`CARDS`, `queueCard`, `pickCard`, `decisions`), security, the Soviet plan and Union projects, `histTick()` | no |
 | `js/models.js` | Low-poly models built with `MB`; `MODEL_FN` per building type (village halls draw as a chapel); house parts and `lotLayout` (farmsteads too); trees, people, animals, vehicles | THREE |
-| `js/scene.js` | Renderer, camera rig, light and shadows, snow shader, ground and field patchwork, water, roads and rails, instanced buildings and trees, smoke, overlays, HTML labels, picking, `draw()` | DOM, THREE |
+| `js/scene.js` | Renderer, camera rig, light and shadows, snow shader, ground and field patchwork, the political colours from far out (`POLTEX`, `POL_U`), water, roads and rails, instanced buildings and trees, smoke, overlays, HTML labels, picking, `draw()` | DOM, THREE |
 | `js/agents.js` | Walking residents, commuters and route vehicles (visual only) | THREE |
 | `js/tools.js` | The tools in world km (`TOOL`, `PEND`, `TRACE`): lines from tapped points (`addPoint`, `undoStep`) planned with `routePieces` into new, used and upgraded stretches; zoning that adds up; removal; the ghost (`setGhost`) and `findSpot`; `doConfirm` | body class only |
 | `js/input.js` | Gestures and keys: one finger moves the map, a tap acts, hold then drag draws or paints, drag the ghost or a line's point | DOM |
-| `js/panels.js` | Sheet HTML as strings, with `v()`/`w()`/`pd()`/`sc()` dynamic fields: header, build menu, town card, building card, routes, country view, trade or plan, chronicle | no writes |
+| `js/panels.js` | Sheet HTML as strings, with `v()`/`w()`/`pd()`/`sc()` dynamic fields: header, build menu, town card, building card, routes, country view, trade or plan, chronicle, and the intro and era cards (`introHTML`, `eraHTML`) | no writes |
 | `js/dash.js` | Dashboards with no DOM: `townIssues` (problems and one-tap fixes), `natIssues`, `goodsRows`, `townAlert` (label dots), `sparkPath` | no |
 | `js/tutorial.js` | First-time hint card (`TUT_STEPS`); the tools report actions with `tutEvent` | DOM |
-| `js/ui.js` | Status bar and speed, bottom navigation, the sheet (`setSheet`, drag), the action bar (`showBar`), `act()` actions, decision card dialog (`showCard`), main loop, `start()` boot | DOM |
+| `js/ui.js` | Status bar and speed, bottom navigation, the sheet (`setSheet`, drag), the action bar (`showBar`), the task pill (`updateTask`), toasts for `NOTES`, `act()` actions, the card dialog for the intro, eras and decisions (`showCard`), main loop, `start()` boot | DOM |
 
 ## Concepts you need before changing code
 
@@ -74,7 +74,9 @@ There is nothing to install. Node 18+ for the tools, any browser with WebGL to p
 - **Panels:** `renderPanel(false)` rebuilds nothing if the HTML structure is unchanged; it only patches values made with `v(key, text)`, widths made with `w(key, pct)`, chart paths made with `pd(key, d)` and states made with `sc(key, state)` (CSS reads `data-c`). A changing number shown without them makes the structure change; the panel then rebuilds at most every 1.5 s, and a button can miss a tap.
 - **Interface layout:** a status bar on top, the map, and a bottom bar with five views (`NAV` in ui.js) that open the sheet: a bottom sheet on phones (`VIEW.sheet` 0 closed, 1 half, 2 full) and a side panel from 960 px. A tool replaces the bottom bar with the action bar (`showBar`). Panels cover the bottom of the view, so the camera's target is drawn in the middle of what stays visible (`VOFF`, `setViewOffset` in scene.js); use `[cam.x, cam.z]` as the centre of the view, not the middle of the canvas.
 - **Tools:** one finger always moves the map. A tap acts; hold and drag draws or paints. Lines are lists of points: never build the planner's raw path, which wanders off existing lines on its 0.5 km cells; `routePieces` replaces those stretches with the network's own way and builds only the rest.
-- **Dashboards:** the day tick leaves made and used goods per town (`t.mk`, `t.us`) and growth (`t.gr`); dash.js turns these and the usual figures (`fed`, `heat`, `house`, `hint`, `pr`, `pol`, buildings' `why`) into problems. A new kind of problem goes in `townIssues`, with a fix that is an `act` the UI already has.
+- **Dashboards:** the day tick leaves made and used goods per town (`t.mk`, `t.us`) and growth (`t.gr`); dash.js turns these and the usual figures (`fed`, `heat`, `house`, `hint`, `pr`, `pol`, buildings' `why`) into problems. A new kind of problem goes in `townIssues`, with a fix that is an `act` the UI already has (`suggestRoute` brings a good from the neighbour with most to spare, `suggestOutlet` sends a surplus to the one that needs it most).
+- **News and cards:** simulation code pushes short texts to `NOTES`, which the interface shows as toasts (never call `toast` from sim or history code). A new game starts paused on the intro card (`S.intro`); a new era opens on its card (`S.eraCard`); decision cards come from `S.hist.cards`. `showCard()` picks which one is up.
+- **Ministry tasks:** `OBJ` in sim.js, easy to hard, with `ok()` and an optional `can()` (the task makes sense now). The map shows `curTask()` above the bottom bar.
 
 ## Recipes
 

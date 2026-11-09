@@ -100,3 +100,15 @@ In February 1918 German troops held all the land around Lithuania (Ober Ost), so
 
 ## 33. A new version starts a new game (2026-11, v0.9)
 The game is early in development, and the owner does not need saves to carry over between versions. `SAVE_KEY` carries the version, and `tools/check.js` makes it match `package.json` and the offline cache. On start the game removes saves of older versions, which would otherwise fill the browser's storage at a few hundred KB each, and says that a new game began. No code reads older saves, so a change to the shape of `S` needs no migration.
+
+## 34. A new game starts paused, on an intro (2026-11, v0.10)
+The owner asked for a short intro: Lithuania has just signed its independence, and the player decides what happens next. A card says so, then the game waits for the player to press play, so a new player can look around, read the first tasks and follow the tutorial without losing time. Vilnius falls in January 1919, under three minutes into a game at 1×; a paused start, a note in the Chronicle and a "Front line" note on the Vilnius region's towns let the player see it coming.
+
+## 35. A political map from far out (2026-11, v0.10)
+In winter snow covered every country alike, and the owner asked for country colours when zoomed out. From about 90 km up, the ground leans to the holders' colours and lifts the snow from land others hold, and fully so from 230 km; Lithuania keeps most of its snow, so the season still shows and Lithuania stands out white against coloured neighbours. Up close the map stays a landscape, with a third less snow on land others hold so its colour shows through. Latvia moved to a blue, since its old tan was close to the Soviet red.
+
+## 36. Growth needs a real surplus (2026-11, v0.10)
+An audit of a game with no player input found 270 of 367 settlements hungry in spring 1919: every village grew on its small starting stock, then ran out and starved back to its 1918 size, and the Chronicle filled with warnings. Growth now needs food coming in faster than it is eaten (or a food filling its store), not just food in stock. The same audit found Kaunas overcrowded on day one (the start map put some of its houses nearer a village hall), cold homes in late August, routes to Vilnius still paying upkeep after it was lost, and a dirt road offered as the fix for an unlinked town although dirt roads never link. All are fixed, and warnings about many places come as one line.
+
+## 37. Direction on the map (2026-11, v0.10)
+A player following only the game's own fixes grew the land Lithuania held from about 550k residents in 1919 to 917k by 1928, but never reached the second era: it needs railways to more towns, which no fix builds. The ministry tasks give that direction, but they sat at the bottom of the Lithuania view. The first task that makes sense now is shown on the map above the bottom bar, tasks run from easy to hard, and a finished task, a population milestone or a history event that changes the map shows as a short note on screen. A new era opens on a card that says what it brings.

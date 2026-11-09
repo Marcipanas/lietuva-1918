@@ -71,6 +71,9 @@ const session = `(function(){const out={};let t=0;
   /* history without the economy, a day at a time, answering cards as history went unless pick says otherwise */
   const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
   const keep=()=>JSON.stringify(serialize(),SAVE_NUM),back=s=>{restore(JSON.parse(s));analyze()},T=n=>S.towns.find(x=>x.n===n);
+  /* a new game opens on its intro, paused on 16 February 1918, with every town housed and a first ministry task */
+  showCard();out.intro=S.intro===1&&S.speed===0&&S.day===0&&document.getElementById('card').innerHTML.includes('Act of Independence');{const K=T('Kaunas');out.kauHomes=K.house>=K.pop0&&K.note!=='Overcrowded'}
+  out.task0=(curTask()||{}).id;act({act:'intro'});out.introGone=!S.intro;
   /* the borders of 16 February 1918: the Klaipėda Region German, the Palanga coast in German-held Courland, the Vilnius region
      ours, and German troops all around (Ober Ost); today's Poland split on the old border of East Prussia */
   out.own0=['kr','pal','vr','vr2','by'].map(k=>S.own[k]).join(',');out.nb0=['lv','pl','ep','ru'].map(k=>S.own[k]).join(',');out.ep=CTY.filter(c=>c===CTY_ID.ep).length;
@@ -120,6 +123,10 @@ const session = `(function(){const out={};let t=0;
   /* history on the way: the government in Kaunas, the Red Army in Vilnius in January 1919, Poland from April, Latvia's coast */
   out.vil19=[S.own.vr,S.own.vr2,S.own.by,S.own.lv,S.own.pal,S.own.pl,capital().n,T('Vilnius').lock].join(',');out.sejny=ymd(S.day)>='1919-08-23';
   out.red19=S.log.some(l=>/Red Army takes Vilnius/.test(l.t))&&S.log.some(l=>/Vilnius region is lost/.test(l.t));
+  /* no hunger from a village's starting stock, no cold homes in summer, one warning line a day, and routes to lost land cost nothing */
+  out.hungry=S.towns.filter(x=>!x.lock&&x.fed<0.97).length;out.coldSummer=S.log.filter(l=>/are cold/.test(l.t)&&[5,6,7].includes(dOf(l.d).getUTCMonth())).length;
+  {const days={};S.log.filter(l=>/Food is running out/.test(l.t)).forEach(l=>{days[l.d]=(days[l.d]||0)+1});out.warnDays=Math.max(0,...Object.values(days))}
+  {const r=S.routes.find(q=>S.towns[q.a].id==='vil'||S.towns[q.b].id==='vil');out.heldRoute=!!r&&r.held===1&&/at no cost/.test(r.why)}
   /* growth, counted on the towns Lithuania holds now */
   const openT=S.towns.map((x,n)=>n).filter(n=>!S.towns[n].lock),tt={pop:openT.reduce((a,n)=>a+S.towns[n].pop,0)};out.pop0=openT.reduce((a,n)=>a+pop00[n],0);
   /* dashboards: problems with fixes, goods made and used, the country's view, and the camera offset under a panel */
@@ -238,6 +245,8 @@ assert(o.pave.up > 1 && o.pave.added > (o.pave.up + o.pave.km) * 0.8, `a paved r
 assert(o.roundtrip, `save and reload keep the game intact (${o.saveKB} KB)`);
 assert(o.saved, 'autosave writes to localStorage');
 assert(o.drop, 'a new version removes saves of older versions and keeps the tutorial note');
+assert(o.intro && o.introGone && o.kauHomes && o.task0 === 'route', `a new game opens on the Act of Independence, paused, with Kaunas housed and a first ministry task (${o.task0})`);
+assert(o.hungry <= 3 && o.coldSummer === 0 && o.warnDays <= 1 && o.heldRoute, `no hunger from starting stocks (${o.hungry} hungry in March 1920), no cold homes in summer, one warning line a day, and the route to Vilnius waits at no cost`);
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
 if (failed) { console.error(`\n${failed} check${failed > 1 ? 's' : ''} failed`); process.exit(1); }
 console.log('\nSmoke test passed.');

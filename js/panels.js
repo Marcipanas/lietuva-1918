@@ -204,8 +204,8 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
   h+=townsBlock();
   h+=S.won?`<div class="goal"><b>Plan fulfilled</b><span>Every town is linked and lit, and ${popStr(t.pop)} people live in them.</span></div>`
     :`<div class="goal"><b>Goal: light up Lithuania</b><span>Reach the Modern era with every town linked to the capital by rail or paved road and powered, and ${popStr(goalPop())} residents.</span></div>`;
-  const open=OBJ.filter(o=>!S.obj[o.id]).slice(0,4),nd=OBJ.length-OBJ.filter(o=>!S.obj[o.id]).length;
-  h+=`<div class="sec"><h3>Ministry tasks<span>${nd} of ${OBJ.length} done</span></h3><ul class="objs">${open.map(o=>`<li>${ic('star')}<span>${o.t}</span><b>+${fmt(o.r)} Lt</b></li>`).join('')}</ul></div>`;
+  const open=OBJ.filter(o=>!S.obj[o.id]&&(!o.can||o.can())).slice(0,4),nd=OBJ.length-OBJ.filter(o=>!S.obj[o.id]).length;
+  h+=`<div class="sec" id="tasks"><h3>Ministry tasks<span>${nd} of ${OBJ.length} done</span></h3><ul class="objs">${open.map(o=>`<li>${ic('star')}<span>${o.t}</span><b>+${fmt(o.r)} Lt</b></li>`).join('')}</ul></div>`;
   h+=`<div class="ebox" id="era"><div><div class="eyebrow">Current era</div><div class="enow">${ERAS[S.era].n}</div></div><div class="eras">${[1,2,3].map(n=>`<div class="es${n<=S.era?' done':''}${n===S.era?' now':''}" style="--ec:${ERAS[n].c}"><i></i><b>${ERAS[n].n}</b></div>`).join('')}</div>`;
   if(L0){const nx=ERAS[S.era+1];h+=`<div class="req">${L0.map((x,i)=>`<span class="m">${v('rq'+i,x.ok?'✓':'·','chk')}</span><span>${x.t}</span><span class="q">${v('rn'+i,x.q)}</span>`).join('')}</div>
     <p class="unl">Unlocks ${nx.unl.charAt(0).toLowerCase()+nx.unl.slice(1)}</p><div class="row"><button class="btn pri" data-act="era">Begin ${nx.n} · ${fmt(nx.req.lt)} Lt</button></div>`}
@@ -226,6 +226,16 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li><button class="link sm" data-act="tutorial">Show the tutorial again</button></li></ul></details>`;
   h+=S.confirmReset?`<div class="row"><span class="note">Start again from 1918? This game will be lost.</span><button class="btn sm" data-act="reset2">Start again</button><button class="btn sm ghost" data-act="cancelr">Keep playing</button></div>`
     :`<div class="row"><button class="btn sm ghost" data-act="reset">New game</button></div>`;return h}
+/* The intro of a new game: 16 February 1918, and the player's part in what follows */
+function introHTML(){return `<div class="cbox intro"><div class="eyebrow">Vilnius · 16 February 1918</div><h2 id="cardt">The Act of Independence</h2>
+  <p>The twenty members of the Council of Lithuania sign the Act of Independence. It restores an independent, democratic Lithuania, with Vilnius as its capital.</p>
+  <p>German troops still hold the country, and the war has left it poor. There is no army yet, no money of its own, and no border anyone has agreed.</p>
+  <p class="lead">What happens next is up to you. Build the economy, link the towns, and answer history when it calls.</p>
+  <div class="opts"><button class="btn pri big" data-intro="1">${ic('play')}Begin</button></div></div>`}
+/* A new era: what it brings, under a stripe in the era's colour */
+function eraHTML(n){const E=ERAS[n];return `<div class="cbox intro era" style="--ec:${E.c}"><div class="eyebrow">A new era · ${dateStr(S.day)}</div><h2 id="cardt">${E.n}</h2>
+  <p>${E.unl}</p><p class="lead">${n===2?'Plan the power grid as you grow: towns without electric light lose heart.':'The last era. Light up every town and link it to the capital to fulfil the plan.'}</p>
+  <div class="opts"><button class="btn pri big" data-eraok="1">Continue</button></div></div>`}
 /* The decisions taken so far, each marked as history went or not, then the chronicle itself */
 function chronPanel(){const D=decisions(),as=D.filter(x=>x.as===1).length,off=D.filter(x=>x.as===0).length;
   const dec=D.length?`<details class="more" data-k="decisions"${D.length<=3?' open':''}><summary>Your decisions<span>${as} as in history${off?`, ${off} not`:''}</span></summary><ul class="decs">${D.map(x=>

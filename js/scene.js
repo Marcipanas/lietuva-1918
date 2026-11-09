@@ -173,7 +173,7 @@ const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), b
 /* Who holds the land, each in its own muted colour: Latvia, Belarus, Poland, Germany (and East Prussia), the Allies, Soviet Russia.
    Neighbours' land takes its holder's colour; land of today's Lithuania held by someone else is washed in it. */
 /* holders' colours: Soviet rule, from the Red Army of 1919 to Soviet Belarus and Russia, shares one */
-const OWN_COL = { lt: '#93b468', lv: '#cfa996', pl: '#d6c189', de: '#9cbfb6', al: '#c7a2c4', ra: '#c98a80', by: '#c98a80', ru: '#c98a80' }, OWN_RGB = {};
+const OWN_COL = { lt: '#93b468', lv: '#a3b1d9', pl: '#d6c189', de: '#9cbfb6', al: '#c7a2c4', ra: '#c98a80', by: '#c98a80', ru: '#c98a80' }, OWN_RGB = {};
 function hx(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
 for (const k in OWN_COL) OWN_RGB[k] = hx(OWN_COL[k]);
 const mixRGB = (a, b, q) => [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q, a[2] + (b[2] - a[2]) * q];
@@ -222,6 +222,20 @@ function paintMask() {
     forDisk(t.x, t.z, r, (k, dd) => { d[k * 4] = Math.round(d[k * 4] * clamp((dd - r * 0.55) / (r * 0.45), 0, 1)); });
   }
   MASK.needsUpdate = true; maskTowns = S.towns.length; maskOwn = WV.own;
+  paintPol();
+}
+/* Political colours for the view from far out: each cell's holder colour, and whether others hold it (alpha). The ground
+   shader leans to it as the camera rises (POL_U), and lifts the snow from land others hold, so borders read in winter too. */
+const POLTEX = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
+POLTEX.magFilter = THREE.LinearFilter; POLTEX.minFilter = THREE.LinearFilter; POLTEX.generateMipmaps = false;
+const POL_U = { value: 0 };
+function paintPol() {
+  const d = POLTEX.image.data, lt = OWN_RGB.lt;
+  for (let k = 0; k < GW * GH; k++) {
+    const t = TT[k], o = k * 4, other = t !== T_SEA && t !== T_LAGOON && (CTY[k] > 1 || heldOff(k)), c = other ? OWN_RGB[ownerOf(k)] || lt : lt;
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = other ? 255 : 0;
+  }
+  POLTEX.needsUpdate = true;
 }
 const FARM_PAL = { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Color()) };
 const FARM_COLS = { spring: ['#8d7754', '#93b268', '#82a85f', '#9c8a5e', '#8aad64', '#97865c'], summer: ['#a6be62', '#bcbb66', '#c7b660', '#98b862', '#aca962', '#8fb15f'],
@@ -231,9 +245,9 @@ function farmSeason() { const m = SEASON.m; return m === 2 || m === 3 ? 'spring'
 function groundMat() {
   const mat = new THREE.MeshLambertMaterial({ map: GTEX });
   mat.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, { uSnow: SNOW_U, uNoise: NOISE_U, uMask: { value: MASK }, uPal: FARM_PAL, uMap: { value: new THREE.Vector2(MAPU, MAPV) } });
+    Object.assign(sh.uniforms, { uSnow: SNOW_U, uNoise: NOISE_U, uMask: { value: MASK }, uPal: FARM_PAL, uMap: { value: new THREE.Vector2(MAPU, MAPV) }, uPolTex: { value: POLTEX }, uPol: POL_U });
     sh.vertexShader = 'varying vec2 vWxz;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWxz = (modelMatrix * vec4(transformed, 1.0)).xz;');
-    sh.fragmentShader = 'uniform float uSnow;\nuniform sampler2D uNoise;\nuniform sampler2D uMask;\nuniform vec3 uPal[6];\nuniform vec2 uMap;\nvarying vec2 vWxz;\n' +
+    sh.fragmentShader = 'uniform float uSnow;\nuniform sampler2D uNoise;\nuniform sampler2D uMask;\nuniform sampler2D uPolTex;\nuniform float uPol;\nuniform vec3 uPal[6];\nuniform vec2 uMap;\nvarying vec2 vWxz;\n' +
       'float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
   float farm = texture2D(uMask, vWxz / uMap).r;
   if (farm > 0.02) {
@@ -251,7 +265,10 @@ function groundMat() {
     diffuseColor.rgb = mix(diffuseColor.rgb, pc, farm * 0.72);
   }
   diffuseColor.rgb *= 0.92 + 0.16 * texture2D(uNoise, vWxz * 1.3).r;
-  float sCover = smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3));
+  vec4 pol = texture2D(uPolTex, vWxz / uMap);
+  float po = uPol * pol.a;
+  diffuseColor.rgb = mix(diffuseColor.rgb, pol.rgb, po * 0.8);
+  float sCover = smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3)) * (1.0 - max(max(po, pol.a * 0.35), uPol * 0.25));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.88, 0.91), clamp(sCover, 0.0, 1.0));`);
   };
   mat.customProgramCacheKey = () => 'ground';
@@ -980,6 +997,9 @@ function pickBuilding(sx, sy) {
 let seasonKey = '';
 function seasonUpdate() {
   SNOW_U.value += (SEASON.snow - SNOW_U.value) * 0.08;
+  /* from about 90 km up the map turns political: holders' colours, and no snow on others' land or beyond the edge */
+  const q = clamp((cam.dist - 90) / 140, 0, 1), pq = q * q * (3 - 2 * q);
+  if (Math.abs(pq - POL_U.value) > 1e-3) { POL_U.value = pq; for (const c in OUTER) OUTER[c].userData.snowMul.value = 1 - pq; }
   const ice = SEASON.snow > 0.75 ? 1 : 0, key = (SEASON.aut > 0.5 ? 1 : 0) + ':' + ice + ':' + WV.own;
   const fk = farmSeason();
   if (fk !== FARM_PAL.k) { FARM_PAL.k = fk; FARM_COLS[fk].forEach((c, i) => FARM_PAL.value[i].set(c)); }

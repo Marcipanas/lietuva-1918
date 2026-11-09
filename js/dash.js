@@ -18,6 +18,15 @@ function suggestRoute(ti,goods){let best=null;
   const r=S.routes.find(q=>(q.a===ti&&q.b===best.o)||(q.b===ti&&q.a===best.o)),nm=S.towns[best.o].n;
   if(r)return {t:`Add a ${VT[r.vt].one} from ${nm}`,a:{act:'rveh',r:r.id,d:1}};
   return {t:`Route from ${nm}`,a:{act:'newroute',a:best.o,b:ti,m:best.m}}}
+/* The neighbour that needs this good most (fewest days of it in stock): a route to send a surplus there, or a vehicle for the route there is. */
+function suggestOutlet(ti,r){let best=null;
+  for(const n of NET.adj[ti]||[]){const e=NET.edges[n],o=e.a===ti?e.b:e.a,T=S.towns[o];if(!T||T.lock)continue;
+    const dem=T.dem[r]||0;if(dem<0.05)continue;const days=(T.stock[r]||0)/dem;if(days>=20)continue;
+    if(!best||days<best.days)best={o,days,m:e.rail&&pairPath('rail',ti,o)?'rail':'road'}}
+  if(!best)return null;
+  const rt=S.routes.find(q=>(q.a===ti&&q.b===best.o)||(q.b===ti&&q.a===best.o)),nm=S.towns[best.o].n;
+  if(rt)return rt.ok?{t:`Add a ${VT[rt.vt].one} to ${nm}`,a:{act:'rveh',r:rt.id,d:1}}:null;
+  return {t:`Route to ${nm}`,a:{act:'newroute',a:ti,b:best.o,m:best.m}}}
 function buildFix(bt,ti,label){return bt&&BT[bt]&&unlocked(bt)?{t:label||BT[bt].n,a:{act:'build',bt,ti},b:1}:null}
 
 /* Problems of one settlement, worst first: {k, sev (2 urgent, 1 holds it back, 0 a note), ic, t, d, fix}.
@@ -44,15 +53,21 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
     [F(suggestRoute,ti,[r]),RI[r].port?null:F(buildFix,PRODUCER[r],ti)])}
   if(staff.length){const r=S.routes.find(q=>(q.a===ti||q.b===ti)&&q.ok&&!q.pax);
     add('staff',1,'people','Short of workers',`${typeList(staff)} ${staff.length>1?'run':'runs'} below strength.`,[r?{t:'Carry commuters',a:{act:'rpax',r:r.id}}:null,zone])}
-  if(full.length){const cap=t.cap||STORE_BASE,gs=RES.filter(r=>(t.stock[r]||0)>=cap*0.97),g0=gs[0];
+  /* a full store: send the surplus where it is needed, sell it, or store more */
+  if(full.length){const cap=t.cap||STORE_BASE,gs=RES.filter(r=>(t.stock[r]||0)>=cap*0.97),g0=gs[0],q=g0?Math.max(25,Math.min(100,Math.floor((t.stock[g0]||0)-cap*0.6))):0;
     add('full',1,'box','Storage full',`${typeList(full)} ${full.length>1?'have':'has'} stopped: the stores are full${gs.length?' of '+gs.map(rname).join(' and '):''}.`,
-      [F(buildFix,'warehouse',ti,'Warehouse'),g0&&S.hist.path!=='soviet'?{t:`Sell 25 ${rname(g0)}`,a:{act:'sell',ti,r:g0},b:1}:null])}
+      [g0?F(suggestOutlet,ti,g0):null,g0&&S.hist.path!=='soviet'?{t:`Sell ${q} ${rname(g0)}`,a:{act:'sell',ti,r:g0,q},b:1}:null,F(buildFix,'warehouse',ti,'Warehouse')])}
   if(t.pol>0.3)add('smog',1,'smog','Smoky air','Industry pollutes its homes, and morale suffers.',[]);
   if(S.era>=2&&t.note==='Want linen cloth')add('want:textiles',1,'textiles','Wants linen cloth','Morale suffers without it.',[F(suggestRoute,ti,['textiles']),F(buildFix,'linen',ti)]);
   if(S.era>=3&&t.note==='Want electronics')add('want:electronics',1,'chip','Wants electronics','Morale suffers without them.',[F(suggestRoute,ti,['electronics']),F(buildFix,'elec',ti)]);
   if(t.h<45)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below 45% a town stops growing.`,[]);
-  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,'Bring a railway or a paved road to its streets.',
-    [{t:'Build a road',a:{act:'tool',tool:'road',ti}},{t:'Lay track',a:{act:'tool',tool:'rail',ti}}]);
+  /* dirt roads never link a town: before industrialization only a railway does */
+  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,S.era>=2?'Bring a railway or a paved road to its streets.':'Bring a railway to its streets. Paved roads come with industrialization.',
+    [S.era>=2?{t:'Build a paved road',a:{act:'tool',tool:'road',ti}}:null,{t:'Lay track',a:{act:'tool',tool:'rail',ti}}]);
+  /* the Vilnius region before a loss history brought: build there knowing it */
+  if(t.rg==='vr'||t.rg==='vr2'){const d=ymd(S.day);
+    if(d<'1919-01-05')add('front',0,'flag','Front line','In history the Red Army took Vilnius in January 1919, and Poland held it for most of the years until 1939. What is built here may be lost for years.');
+    else if(d>='1920-08-26'&&d<'1920-10-08')add('front',0,'flag','Front line','In history Polish troops took Vilnius in October 1920 and held it until 1939.')}
   if(!lite&&!t.vil&&!bOfTown(ti).some(b=>b.t==='station')&&nearestEdge(t.x,t.z,'rail',(t.R||1)*1.2+1))
     add('station',0,'rail','No railway station','A railway passes, but trains cannot stop here. Build a station beside the track.',[buildFix('station',ti,'Station')]);
   return out.sort((a,b)=>b.sev-a.sev)}
