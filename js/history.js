@@ -76,7 +76,7 @@ function runDeals() {
     const p = mktPrice(d.m, d.r, d.dir);
     if (!p) { d.why = 'Not traded there'; continue; }
     if (d.dir === 'out') {
-      const lim = d.lim === undefined ? 0.5 : d.lim, keep = Math.max((t.dem[d.r] || 0) * 10, t.cap * lim), q = Math.min(d.q, (t.stock[d.r] || 0) - keep);
+      const lim = d.lim === undefined ? 0.5 : d.lim, keep = Math.max((t.dem[d.r] || 0) * 10, t.cap * lim, keptOf(t, d.r)), q = Math.min(d.q, (t.stock[d.r] || 0) - keep);
       if (q <= 0.01) { d.why = lim ? `Waits until ${t.n} has more than ${Math.round(lim * 100)}% of its store` : `No ${rname(d.r)} to spare in ${t.n}`; continue; }
       const k = d.m + d.r, v0 = vol[k] || 0, full = Math.max(0, Math.min(q, MKT_CAP - v0)), val = p * (full + (q - full) * 0.5);
       t.stock[d.r] -= q; vol[k] = v0 + q; S.funds += val; BUD.trade += val; d.done = q; d.val = val; tradeNote('ex', 'eg', d.m, d.r, val);

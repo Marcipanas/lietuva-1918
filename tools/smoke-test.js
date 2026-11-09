@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* Headless smoke test. Loads every script in a stub browser (one vm context, one script at a time, exactly like
-   separate <script> tags). three.js runs for real and builds every mesh; only the WebGL renderer is replaced.
+/* Headless smoke test. Loads every script in a stub browser (tools/headless.js: one vm context, one script at a time,
+   exactly like separate <script> tags). three.js runs for real and builds every mesh; only the WebGL renderer is replaced.
    It boots the game, drives the tools and the route editor the way the UI does, plays about two in-game years,
    walks history through its borders and decisions (as they happened, and the other ways), renders every panel and
    zoom level, then saves and reloads. Exit code 1 on any exception or failed assertion.
@@ -10,57 +10,8 @@ const root = path.join(__dirname, '..');
 let failed = 0;
 const assert = (c, m) => { if (c) console.log('✓ ' + m); else { console.error('✗ ' + m); failed++; } };
 
-/* ---- stub browser ---- */
-const noop = () => {};
-const ctx2d = () => new Proxy({}, {
-  get: (t, p) => {
-    if (p in t) return t[p];
-    if (p === 'measureText') return () => ({ width: 30 });
-    if (p === 'createImageData' || p === 'getImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
-    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop: noop });
-    return noop;
-  },
-  set: (t, p, v) => { t[p] = v; return true; }
-});
-function el(id) {
-  const kids = [], full = id === 'cv' || id === 'stage';
-  return {
-    id, hidden: true, innerHTML: '', textContent: '', value: '0', className: '', dataset: {}, style: { setProperty: noop }, width: 300, height: 150,
-    classList: { toggle: noop, add: noop, remove: noop, contains: () => false },
-    addEventListener: noop, setPointerCapture: noop, appendChild: c => { kids.push(c); return c; }, firstElementChild: { style: {} },
-    setAttribute: noop, getAttribute: () => null, scrollIntoView: noop,
-    getContext: () => ctx2d(),
-    /* the map fills a 390 by 700 phone screen; panels are closed (no height) */
-    getBoundingClientRect: () => full ? { width: 390, height: 700, left: 0, top: 0, right: 390, bottom: 700 } : { width: 390, height: 0, left: 0, top: 700, right: 390, bottom: 700 },
-    querySelector: () => el('q'), querySelectorAll: () => [], closest: () => null
-  };
-}
-const els = {};
-const sandbox = {
-  console, Math, Date, JSON, btoa, atob, performance, setTimeout: () => 0, clearTimeout: noop,
-  document: { getElementById: id => els[id] || (els[id] = el(id)), querySelector: s => el(s), querySelectorAll: () => [], createElement: t => el(t), addEventListener: noop,
-    body: el('body'), documentElement: el('html'), fonts: { ready: { then: noop } }, hidden: false },
-  getComputedStyle: () => ({ getPropertyValue: () => '' }),
-  window: { devicePixelRatio: 2, innerWidth: 390, addEventListener: noop, ResizeObserver: class { observe() {} } },
-  localStorage: { _d: {}, getItem(k) { return this._d[k] ?? null; }, setItem(k, v) { this._d[k] = String(v); }, removeItem(k) { delete this._d[k]; },
-    key(i) { return Object.keys(this._d)[i] ?? null; }, get length() { return Object.keys(this._d).length; } },
-  requestAnimationFrame: cb => { sandbox.rafCb = cb; }
-};
-vm.createContext(sandbox);
-
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const order = [...html.matchAll(/<script src="((?:js|vendor)\/[^"]+)"><\/script>/g)].map(m => m[1]);
-for (const f of order) {
-  try { vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), sandbox, { filename: f }); }
-  catch (e) { console.error(`✗ ${f} failed to load: ${e.stack || e.message}`); process.exit(1); }
-  if (f.startsWith('vendor/three')) {
-    /* no WebGL here: a renderer that draws nothing */
-    sandbox.THREE.WebGLRenderer = class {
-      constructor(o) { this.domElement = o && o.canvas; this.shadowMap = {}; this.capabilities = { getMaxAnisotropy: () => 4 }; this.calls = 0; }
-      setPixelRatio() {} getPixelRatio() { return 2; } setSize() {} render() { this.calls++; } dispose() {}
-    };
-  }
-}
+/* ---- the game in a stub browser (tools/headless.js) ---- */
+const { sandbox, order } = require('./headless.js')(root);
 assert(true, `loaded ${order.length} scripts in index.html order`);
 
 /* ---- play session (runs inside the game's global scope) ---- */
@@ -147,8 +98,8 @@ const session = `(function(){const out={};let t=0;
   /* the post is a building site first: it trades only once the builders are done */
   setTool('inspect');analyze();out.postSite=!!post&&!!post.c&&!townGates(kyi).has('de');for(let q=0;q<40&&post&&post.c;q++)tick();analyze();
   out.post=!!post&&!post.c&&post.town===kyi&&post.gate==='de';out.postWhy=post?post.gate+' town '+post.town:'not placed';
-  addDeal('de','grain','out',5,kyi);S.speed=0;const f0=S.funds;for(let q=0;q<3;q++)tick();const dl=S.deals[0];out.deal=dl.done>0&&dl.val>0;out.dealWhy=dl.why||dl.done.toFixed(1)+' a day for '+dl.val.toFixed(0)+' Lt';
-  S.tab='trade';renderPanel(true);renderPanel(false);
+  addDeal('de','grain','out',5,kyi);S.speed=0;const f0=S.funds;for(let q=0;q<3;q++)tick();const dl=S.deals[0];out.deal=dl.done>0&&dl.val>0;out.tb=sumVals(S.tb.ex)>0&&S.tb.eg.grain>0&&S.tb.ex.de>0;out.dealWhy=dl.why||dl.done.toFixed(1)+' a day for '+dl.val.toFixed(0)+' Lt';
+  S.tab='trade';renderPanel(true);renderPanel(false);out.tb=out.tb&&document.getElementById('pbody').innerHTML.includes('Trade balance');
   /* history: Żeligowski marches on Vilnius in October 1920. Defending it works only with enough security; holding the line at
      Širvintos, as happened, loses the Vilnius region to Poland and makes Kaunas the temporary capital */
   out.vol=S.hist.picks.volunteers===0;jump('1920-07-15');out.red20=[S.own.vr,S.own.by,capital().n].join(',');
@@ -226,6 +177,67 @@ const session = `(function(){const out={};let t=0;
   {S.hist.cards=['volunteers'];showCard();const h=document.getElementById('card').innerHTML;out.confirm=h.includes('data-confirm')&&h.includes('data-pick');S.hist.cards=[];showCard();
    VIEW.route=S.routes[0].id;VIEW.sheet=0;updateTask();out.pill=document.getElementById('task').dataset.k==='route';VIEW.route=null;
    VIEW.prod='all';for(const d of [10,300]){cam.dist=d;applyCam();draw(0.016)}VIEW.prod='grain';draw(0.016);VIEW.prod=null;out.prodOk=true}
+  /* ---- v0.12, on a fresh game: building sites, carters, chains, winter fuel, the state ---- */
+  newGame();analyze();S.intro=0;S.speed=0;setTool('inspect');
+  {const html=()=>document.getElementById('pbody').innerHTML;
+   const plan=(type,town)=>{const ti=S.towns.indexOf(town);setTool('place',type,ti);let b=null;if(PEND&&PEND.kind==='place'&&PEND.ok&&PEND.jt===ti){const n=S.bld.length;doConfirm();if(S.bld.length===n+1)b=S.bld[S.bld.length-1]}setTool('inspect');return b};
+   let K=T('Kaunas'),kk=S.towns.indexOf(K);
+   /* a plan with no money to take (the whole treasury is kept back): it stands as a site, gives no work and takes nothing */
+   S.keep=1e9;K.stock.planks=200;const dairy=plan('dairy',K);for(let q=0;q<3;q++)tick();
+   out.sitePlan=!!dairy&&isSite(dairy)&&!(dairy.c.g.lt>0)&&dairy.cw==='Waiting for money'&&siteInfo(dairy).st==='wait'&&!BYT[kk].includes(dairy)&&townIssues(kk).some(x=>x.k==='site:lt');
+   /* the reserve lifted: money and the town's planks arrive, the builders need their days, then it works */
+   S.keep=0;{const d0=S.day;let n=0;while(dairy.c&&n++<80)tick();out.siteDays=S.day-d0}
+   checkObj();out.siteDone=!dairy.c&&S.stats.built===1&&S.obj.built===1&&out.siteDays>=BT.dairy.bd&&out.siteDays<=BT.dairy.bd+2;for(let q=0;q<4;q++)tick();out.siteWorks=dairy.eff>0&&BYT[kk].includes(dairy);
+   /* carters: a town with no planks gets them from the nearest town with some to spare, a few loads a day */
+   const P=T('Prienai'),pi=S.towns.indexOf(P);P.stock.planks=0;const sch=plan('school',P);tick();
+   out.cart=!!sch&&!!sch.hf&&sch.hf.planks!==undefined&&sch.c.g.planks>0&&sch.c.g.planks<=HAUL+1e-6&&/Carts bring planks from /.test(siteTxt(sch));out.cartFrom=sch&&sch.hf?S.towns[sch.hf.planks].n+' '+sch.c.g.planks.toFixed(1):'';
+   /* with no planks anywhere and no sawmill at work, the site waits and the town says so */
+   {const saws=S.bld.filter(b=>b.t==='sawmill');saws.forEach(b=>{b.on=false});const old=S.towns.map(t=>t.stock.planks||0);S.towns.forEach(t=>{t.stock.planks=0});for(let q=0;q<14;q++)tick();
+    out.dry=sch.cw==='Waiting for planks'&&siteInfo(sch).st==='wait'&&townIssues(pi).some(x=>x.k==='site:planks'&&x.fix.length>0);out.dryWhy=sch.cw;saws.forEach(b=>{b.on=true});S.towns.forEach((t,i)=>{t.stock.planks=old[i]})}
+   /* a plan given up returns what its site had taken */
+   {const got={...sch.c.g},fb=S.funds,pb=P.stock.planks||0;act({act:'scancel',id:String(sch.id)});out.cancel=!BMAP.has(sch.id)&&Math.abs(S.funds-fb-(got.lt||0))<0.01&&Math.abs((P.stock.planks||0)-pb-(got.planks||0))<0.01}
+   /* hold and build first; the site's card and the country's works list */
+   K.stock.planks=200;const wh=plan('warehouse',K);act({act:'shold',id:String(wh.id)});tick();out.hold=wh.c.hold===1&&!(wh.c.g.lt>0)&&siteInfo(wh).st==='hold';
+   act({act:'shold',id:String(wh.id)});act({act:'spri',id:String(wh.id)});tick();out.pri=wh.c.pri===1&&wh.c.g.lt>0&&SITES[0]===wh;
+   selectBuilding(wh,true);renderPanel(true);out.siteCard=html().includes('On site')&&html().includes('Cancel the plan');
+   {const seen=[];navTo('nat');['over','eco','works','towns','state'].forEach(k=>{act({act:'nseg',k});renderPanel(false);seen.push(html().length>300)});
+    act({act:'nseg',k:'works'});out.worksView=html().includes('Building sites')&&html().includes('Keep in the treasury')&&html().includes('Warehouse');
+    act({act:'nseg',k:'state'});out.stateView=html().includes('Public trust')&&html().includes('What moves trust')&&html().includes('Taxes')&&html().includes('Road gangs');
+    act({act:'nseg',k:'eco'});out.ecoView=html().includes('Money a day')&&html().includes('Goods in Lithuania a day')&&html().includes('From field to shop');
+    act({act:'good',r:'planks'});out.goodView=VIEW.good==='planks'&&html().includes('Sawmill')&&html().includes('Used for');act({act:'goodback'});out.segs=seen.every(Boolean)&&VIEW.good===null&&VIEW.nseg==='eco'}
+   /* goods and chains: sawmills saw planks, Šiauliai brews beer, cement waits for its era */
+   for(let q=0;q<8;q++)tick();{const gi=goodInfo('planks');out.chain=gi.makers.join()==='sawmill'&&gi.users.includes('furniture')&&gi.mk>0&&goodOpen('planks')&&!goodOpen('cement')&&CHAINS.some(c=>c.join()==='timber,planks,furniture')&&(T('Šiauliai').mk.beer||0)>0;out.chainWhy=gi.mk.toFixed(1)+' planks a day'}
+   /* a site kept through save and load */
+   {const p0=wh.c.p,g0=wh.c.g.lt,id=wh.id,s0=keep();back(s0);const w2=BMAP.get(id);out.siteSave=!!w2&&!!w2.c&&Math.abs(w2.c.p-p0)<1e-3&&Math.abs(w2.c.g.lt-g0)<0.01&&w2.c.pri===1;tick();out.siteSave=out.siteSave&&!!BMAP.get(id).c;K=T('Kaunas');kk=S.towns.indexOf(K)}
+   /* a modernization is a site on a building that keeps working */
+   {S.era=2;S.eraDay=S.day;const saw=S.bld.find(b=>b.t==='sawmill'&&b.town===kk&&!b.c);K.stock.bricks=100;K.stock.metal=20;K.stock.timber=400;act({act:'up',id:String(saw.id)});
+    out.upSite=!!saw.c&&saw.c.up===1&&!isSite(saw);tick();out.upWorks=saw.eff>0&&BYT[kk].includes(saw);let n=0;while(saw.c&&n++<60)tick();out.upDone=!saw.c&&saw.lv===2;out.upDays=n;
+    /* a new era is not a cliff: its wants set in over WANT_YEARS */
+    S.eraDay=S.day;for(let q=0;q<25;q++)tick();const h0=K.h,n0=K.note;S.eraDay=S.day-WANT_YEARS*365;for(let q=0;q<25;q++)tick();
+    out.wants=wantK()===1&&!/^Want|Blackouts/.test(n0)&&/^Want|Blackouts/.test(K.note)&&K.h<h0-3;out.wantsWhy=n0+' '+h0.toFixed(0)+' → '+K.note+' '+K.h.toFixed(0);S.era=1;S.eraDay=0}
+   /* winter fuel: a town that outgrew its woodlots keeps a winter's fuel, which its sawmill may not burn, and takes in no one until it has it */
+   {const saw=S.bld.find(b=>b.t==='sawmill'&&b.town===kk&&!b.c);K.pop=K.pop0+20;K.stock.peat=0;K.stock.timber=40;tick();const iss=townIssues(kk);
+    out.fuel=K.fkeep>80&&K.nofuel===1&&saw.why==='Fuel kept for homes'&&K.stock.timber>=38&&iss.some(x=>x.k==='kept')&&iss.some(x=>x.k==='fuel');out.fuelWhy=[Math.round(K.fkeep),K.nofuel,saw.why,Math.round(K.stock.timber)].join(' ');
+    K.stock.peat=K.cap;K.stock.timber=K.cap;tick();tick();out.fuelOk=K.nofuel===0&&saw.why!=='Fuel kept for homes';K.pop=K.pop0}
+   /* a paved road drawn from one town's hall to another's reaches both, so the second is linked; its bricks may come from a third town */
+   {const A=T('Kybartai'),B=T('Kudirkos Naumiestis'),bi=S.towns.indexOf(B);S.funds+=3000;A.stock.bricks=0;B.stock.bricks=0;TOOL.lv.road=2;cam.dist=60;cam.x=(A.x+B.x)/2;cam.z=(A.z+B.z)/2;applyCam();setTool('road');tapTool(A.x,A.z);tapTool(B.x,B.z);showBar();
+    const tp=PEND&&PEND.ti>=0?takePlan(PEND.cost,PEND.ti):null;out.farPay=!!tp&&tp.ok&&tp.far;out.linkUp=PEND&&PEND.upKm||0;const l0=NET.linked.has(bi);doConfirm();analyze();setTool('inspect');TOOL.lv.road=1;out.linkTown=!l0&&NET.linked.has(bi)}
+   /* the state: taxes, a policy, public trust */
+   {const t0=histTax(),v0=trustParts().v;act({act:'tax',q:'2'});out.tax=histTax()>t0*1.25&&trustParts().v<v0;act({act:'tax',q:'1'});
+    act({act:'pol',k:'roads'});tick();out.pol=polOn('roads')&&lineDisc('road')===0.75&&Math.round(BUD.policy)===-POLICY.roads.cost&&!polOpen('schools')&&S.hist.gov==='council';act({act:'pol',k:'roads'})}
+   /* chance: every random event runs */
+   {let bad='';REV.forEach((f,i)=>{try{f()}catch(e){bad+=i+': '+e+' '}});out.rev=!bad;out.revWhy=bad;S.fx=[]}
+   /* history: the Bermontians, the Seimas, land reform, the coup of 1926 both ways */
+   jump('1919-11-21');tick();out.bermont=S.hist.cards[0]==='bermont';{const s=keep(),sec=S.hist.sec;act({act:'card',o:'1'});out.bermontWait=S.hist.sec===sec-3&&S.hist.mood.some(m=>m.n==='Bermontian looting'&&!!m.at);back(s);act({act:'card',o:'0'});out.bermontWin=S.hist.sec===sec+5}
+   jump('1920-05-17');out.seimas=S.hist.gov==='dem'&&!!S.ev.elect20;
+   jump('1922-02-15');tick();out.landCard=S.hist.cards[0]==='land';act({act:'card',o:'0'});out.land=S.mod.farm===1.15&&S.hist.ptm.some(m=>m.n==='Land reform');
+   jump('1926-12-17');tick();out.coupCard=S.hist.cards[0]==='coup';{const s=keep();S.hist.pt=70;act({act:'card',o:'1'});out.coupHeld=S.hist.gov==='dem'&&S.hist.risk.coup===1;back(s);S.hist.pt=40;act({act:'card',o:'1'});out.coupLost=S.hist.gov==='auth'&&S.hist.risk.coup===0;back(s);act({act:'card',o:'0'});out.coup=S.hist.gov==='auth'}
+   /* September 1939: marching on Vilnius, which did not happen, takes the city and breaks with Britain */
+   jump('1939-09-10');tick();out.marchCard=S.hist.cards[0]==='march39';{const s=keep();act({act:'card',o:'1'});out.march=S.own.vr==='lt'&&!S.mkt.gb.open&&capital().n==='Vilnius';back(s);act({act:'card',o:'0'})}
+   /* and on through the Soviet years to the restored republic: Union projects, privatization, the litas of 1993 */
+   jump('1994-01-01');const pk=S.hist.picks;out.late=S.hist.path==='free'&&S.hist.restored===1&&S.hist.gov==='dem'&&S.hist.priv===1&&pk.cement===0&&pk.chem===0&&pk.privat===0&&pk.litas93===0&&unlocked('cement')&&unlocked('fert');
+   out.lateWhy=[S.hist.path,S.hist.restored,S.hist.gov,S.hist.priv,Object.keys(pk).length].join(' ');
+   jump('2005-01-01');tick();navTo('nat');act({act:'nseg',k:'state'});renderPanel(true);out.end=isFinite(S.funds)&&ymd(S.day)>='2005-01-01'&&html().includes('Republic of Lithuania');S.tab='chron';renderPanel(true)}
   /* New game waits on its intro, paused, whatever the clock did before */
   S.speed=3;act({act:'reset'});act({act:'reset2'});out.restart=S.speed===0&&S.intro===1&&S.day===0;
   return out})()`;
@@ -290,6 +302,29 @@ assert(o.drop, 'a new version removes saves of older versions and keeps the tuto
 assert(o.intro && o.introGone && o.kauHomes && o.task0 === 'route', `a new game opens on the Act of Independence, paused, with Kaunas housed and a first ministry task (${o.task0})`);
 assert(o.hungry <= 3 && o.coldSummer === 0 && o.warnDays <= 1 && o.heldRoute, `no hunger from starting stocks (${o.hungry} hungry in March 1920), no cold homes in summer, one warning line a day, and the route to Vilnius waits at no cost`);
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
+/* ---- v0.12 ---- */
+assert(o.tb, 'the year’s trade balance counts what was sold abroad, by market and by good, and the Trade view shows it');
+assert(o.sitePlan, 'a building is planned with no money in hand: the site waits, gives no work, and its town lists it as waiting for money');
+assert(o.siteDone && o.siteWorks, `once paid and supplied the builders need their days (${o.siteDays} for a dairy farm), then it works and the first-building task is done`);
+assert(o.cart, `carters bring a site the planks its town lacks, a few loads a day (${o.cartFrom})`);
+assert(o.dry, `with no planks anywhere the site waits, and the town offers fixes (${o.dryWhy})`);
+assert(o.cancel, 'a cancelled plan returns its money to the treasury and its materials to the town');
+assert(o.hold && o.pri, 'a site on hold takes nothing; one marked "build first" is served first');
+assert(o.siteCard && o.worksView && o.stateView && o.ecoView && o.goodView && o.segs, `the site card, the five parts of the Lithuania view and the view of one good render (${[o.siteCard, o.worksView, o.stateView, o.ecoView, o.goodView, o.segs].join(', ')})`);
+assert(o.chain, `sawmills saw timber into planks, Šiauliai brews beer, and the chains know what is made of what (${o.chainWhy})`);
+assert(o.siteSave, 'save and load keep a building site with its progress');
+assert(o.upSite && o.upWorks && o.upDone, `a modernization is a site on a building that keeps working, then it is Lv 2 (${o.upDays} days)`);
+assert(o.wants, `a new era's wants set in over four years: no cliff on the first day (${o.wantsWhy})`);
+assert(o.fuel && o.fuelOk, `a town that outgrew its woodlots keeps a winter's fuel: the sawmill leaves it, and growth waits for it (${o.fuelWhy})`);
+assert(o.farPay && o.linkTown && o.linkUp > 1, `a paved road from Kybartai links Kudirkos Naumiestis: it paves ${(o.linkUp || 0).toFixed(1)} km of streets on the way, with bricks from other towns`);
+assert(o.tax && o.pol, 'high taxes bring in more and cost public trust; road gangs cost 6 Lt a day and make roads cheaper');
+assert(o.rev, `every random event runs${o.revWhy ? ': ' + o.revWhy : ''}`);
+assert(o.bermont && o.bermontWait && o.bermontWin, 'the Bermontians: attacking at Radviliškis adds security, waiting costs it and brings looting around Šiauliai');
+assert(o.seimas && o.landCard && o.land, 'the Constituent Assembly makes Lithuania a democracy, and the land reform card raises farm output');
+assert(o.coupCard && o.coupHeld && o.coupLost && o.coup, 'the coup of 1926: loyal troops hold only with public trust of 60, giving way ends the democracy');
+assert(o.marchCard && o.march, 'September 1939: the march on Vilnius, which did not happen, takes the city and loses the British market');
+assert(o.late, `history runs on to the restored republic: the cement and fertiliser projects, privatization, the litas of 1993 (${o.lateWhy})`);
+assert(o.end, 'the game runs to 2005 and the State view names the Republic of Lithuania');
 assert(o.budArmy <= -24 && o.budGap < 0.5, `the army's 25 Lt a day is in the day's balance, which adds up from its parts without one-off building (army ${o.budArmy}, off by ${o.budGap.toFixed(2)})`);
 assert(o.idle.length > 0 && o.idle.every(w => w && w !== 'Starting'), `stations, warehouses and border posts say what they do (${[...new Set(o.idle)].slice(0, 2).join('; ')})`);
 assert(o.km === '2,15,800' && o.ras && o.paved1, `the map is drawn twice its size and shown in real km (${o.km}), its terrain ships packed, and paved roads can be built from 1918`);

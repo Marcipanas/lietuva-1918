@@ -152,11 +152,21 @@ function planLine() {
   if (s1) tr[n - 1] = [s1.x, s1.z];
   /* ends on the network leave it where it faces the next point, clear of houses */
   const reach = (a, b) => clamp(Math.hypot(b[0] - a[0], b[1] - a[1]) * 0.45, 0.3, 2.5);
-  if (s0 && n > 1) { const ex = exitPoint(tr[0][0], tr[0][1], tr[1][0], tr[1][1], k, reach(tr[0], tr[1])); if (ex) tr[0] = ex; }
-  if (s1 && n > 1) { const ex = exitPoint(tr[n - 1][0], tr[n - 1][1], tr[n - 2][0], tr[n - 2][1], k, reach(tr[n - 1], tr[n - 2])); if (ex) tr[n - 1] = ex; }
+  let in0 = null, in1 = null;
+  if (s0 && n > 1) { const ex = exitPoint(tr[0][0], tr[0][1], tr[1][0], tr[1][1], k, reach(tr[0], tr[1])); if (ex) { in0 = [tr[0], ex]; tr[0] = ex; } }
+  if (s1 && n > 1) { const ex = exitPoint(tr[n - 1][0], tr[n - 1][1], tr[n - 2][0], tr[n - 2][1], k, reach(tr[n - 1], tr[n - 2])); if (ex) { in1 = [ex, tr[n - 1]]; tr[n - 1] = ex; } }
   VIEW.snaps = tr.map((q, i) => [q[0], q[1], i === 0 ? !!s0 : i === tr.length - 1 ? !!s1 : false, i > 0 && i < tr.length - 1]);
   let pts = null, pieces = null;
   if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = TOOL.free0 ? [{ net: false, p: pts }] : routePieces(pts, k); }
+  /* A better kind of line also takes over the streets (or track) between the point tapped and the place where the line leaves
+     the network, so a paved road drawn from one town to another reaches both towns, not just their edges. */
+  if (pieces && lineLevel(k) > 1) {
+    const lead = q => { if (!q) return null; const a = nearestEdge(q[0][0], q[0][1], k, 0.3), b = nearestEdge(q[1][0], q[1][1], k, 0.3), d = Math.hypot(q[0][0] - q[1][0], q[0][1] - q[1][1]);
+      const np = a && b && d > 0.05 ? netPath(k, a, b) : null; return np && np.len > 0.05 && np.len <= d * 2 + 1 ? { net: true, p: np.p, segs: np.segs } : null; };
+    const l0 = lead(in0), l1 = lead(in1);
+    if (l0) pieces.unshift(l0);
+    if (l1) pieces.push(l1);
+  }
   /* new track that meets old track curves onto it, as a switch does */
   if (pieces && k === 'rail') pieces.forEach(P => { if (!P.net && polyLen(P.p) > 0.6) P.p = turnouts(P.p); });
   VIEW.path = pts || (tr.length > 1 ? tr : null); VIEW.pathOk = !!pts; VIEW.pathMode = k; VIEW.hit = null;
@@ -254,11 +264,12 @@ function lineHitsBuilding(pts, hw) {
 }
 /* the town that pays: the one whose roads reach the spot (towns before villages), or the nearest town */
 function payTown(x, z) { const t = townAtPoint(x, z, true); return t >= 0 ? t : nearestTown(x, z, true, true); }
-/* a line is paid by a town at one of its ends that has the materials: the owner of the spot, or the nearest town */
+/* a line is paid through a town at one of its ends: the owner of the spot, or the nearest town. Its materials come from that
+   town's store and, for what it lacks, from the nearest towns with some to spare (takePlan in sim.js) */
 function linePayer(cost, ends) {
   const c = [];
   ends.forEach(q => { [payTown(q[0], q[1]), nearestTown(q[0], q[1], true, true)].forEach(ti => { if (ti >= 0 && !c.includes(ti)) c.push(ti); }); });
-  const ok = c.find(ti => !missing(cost, S.towns[ti]));
+  const ok = c.find(ti => takePlan(cost, ti).ok);
   return ok !== undefined ? ok : c.length ? c[0] : -1;
 }
 /* stretches of old lines a plan upgrades: merged spans per edge, {e, s0, s1} */
@@ -478,9 +489,9 @@ function doConfirm() {
   const town = p.ti >= 0 ? S.towns[p.ti] : null;
   if (p.kind === 'line' || p.kind === 'up') {
     if (!town) return toast('Found or unlock a town nearby first');
-    const m = missing(p.cost, town);
+    const m = takePlan(p.cost, p.ti).why;
     if (m) return toast(m);
-    pay(p.cost, town);
+    payPlan(p.cost, p.ti);
     if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${kmTxt(p.km)} km to ${p.name.toLowerCase()}`); log(`${kmTxt(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
     else {
       if (p.ups && p.ups.length) applyUps(p.ups, p.lv);
@@ -506,9 +517,9 @@ function doConfirm() {
     if (!v.ok) return toast(v.why);
     if (p.t === 'hall') {
       if (!town) return toast('No town nearby to pay for it');
-      const m = missing(p.cost, town);
+      const m = takePlan(p.cost, p.ti).why;
       if (m) return toast(m);
-      pay(p.cost, town); newTownAt(p.x, p.z, p.rot);
+      payPlan(p.cost, p.ti); newTownAt(p.x, p.z, p.rot);
     } else {
       const T0 = BT[p.t], jt = p.jt >= 0 ? S.towns[p.jt] : null;
       placed = siteNew(addB(p.t, p.x, p.z, p.rot, 1), T0.cost, T0.bd);

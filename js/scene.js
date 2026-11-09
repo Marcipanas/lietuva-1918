@@ -1018,7 +1018,7 @@ function updateLabels() {
     if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
     let el = STATUS[i];
     if (!el) { el = document.createElement('i'); el.className = 'st'; LBL.appendChild(el); STATUS.push(el); }
-    const wait = b.c.hold || b.town < 0 || (b.wait && b.wait.length && b.cw !== 'Building'), txt = b.c.hold ? 'II' : b.town < 0 ? '!' : wait ? '…' : Math.round(b.c.p * 100) + '%', cls = 'st cs' + (b.town < 0 ? ' bad' : wait ? ' wait' : '');
+    const wait = b.c.hold || b.town < 0 || (b.wait && b.wait.length && (b.cw || '').startsWith('Waiting')), txt = b.c.hold ? 'II' : b.town < 0 ? '!' : wait ? '…' : Math.round(b.c.p * 100) + '%', cls = 'st cs' + (b.town < 0 ? ' bad' : wait ? ' wait' : '');
     if (el.className !== cls) el.className = cls;
     if (el.textContent !== txt) el.textContent = txt;
     place(el, x, y, true); i++;

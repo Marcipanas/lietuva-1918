@@ -5,7 +5,7 @@ const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
   S={day:0,funds:3000,inc:0,era:1,eraDay:0,speed:0,intro:1,own:startOwners(),nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:200,
     towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0,built:0},sel:null,tab:'nat',cam:null,series:[],
-    keep:0,fx:[],gs:{},tb:{y:1918,ex:{},im:{},eg:{},ig:{}},tb0:null};
+    keep:500,fx:[],gs:{},tb:{y:1918,ex:{},im:{},eg:{},ig:{}},tb0:null};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
   if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else{genWorld();settleOwners()}
@@ -120,8 +120,8 @@ function moveCargo(A,B0,spec,cap,rec){if(cap<=0)return 0;let left=cap;const auto
       if(isMat(r)&&sb<40&&sa>60)amt=Math.max(amt,Math.min(40-sb,sa-60));
       /* a store filling up sends its surplus on to a town with room (only from the fuller to the emptier, so nothing goes back) */
       const ca=A.cap||STORE_BASE,cb=B0.cap||STORE_BASE,fa=sa/ca,fb=sb/cb;if(fa>0.75&&fa-fb>0.25)amt=Math.max(amt,Math.min((fa-fb)/2*Math.min(ca,cb),sa-ca*0.6));
-      amt=Math.min(amt,sa-da*5,sp)}
-    else amt=Math.min(sa-da*5,sp);if(amt>0.05)cand.push([r,amt,db>0?sb/db:99])});
+      amt=Math.min(amt,sa-Math.max(da*5,keptOf(A,r)),sp)}
+    else amt=Math.min(sa-Math.max(da*5,keptOf(A,r)),sp);if(amt>0.05)cand.push([r,amt,db>0?sb/db:99])});
   if(auto)cand.sort((x,y)=>x[2]-y[2]);
   cand.forEach(([r,amt])=>{const m=Math.min(amt,left);if(m<=0)return;A.stock[r]-=m;B0.stock[r]=(B0.stock[r]||0)+m;rec[r]=(rec[r]||0)+m;left-=m});return cap-left}
 function runRoutes(){S.routes.forEach(r=>{r.mAB={};r.mBA={};r.used=0;if(!r.ok)return;const A=S.towns[r.a],B0=S.towns[r.b],gc=r.pax?r.cap*0.5:r.cap;
@@ -155,6 +155,9 @@ function runTraders(){TRADES.length=0;
    site on a building that keeps working. b.c = {n: needs, g: got, p: progress 0 to 1, d: days, up, hold, pri}; b.cw says how it
    stands and b.wait lists what it lacks (both worked out each day, not saved). */
 const isSite=b=>!!b.c&&!b.c.up;
+/* what a town holds back of a good: the fuel it keeps to heat its homes in winter (t.hold, set each morning). Industry,
+   building sites, routes, deals and carters leave it alone. */
+const keptOf=(t,r)=>(t.hold&&t.hold[r])||0;
 let SITES=[];
 function siteNew(b,cost,days,up){b.c={n:{...cost},g:{},p:0,d:Math.max(1,days||20)};if(up)b.c.up=1;else{b.eff=0;b.why='Planned'}b.cw='Planned';b.wait=Object.keys(cost);return b}
 function startUpgrade(b){return siteNew(b,upCost(b),Math.max(10,Math.round((BT[b.t].bd||30)*(b.lv===1?0.5:0.8))),true)}
@@ -172,9 +175,39 @@ function siteDone(b){const c=b.c,T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null,at=
 function cancelSite(b){const c=b.c;if(!c)return;const ti=b.town>=0?b.town:nearestTown(b.x,b.z,true),t=S.towns[ti];
   for(const k in c.g){if(k==='lt')S.funds+=c.g[k];else if(t)t.stock[k]=(t.stock[k]||0)+c.g[k]}
   delete b.c;b.cw='';b.wait=null;if(c.up)WV.bld++;else removeB(b);NET.dirty=true}
-function runSites(){if(!SITES.length)return;const hp=buildRate(),own=new Map();let avail=Math.max(0,S.funds-(S.keep||0));
+/* Carters. What builders need and their own town cannot give comes from the nearest town along the roads and railways that
+   has it to spare: HAUL loads a day of each material for each town, halved for every HAUL_KM real km of the way (a railway
+   counts as half its length), from no further than HAUL_MAX km. Slow next to a route, but no site waits for ever while the
+   country has what it needs. haulFrom(ti): the towns in reach, nearest first, as [town, km of the way]. */
+const HAUL=4,HAUL_KM=50,HAUL_MAX=200;
+let HAULC={ver:-1,m:new Map()},HAULD=new Map();
+function haulFrom(ti){if(HAULC.ver!==NET.ver)HAULC={ver:NET.ver,m:new Map()};let out=HAULC.m.get(ti);if(out)return out;out=[];
+  const dist=new Map([[ti,0]]),done=new Set(),max=HAUL_MAX*MAPK;
+  for(;;){let u=-1,du=Infinity;dist.forEach((d,k)=>{if(d<du&&!done.has(k)){du=d;u=k}});if(u<0||du>max)break;done.add(u);if(u!==ti)out.push([u,du]);
+    for(const n of (NET.adj[u]||[])){const e=NET.edges[n],o=e.a===u?e.b:e.a,T=S.towns[o];if(!T||T.lock||done.has(o))continue;
+      const d=du+Math.min(e.road?e.road.len:Infinity,e.rail?e.rail.len*0.5:Infinity);if(d<(dist.has(o)?dist.get(o):Infinity))dist.set(o,d)}}
+  HAULC.m.set(ti,out);return out}
+/* bring up to `want` loads of k toward town ti today; returns {q, from: the town most of it came from} */
+function haul(ti,k,want){const key=ti+':'+k;let left=HAULD.has(key)?HAULD.get(key):1,q=0,from=-1,most=0;
+  if(left>1e-6&&want>1e-6)for(const [o,d] of haulFrom(ti)){const X=S.towns[o],rate=HAUL*Math.pow(0.5,d/(HAUL_KM*MAPK)),spare=(X.stock[k]||0)-Math.max(((X.dem&&X.dem[k])||0)*10,keptOf(X,k));
+    if(spare<=0.01)continue;const x=Math.min(want-q,spare,rate*left);if(x<=1e-6)continue;
+    X.stock[k]-=x;q+=x;left-=x/rate;if(x>most){most=x;from=o}if(want-q<=1e-6||left<=1e-6)break}
+  HAULD.set(key,left);return {q,from}}
+/* What is paid at once (a road, a railway, a new town): money from the treasury, materials from the paying town's store and
+   then from the towns in the carters' reach that have some to spare, nearest first.
+   takePlan(cost, ti) → {ok, why: what is missing, take: [[town, good, loads]], far: some of it comes from another town} */
+function takePlan(cost,ti){const t=S.towns[ti],take=[];let far=false;
+  if((cost.lt||0)>S.funds)return {ok:false,why:`Need ${fmt(cost.lt-S.funds)} more Lt`,take,far};
+  for(const k in cost){if(k==='lt'||!(cost[k]>0))continue;let need=cost[k];
+    if(t){const own=Math.min(need,Math.max(0,(t.stock[k]||0)-keptOf(t,k)));if(own>0){take.push([ti,k,own]);need-=own}
+      if(need>1e-6)for(const [o] of haulFrom(ti)){const X=S.towns[o],sp=(X.stock[k]||0)-Math.max(((X.dem&&X.dem[k])||0)*10,keptOf(X,k));if(sp<=0.01)continue;
+        const q=Math.min(need,sp);take.push([o,k,q]);need-=q;far=true;if(need<=1e-6)break}}
+    if(need>1e-6)return {ok:false,why:`Need ${Math.ceil(need)} more ${rname(k)} within ${HAUL_MAX} km of ${t?t.n:'a town'} by road`,take,far}}
+  return {ok:true,why:'',take,far}}
+function payPlan(cost,ti){const p=takePlan(cost,ti);if(!p.ok)return false;S.funds-=cost.lt||0;p.take.forEach(([o,k,q])=>{const X=S.towns[o];X.stock[k]=Math.max(0,(X.stock[k]||0)-q)});return true}
+function runSites(){HAULD.clear();const hp=buildRate(),own=new Map();let avail=Math.max(0,S.funds-(S.keep||0));
   SITES.sort((a,b)=>(b.c.pri||0)-(a.c.pri||0)||a.id-b.id);
-  for(const b of SITES){const c=b.c,t=b.town>=0?S.towns[b.town]:null,lack=[];
+  for(const b of SITES){const c=b.c,t=b.town>=0?S.towns[b.town]:null,lack=[];b.hf=null;
     if(c.hold){b.cw='On hold';b.wait=[]}
     else if(!t||t.lock){b.cw=naTxt(b);b.wait=[]}
     else{
@@ -182,16 +215,23 @@ function runSites(){if(!SITES.length)return;const hp=buildRate(),own=new Map();l
       let d0=own.get(t);if(!d0){d0={...t.dem};own.set(t,d0)}
       for(const k in c.n){const miss=c.n[k]-(c.g[k]||0);if(miss<=1e-6)continue;let q;
         if(k==='lt'){q=Math.min(miss,avail);avail-=q;S.funds-=q;BUD.build-=q}
-        else{q=Math.max(0,Math.min(miss,(t.stock[k]||0)-(d0[k]||0)*5));t.stock[k]=(t.stock[k]||0)-q;if(t._us)t._us[k]=(t._us[k]||0)+q;
-          /* what is still missing is wanted here, so routes and merchants bring it */
+        else{q=Math.max(0,Math.min(miss,(t.stock[k]||0)-Math.max((d0[k]||0)*5,keptOf(t,k))));t.stock[k]=(t.stock[k]||0)-q;
+          /* the rest comes by cart from the nearest town with some to spare */
+          if(miss-q>1e-6){const h=haul(b.town,k,miss-q);if(h.q>0){q+=h.q;(b.hf=b.hf||{})[k]=h.from}}
+          if(t._us)t._us[k]=(t._us[k]||0)+q;
+          /* what is still missing is wanted here, so routes and merchants bring it too */
           if(miss-q>1e-6)t.dem[k]=(t.dem[k]||0)+(miss-q)/10}
         c.g[k]=(c.g[k]||0)+q;if(miss-q>1e-6)lack.push(k)}
       const fr=siteGot(c);
       if(c.p<fr-1e-9){c.p=Math.min(fr,c.p+hp/c.d);b.cw='Building'}
-      else b.cw=lack.length?'Waiting for '+lack.map(k=>k==='lt'?'money':rname(k)).join(' and '):'Building';
+      else{const dry=lack.filter(k=>k==='lt'||!b.hf||b.hf[k]===undefined);
+        b.cw=!lack.length?'Building':dry.length?'Waiting for '+dry.map(k=>k==='lt'?'money':rname(k)).join(' and '):'Carts bring '+lack.map(rname).join(' and ')}
       b.wait=lack;
       if(c.p>=1-1e-6){siteDone(b);continue}}
-    if(!c.up){b.eff=c.p;b.why=b.cw}}}
+    if(!c.up){b.eff=c.p;b.why=b.cw}}
+  /* homes: a town that waits for the material of its houses gets it the same way, into its store */
+  S.towns.forEach((t,ti)=>{if(t.lock||!t.hmat||!RI[t.hmat])return;const k=t.hmat,want=Math.min(12-(t.stock[k]||0),room(t,k));if(want<=0.01)return;
+    const h=haul(ti,k,want);if(h.q>0)t.stock[k]=(t.stock[k]||0)+h.q})}
 /* building sites and modernizations of one settlement, or of the whole country (ti < 0) */
 function sitesOf(ti){return S.bld.filter(b=>b.c&&(ti<0||b.town===ti))}
 
@@ -217,8 +257,8 @@ function wantK(){return clamp((S.day-(S.eraDay||0))/(WANT_YEARS*365),0,1)}
 /* ---------- production and town life ---------- */
 /* residents a house lot holds: village farmsteads hold fewer than town houses */
 function houseCap(b){return b.f&&b.lv===1?FARMSTEAD_CAP:HOUSE.cap[b.lv]}
-function useInputs(b,e,st,dem,fill,us){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';
-  for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const q=(st[r]||0)/need;if(q<ir){ir=q;b.lack=r}}}
+function useInputs(b,e,st,dem,fill,us,hold){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';b.kept=0;
+  for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const h=(hold&&hold[r])||0,q=Math.max(0,(st[r]||0)-h)/need;if(q<ir){ir=q;b.lack=r;b.kept=h>0.5&&(st[r]||0)>=need*0.9?1:0}}}
   ir=clamp(ir,0,1);for(const r in T0.in){const q=T0.in[r]*im*e*ir;st[r]=(st[r]||0)-q;us[r]=(us[r]||0)+q}return ir}
 /* buildings that make nothing themselves: what they do for their town */
 const IDLE=new Set(['station','warehouse','customs','port']);
@@ -228,18 +268,22 @@ function idleWhy(b,t){if(!b.on)return 'Paused';
   if(b.t==='port')return `Ships load here for ${t.n}`;
   const m=b.gate?Object.keys(MARKETS).filter(k=>MARKETS[k].gate.includes(b.gate)).map(k=>MARKETS[k].n):[];
   return m.length?`Trade with ${m.join(' and ')} crosses here`:'No market across this border now'}
-function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
+function why(b,fill,pr,ir){if(ir<0.9)return b.kept?'Fuel kept for homes':'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
 const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall'};
 function naTxt(b){return b.na==='locked'?heldTxt(rgnAt(b.x,b.z)):NA_TXT[b.na]||'Not connected'}
 let BYT=[];
 function phase1(ti){const t=S.towns[ti];let house=0,jobs=0,cap=STORE_BASE,sch=0,cli=0,pol=0,hn=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(b.t==='house'){house+=houseCap(b);pol+=polAt(b.x,b.z);hn++}else if(T0.w&&b.on)jobs+=T0.w;
     if(T0.store)cap+=WH_CAP[b.lv];if(T0.svc==='school'&&b.on)sch++;if(T0.svc==='clinic'&&b.on)cli++});
-  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={};t._mk={};t._us={};t._tr={}}
+  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={};t._mk={};t._us={};t._tr={};
+  /* fuel for winter: a town keeps a winter's peat and timber for everyone its own woodlots do not heat (as much as its store
+     holds), peat first. Villages gather their own. */
+  const fk=t.vil?0:Math.min(Math.max(0,t.pop-(t.pop0||0))*0.03*WINTER,cap*1.2),hp=Math.min(t.stock.peat||0,fk);
+  t.fkeep=fk;t.hold={peat:hp,timber:Math.min(t.stock.timber||0,fk-hp)}}
 function phase1b(ti){const t=S.towns[ti],st=t.stock;t.edu=Math.min(1,t.nsch*50*t.fill/Math.max(1,t.pop)+(polOn('schools')?0.25:0));t.med=Math.min(1,t.ncli*70*t.fill/Math.max(1,t.pop));
   t.pm=(0.7+0.6*t.h/100)*(1+0.1*t.edu);t.powS=0;t.powD=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.pow)return;if(!b.on){b.eff=0;b.why='Paused';return}
-    const ir=useInputs(b,t.fill,st,t.dem,t.fill,t._us);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
+    const ir=useInputs(b,t.fill,st,t.dem,t.fill,t._us,t.hold);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(T0.powNeed&&b.on)t.powD+=T0.powNeed*LV[b.lv]*t.fill;if(T0.svc){b.eff=b.on?t.fill:0;b.why=b.on?(t.fill<0.9?'Short of workers':'Running'):'Paused'}});
   if(S.era>=2&&!t.vil)t.powD+=t.pop*(S.era>=3?0.06:0.03)}
 function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill,hp=histProd()*fxMul('prod',t),mk=t._mk,us=t._us;
@@ -247,7 +291,7 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   /* fields take fertiliser when the town has some (or can be sent some) */
   const fertOn=(st.fertiliser||0)>0.01||era>=3||!!S.hist.unl.fert;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.out)return;if(!b.on){b.eff=0;b.why='Paused';return}
-    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill,us);let full=false;
+    const p=T0.powNeed?pr:1,e0=fill*p,ir=useInputs(b,e0,st,t.dem,fill,us,t.hold);let full=false;
     let mod=(b.t==='farm'||b.t==='potato'?S.mod.farm:1)*(b.k||1)*hp*(T0.fert?fxFarm:1)*(b.t==='dairy'||b.t==='pigs'?fxStock:1)*(b.t==='fishery'?fxFish:1);
     b.fz=0;
     if(T0.fert&&fertOn){t.dem.fertiliser=(t.dem.fertiliser||0)+FERT_USE*fill;const q=FERT_USE*e0;if(q>0&&(st.fertiliser||0)>=q){st.fertiliser-=q;us.fertiliser=(us.fertiliser||0)+q;mod*=FERT_GAIN;b.fz=1}}
@@ -262,7 +306,8 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   t.fdays=need>0?FOOD.reduce((a,r)=>a+(st[r]||0),0)/need:99;
   /* heating: a village gathers its own firewood however it grows; a town's woodlots heat only its people of 1918 */
   const hk=0.03*sea.heat*(era>=3&&pr>0.9?0.5:1)*fxMul('heat',t),hm=t.pop*hk,hsub=(t.vil?t.pop:Math.min(t.pop,base))*hk,hneed=hm-hsub;
-  t.dem.peat=(t.dem.peat||0)+hneed*0.6;t.dem.timber=(t.dem.timber||0)+hneed*0.4;
+  /* a town wants its winter store full all year: twenty days of this demand make the store, so routes and merchants fill it */
+  const fk=t.fkeep||0;t.dem.peat=(t.dem.peat||0)+Math.max(hneed*0.6,fk*0.6/20);t.dem.timber=(t.dem.timber||0)+Math.max(hneed*0.4,fk*0.4/20);
   let hr=hneed;['peat','timber'].forEach(r=>{const take=Math.min(hr,st[r]||0);st[r]=(st[r]||0)-take;us[r]=(us[r]||0)+take;hr-=take});t.heat=hm>0?1-hr/hm*Math.min(1,sea.heat/0.35):1;
   /* materials the town waits for to build homes */
   if(t.hmat)t.dem[t.hmat]=(t.dem[t.hmat]||0)+0.3;
@@ -288,7 +333,7 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   /* a town also needs fuel put by before it takes in more people than its woodlots heat: a winter's worth for everyone beyond
      its 1918 size (t.fuelw: the share of that winter in store). Without it the town holds its size, and if homes go cold the
      newcomers leave again. */
-  const over=t.vil?0:Math.max(0,t.pop-base),wint=over*0.03*WINTER;t.fuelw=wint>0.01?((st.peat||0)+(st.timber||0))/wint:9;t.nofuel=!t.vil&&t.pop>=base-0.05&&t.fuelw<1?1:0;
+  const over=t.vil?0:Math.max(0,t.pop-base);t.fuelw=fk>0.01?((st.peat||0)+(st.timber||0))/fk:9;t.nofuel=!t.vil&&t.pop>=base-0.05&&t.fuelw<0.9?1:0;
   if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(!t.nofuel&&t.fdays>=8&&(fbal>=need*0.015||full))))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med)*(polOn('health')?1.15:1));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.heat<0.9&&over>0)t.pop-=over*(1-t.heat)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
   const tax=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax()*fxMul('tax',t);S.funds+=tax;BUD.tax+=tax;

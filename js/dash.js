@@ -46,26 +46,37 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   if(t.fed!==undefined&&t.fed<0.97)add('hungry',2,'grain','Hungry',`${pct(t.fed)} fed. People are leaving.`,[F(suggestRoute,ti,FOOD),F(buildFix,'farm',ti),F(buildFix,'potato',ti)]);
   else if((t.fdays||99)<6&&fbal<-0.01)add('lowfood',1,'grain','Food runs low',`Food for ${num(t.fdays)} days, and stocks are falling.`,[F(suggestRoute,ti,FOOD),F(buildFix,'farm',ti)]);
   if(heatOn&&t.heat!==undefined&&t.heat<0.9)add('cold',2,'fire','Cold homes',`${pct(t.heat)} of homes are warm. Homes burn peat or timber.`,[F(suggestRoute,ti,FUEL),F(buildFix,'forestry',ti),F(buildFix,'peat',ti)]);
-  if(!t.vil&&S.era>=2&&t.pr!==undefined&&t.pr<0.95)add('power',t.pr<0.8?2:1,'bolt','Short of power',`It gets ${pct(t.pr)} of the power it needs.`,
-    [NET.linked.has(ti)?F(buildFix,'power',ti):{t:'Link it by paved road',a:{act:'tool',tool:'road',ti,lv:2}}]);
+  /* power: no line reaches it, no station on its grid, stations that stand short of fuel or hands, or too few of them */
+  if(!t.vil&&S.era>=2&&t.pr!==undefined&&t.pr<0.95){const G=gridInfo(ti),sev=t.pr<0.8&&darkNow()?2:1;let d,fix;
+    if(!G.st.length){const lk=NET.linked.has(ti);d=lk?`No power station feeds the grid ${t.n} is on.`:'No power line reaches it. Railways and paved roads carry the grid.';
+      fix=lk?[F(buildFix,'power',ti)]:[{t:'Link it by paved road',a:{act:'tool',tool:'road',ti,lv:2}},F(buildFix,'power',ti,'A station of its own')]}
+    else if(G.weak.length&&G.cap>=G.D*0.95){const b=G.weak[0],bt=S.towns[b.town];d=`Its grid could make ${num(G.cap)} MW and makes ${num(G.S)}: the ${BT[b.t].n.toLowerCase()} in ${bt.n} is ${b.why==='Fuel kept for homes'?'left without peat, which the town keeps for its homes':b.why.toLowerCase()}.`;
+      fix=[b.lack?F(suggestRoute,b.town,[b.lack]):null,b.lack?F(buildFix,PRODUCER[b.lack],b.town):null,{t:'Open '+bt.n,a:{act:'seltown',ti:b.town}}]}
+    else if(G.sites.length&&G.cap+G.sites.reduce((a,b)=>a+BT[b.t].pow,0)>=G.D*0.95){d=`It gets ${pct(t.pr)} of the power it needs. A power station is being built.`;fix=[{t:'Open the works',a:{act:'works'}}]}
+    else{d=`Its grid makes ${num(G.S)} MW and needs ${num(G.D)}.`;fix=[F(buildFix,'power',ti),F(buildFix,'hydro',ti)]}
+    add('power',sev,'bolt','Short of power',d,fix)}
   if(t.pop>(t.house||0)+0.3)add('crowd',1,'house','Overcrowded',`${popStr(t.pop-t.house)} more people than homes.`,[zone]);
   else if(t.hint&&t.hint.startsWith('No room'))add('room',1,'zone','No land to build on','Every zoned lot has houses. Zone land along its streets so it can keep growing.',[zone]);
   if(t.hint&&t.hint.startsWith('Needs')){const r=t.hmat&&RI[t.hmat]?t.hmat:HOUSE_MAT[S.era];add('mat',1,RI[r].ic,'Can’t build homes',t.hint+'.',[F(suggestRoute,ti,[r]),F(buildFix,PRODUCER[r],ti),F(buyFix,ti,r)])}
   /* fuel put by: a town takes in no more people than it can keep warm */
-  if(t.nofuel&&t.pop-t.pop0>=0.3&&!(heatOn&&t.heat<0.9))add('fuel',1,'fire','No fuel for more homes',`Its own woodlots heat ${popStr(t.pop0)}. For the ${popStr(t.pop-t.pop0)} beyond that it has ${pct(Math.min(1,t.fuelw||0))} of a winter’s peat or timber in store, so it takes in no one new.`,
+  if(t.nofuel&&t.pop-t.pop0>=0.3&&!(heatOn&&t.heat<0.9))add('fuel',1,'fire','No fuel for more homes',`Its own woodlots heat ${popStr(t.pop0)}. For the ${popStr(t.pop-t.pop0)} beyond that it keeps ${fmt(Math.round(t.fkeep||0))} peat and timber for winter, and has ${pct(Math.min(1,t.fuelw||0))} of it. It takes in no one new until the store is full.`,
     [F(suggestRoute,ti,FUEL),F(buildFix,'forestry',ti),F(buildFix,'peat',ti)]);
   /* building sites that wait: for a material, for money, or for a road */
-  {const waits={},noroad=[];S.bld.forEach(b=>{if(!b.c||b.c.hold)return;if(b.town!==ti)return;(b.wait||[]).forEach(k=>{if(b.cw!=='Building')(waits[k]=waits[k]||[]).push(b)})});
+  {const waits={};S.bld.forEach(b=>{if(!b.c||b.c.hold||b.town!==ti||b.cw==='Building')return;(b.wait||[]).forEach(k=>{if(k==='lt'||!b.hf||b.hf[k]===undefined)(waits[k]=waits[k]||[]).push(b)})});
     for(const k in waits){const L0=waits[k],lack=L0.reduce((a,b)=>a+Math.max(0,b.c.n[k]-(b.c.g[k]||0)),0);
       if(k==='lt')add('site:lt',1,'coin','Building waits for money',`${typeList(L0)} ${L0.length>1?'need':'needs'} ${fmt(lack)} Lt more. Sites take what the treasury has above the reserve you keep.`,[{t:'Open the works',a:{act:'works'}}]);
-      else add('site:'+k,1,RI[k].ic,'Building waits for '+rname(k),`${typeList(L0)} ${L0.length>1?'need':'needs'} ${fmt(Math.ceil(lack))} more ${rname(k)} in ${t.n}.`,[F(suggestRoute,ti,[k]),RI[k].port?F(importFix,ti,k):F(buildFix,PRODUCER[k],ti),F(buyFix,ti,k)])}}
+      else add('site:'+k,1,RI[k].ic,'Building waits for '+rname(k),`${typeList(L0)} ${L0.length>1?'need':'needs'} ${fmt(Math.ceil(lack))} more ${rname(k)}. ${t.n} has none to give, and no town within ${HAUL_MAX} km by road has any to spare.`,
+        [RI[k].port?F(importFix,ti,k):F(buildFix,PRODUCER[k],ti),F(buyFix,ti,k),{t:'See '+rname(k),a:{act:'good',r:k}}])}}
   if((t.unemp||0)>(t.wf||0)*0.25+1&&S.hist.path!=='soviet')add('jobless',1,'people','People out of work',`${popStr(t.unemp)} people have no work.`,[{t:'Build a workplace',a:{act:'buildmenu',ti},b:1}]);
-  const miss={},staff=[],full=[];
+  const miss={},staff=[],full=[],kept=[];
   bOfTown(ti).forEach(b=>{if(b.t==='house'||b.t==='hall'||b.t==='landmark'||!b.on)return;
-    if(b.lack&&b.why&&b.why.startsWith('Missing '))(miss[b.lack]=miss[b.lack]||[]).push(b);
+    if(b.lack&&b.why==='Fuel kept for homes')kept.push(b);
+    else if(b.lack&&b.why&&b.why.startsWith('Missing '))(miss[b.lack]=miss[b.lack]||[]).push(b);
     else if(b.why==='Short of workers'&&b.eff<0.8)staff.push(b);else if(b.why==='Storage full')full.push(b)});
   for(const r in miss){const L0=miss[r];add('in:'+r,1,RI[r].ic,'Missing '+rname(r),`${typeList(L0)} ${L0.length>1?'wait':'waits'} for ${rname(r)}.`,
     [F(suggestRoute,ti,[r]),RI[r].port?null:F(buildFix,PRODUCER[r],ti)])}
+  if(kept.length){const rs=[...new Set(kept.map(b=>b.lack))];add('kept',1,'fire','Fuel kept for homes',`${typeList(kept)} ${kept.length>1?'wait':'waits'}: ${t.n} keeps its last ${fmt(Math.round(t.fkeep||0))} peat and timber to heat homes in winter.`,
+    [F(suggestRoute,ti,rs),...rs.map(r=>F(buildFix,PRODUCER[r],ti))])}
   if(staff.length){const r=S.routes.find(q=>(q.a===ti||q.b===ti)&&q.ok&&!q.pax);
     add('staff',1,'people','Short of workers',`${typeList(staff)} ${staff.length>1?'run':'runs'} below strength.`,[r?{t:'Carry commuters',a:{act:'rpax',r:r.id}}:null,zone])}
   /* a full store: send the surplus where it is needed, sell it, or store more */
@@ -90,7 +101,7 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
 /* How a settlement looks on the map: 2 red (hungry, cold, blackouts), 1 amber (held back), -1 thriving, 0 nothing to say.
    Villages show only red: most of them are held back by something small, and dots on hundreds of them would hide what matters. */
 function townAlert(t,heatOn){if(t.lock||t.fed===undefined)return 0;
-  if(t.fed<0.97||(heatOn&&t.heat<0.9)||(!t.vil&&S.era>=2&&t.pr<0.8))return 2;
+  if(t.fed<0.97||(heatOn&&t.heat<0.9)||(!t.vil&&S.era>=2&&t.pr<0.8&&darkNow()))return 2;
   if(t.vil)return 0;
   const note=t.note||'';
   if(t.pop>(t.house||0)+0.3||t.h<45||t.pol>0.3||(t.hint&&t.hint.length)||(t.nofuel&&t.pop-t.pop0>=0.3)||note==='Unemployment'||note==='Blackouts'||note.startsWith('Want'))return 1;
@@ -122,15 +133,27 @@ function sparkPath(vals,w,h,n){if(vals.length<2)return '';n=n||60;
 function popTrend(){const L0=S.series||[];if(L0.length<2)return 0;const a=L0[Math.max(0,L0.length-9)],b=L0[L0.length-1];return b[0]>a[0]?(b[1]-a[1])/(b[0]-a[0])*30:0}
 function trendTxt(perMonth){return Math.abs(perMonth)<0.05?'steady':(perMonth>0?'+':'−')+popStr(Math.abs(perMonth))+' a month'}
 
+/* towns expect electric light: at once in the Modern era, and from a year or so into Industrialization (see wantK) */
+const darkNow=()=>S.era>2||wantK()>0.3;
+/* The power grid a town is on: its stations (st), those at work (work) and what they could make (cap, MW), those that stand
+   short of fuel or hands (weak), stations being built (sites), and the grid's supply and demand today (S, D). */
+function gridInfo(ti){const g=NET.grid[ti],st=[];S.bld.forEach(b=>{if(BT[b.t].pow&&b.town>=0&&!S.towns[b.town].lock&&NET.grid[b.town]===g)st.push(b)});
+  const work=st.filter(b=>!isSite(b)&&b.on);
+  return {st,work,sites:st.filter(isSite),cap:work.reduce((a,b)=>a+BT[b.t].pow*LV[b.lv],0),weak:work.filter(b=>b.eff<0.8),S:S.towns[ti].gS||0,D:S.towns[ti].gD||0}}
+
 /* ---------- building sites ---------- */
 /* How a site stands: {b, st: 'build' | 'wait' | 'hold' | 'road', lack: what it waits for, days: days of work left, pc: percent built} */
-function siteInfo(b){const c=b.c,lack=(b.wait||Object.keys(c.n).filter(k=>(c.g[k]||0)<c.n[k]-1e-6)),got=siteGot(c);
-  const st=c.hold?'hold':b.town<0?'road':c.p<got-1e-9||!lack.length?'build':'wait';
-  return {b,st,lack,days:siteDays(b),pc:Math.round(c.p*100)}}
-/* "Building · 43% · about 8 days of work left", "Waiting for planks and money" */
+function siteInfo(b){const c=b.c,lack=(b.wait||Object.keys(c.n).filter(k=>(c.g[k]||0)<c.n[k]-1e-6)),got=siteGot(c),hf=b.hf||{},dry=lack.filter(k=>k==='lt'||hf[k]===undefined);
+  const st=c.hold?'hold':b.town<0?'road':c.p<got-1e-9||!lack.length?'build':dry.length?'wait':'haul';
+  return {b,st,lack,dry,days:siteDays(b),pc:Math.round(c.p*100)}}
+const lackTxt=L0=>L0.map(k=>k==='lt'?'money':rname(k)).join(' and ');
+/* where the carts that supply a site come from: " from Kaunas" when it is one town */
+function cartsFrom(b){const s=new Set(Object.values(b.hf||{}));return s.size===1&&S.towns[[...s][0]]?' from '+S.towns[[...s][0]].n:''}
+/* "Building, 43% done · 8 days left", "Carts bring planks from Kaunas", "Waits for bricks and money" */
 function siteTxt(b){const q=siteInfo(b);if(q.st==='hold')return 'On hold';if(q.st==='road')return b.na==='locked'?naTxt(b):b.na==='far'?'Too far from a town hall':'Waits for a road to a town';
-  if(q.st==='wait')return 'Waits for '+q.lack.map(k=>k==='lt'?'money':rname(k)).join(' and ');
-  return q.lack.length?`Building, ${q.pc}% done. Still short of ${q.lack.map(k=>k==='lt'?'money':rname(k)).join(' and ')}`:`Building, ${q.pc}% done · ${q.days} day${q.days===1?'':'s'} left`}
+  if(q.st==='wait')return 'Waits for '+lackTxt(q.dry);
+  if(q.st==='haul')return `Carts bring ${lackTxt(q.lack)}${cartsFrom(b)}`;
+  return q.lack.length?`Building, ${q.pc}% done. ${q.dry.length?'Still short of '+lackTxt(q.dry):'Carts bring '+lackTxt(q.lack)+cartsFrom(b)}`:`Building, ${q.pc}% done · ${q.days} day${q.days===1?'':'s'} left`}
 /* what all sites of the country still need: {lt, planks, …} */
 function siteNeeds(ti){const n={};sitesOf(ti===undefined?-1:ti).forEach(b=>{if(b.c.hold)return;for(const k in b.c.n){const m=b.c.n[k]-(b.c.g[k]||0);if(m>0.01)n[k]=(n[k]||0)+m}});return n}
 

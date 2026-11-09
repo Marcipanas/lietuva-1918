@@ -91,11 +91,11 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
     icon=k;title=spec[lv].n;
     if(mx>1)extra=`<div class="seg lvs" role="group" aria-label="Kind">${Array.from({length:mx},(x,i)=>i+1).map(l=>`<button data-act="lv" data-lv="${l}" aria-pressed="${l===lv}">${spec[l].n}</button>`).join('')}</div>`;
     if(!n)sub=`Tap where the ${what} starts, then tap where it goes. Hold and drag to draw it.`;
-    else if(p&&p.kind==='up'){const m=missing(p.cost,town);sub=m||`Upgrade this ${kmTxt(p.km)} km stretch to ${p.name.toLowerCase()}, or tap where a new ${what} goes.`;state=m?'bad':'';cost=costHTML(p.cost);
+    else if(p&&p.kind==='up'){const m=town?takePlan(p.cost,p.ti).why:'';sub=m||`Upgrade this ${kmTxt(p.km)} km stretch to ${p.name.toLowerCase()}, or tap where a new ${what} goes.`;state=m?'bad':'';cost=costHTML(p.cost);
       btns=undo+pri('Upgrade','up',!!m)}
     else if(n===1){sub=`Now tap where the ${what} goes. Drag the map to move around.`;btns=undo}
     else if(p&&p.bad){sub=p.bad;state='bad';btns=undo}
-    else if(p&&p.kind==='line'){const m=missing(p.cost,town);sub=m||`${kmTxt(p.km)} km new${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · paid from ${town?town.n:'—'}. Tap to add a bend.`;state=m?'bad':'';
+    else if(p&&p.kind==='line'){const tp=town?takePlan(p.cost,p.ti):{why:'',far:false},m=tp.why;sub=m||`${kmTxt(p.km)} km new${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · materials from ${town?town.n:'—'}${tp.far?' and towns near it':''}. Tap to add a bend.`;state=m?'bad':'';
       cost=costHTML(p.cost);btns=undo+pri('Build','check',!!m)}
     else btns=undo}
   else if(k==='zone'){icon='zone';title='Zone homes';
@@ -112,12 +112,13 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
     const turn=`<button class="btn ghost" data-act="rotg" aria-label="Turn">${ic('turn')}Turn</button>`,find=`<button class="btn ghost" data-act="find">${ic('spot')}Find a spot</button>`;
     if(!p||p.kind!=='place'){sub=TOOL.built?`${TOOL.built} planned. Tap the map to plan another, or close.`:'Tap the map to place it.';state=TOOL.built?'good':'';btns=find}
     else if(!p.ok){sub=p.why+(VIEW.need&&/^Needs|^Too wet/.test(p.why)?'. The lit ground suits it.':'.');state='bad';btns=turn+find+pri('Build','check',true)}
-    else if(TOOL.bt==='hall'){const m=missing(p.cost,town);sub=m||'Founds a new town here, paid at once. Drag it to move.';state=m?'bad':'';cost=costHTML(p.cost);btns=turn+pri('Found town','check',!!m)}
-    else{const jt=p.jt>=0?S.towns[p.jt]:null,lack=jt?Object.keys(p.cost).filter(q=>q!=='lt'&&(jt.stock[q]||0)<p.cost[q]).map(rname):[];
-      if(S.funds-(S.keep||0)<p.cost.lt)lack.unshift('money');
-      /* nothing has to be in hand: the site takes money and materials as they come */
+    else if(TOOL.bt==='hall'){const m=town?takePlan(p.cost,p.ti).why:'';sub=m||'Founds a new town here, paid at once. Drag it to move.';state=m?'bad':'';cost=costHTML(p.cost);btns=turn+pri('Found town','check',!!m)}
+    else{const jt=p.jt>=0?S.towns[p.jt]:null,mat={};for(const q in p.cost)if(q!=='lt')mat[q]=p.cost[q];
+      /* nothing has to be in hand: the site takes money and materials as they come, and carts bring what the town lacks */
+      const local=jt?Object.keys(mat).filter(q=>(jt.stock[q]||0)<mat[q]):[],far=jt&&local.length?takePlan(mat,p.jt).ok:true,lack=[];
+      if(S.funds-(S.keep||0)<p.cost.lt)lack.push('money');if(!far)lack.push(...local.map(rname));
       sub=(p.bonus?'Good land: it makes more here. ':T0.bonus?'It makes more on the lit ground. ':'')+(jt?(p.acc?`Joins ${jt.n}. `:`Joins ${jt.n} once a road reaches it: you lay one next. `):`No town will supply it here: it needs a road to a town hall within ${kmTxt(TERRITORY)} km. `)
-        +(jt?(lack.length?`The site will wait for ${lack.join(' and ')}.`:`Ready in about ${daysTxt(T0.bd)}.`):'');
+        +(jt?(lack.length?`The site will wait for ${lack.join(' and ')}.`:local.length?`Carts bring ${local.map(rname).join(' and ')} from towns near it: ${daysTxt(T0.bd)} of work, and the haul.`:`Ready in about ${daysTxt(T0.bd)}.`):'');
       state=!jt?'bad':lack.length?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
   const html=`<div class="bh"><span class="bico">${ic(icon)}</span>${extra&&extra.startsWith('<div class="seg')?'':`<b class="btitle">${title}</b>`}${extra}<button class="ib" data-act="tooloff" aria-label="Close the tool">${ic('close')}</button></div>
     <p class="bsub" data-c="${state}">${sub}</p>${cost||btns?`<div class="bfoot">${cost?`<div class="cost">${cost}</div>`:'<span></span>'}<div class="bbtn">${btns}</div></div>`:''}`;

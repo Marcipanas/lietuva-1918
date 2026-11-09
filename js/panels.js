@@ -120,7 +120,8 @@ function sitePanel(b){const T0=BT[b.t],c=b.c,t=b.town>=0?S.towns[b.town]:null,q=
     <p class="status big site"${sc('sst'+b.id,q.st)}>${ic('hammer')}${v('sx'+b.id,siteTxt(b))}</p>
     <div class="kpis"><div class="kpi"><span class="k">${ic('hammer')}Built</span><b>${v('sp'+b.id,q.pc+'%')}</b><div class="mbar">${w('sm'+b.id,q.pc)}</div></div>
       <div class="kpi"><span class="k">${ic('clock')}Work left</span><b>${v('sd'+b.id,daysTxt(q.days))}</b><small>of ${c.d}, once supplied</small></div></div>
-    <div class="sec"><h3>On site<span>${t?`money from the treasury, materials from ${t.n}`:'needs a road to a town'}</span></h3>${needsHTML(b)}</div>
+    <div class="sec"><h3>On site<span>${t?`money from the treasury, materials from ${t.n}`:'needs a road to a town'}</span></h3>${needsHTML(b)}
+      ${t?`<p class="note">What ${t.n} lacks comes by cart from the nearest town that has some to spare, up to ${HAUL} loads a day and fewer the further it is. A route is faster.</p>`:''}</div>
     ${iss.length?issuesHTML(iss,'s'+b.id):q.st==='road'&&b.na!=='locked'?`<p class="note">A site gets its materials from the town whose hall a road reaches within ${kmTxt(TERRITORY)} km. <button class="link sm" data-act="tool" data-tool="road">Build a road to it</button></p>`:''}
     ${T0.out||T0.pow?`<p class="note">When finished it ${io(T0,1)} per day${T0.w?`, with ${popStr(T0.w)} workers`:''}.</p>`:T0.store?`<p class="note">When finished it adds ${fmt(WH_CAP[1])} storage for every good.</p>`:''}
     <div class="row"><button class="btn ghost" data-act="shold" data-id="${b.id}">${c.hold?ic('play')+'Resume':ic('pause')+'Hold'}</button>
@@ -321,7 +322,7 @@ function goodPanel(r){const q=goodInfo(r),R0=RI[r],gs=S.gs&&S.gs.v&&S.gs.v[r]?S.
   return h}
 
 /* ---------- Works: every building site, what it waits for, and how much the treasury keeps back ---------- */
-function worksPanel(){const L0=sitesOf(-1).map(siteInfo),ord={build:0,wait:1,road:2,hold:3},need=siteNeeds();
+function worksPanel(){const L0=sitesOf(-1).map(siteInfo),ord={build:0,haul:1,wait:2,road:3,hold:4},need=siteNeeds();
   L0.sort((a,b)=>(b.b.c.pri||0)-(a.b.c.pri||0)||ord[a.st]-ord[b.st]||a.b.id-b.b.id);
   const nb=L0.filter(q=>q.st==='build').length,keep=S.keep||0;
   let h=`<div class="kpis"><div class="kpi"><span class="k">${ic('hammer')}Sites</span><b>${v('wn',L0.length)}</b><small>${v('wb',nb+' at work')}</small></div>
