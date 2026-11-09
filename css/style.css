@@ -381,14 +381,14 @@ select{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);b
   background:rgba(15,33,29,.86);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 .mapbtn svg{width:20px;height:20px}
 .mapbtn[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:var(--amber-ink)}
-.prodbar{position:absolute;top:12px;left:max(12px,env(safe-area-inset-left,0px));right:62px;z-index:4;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:1px 2px 3px}
+.prodbar{position:absolute;bottom:calc(100% + 56px);left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:1px 2px 3px}
 .prodbar::-webkit-scrollbar{display:none}
 .prodbar button{flex:none;display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line2);background:rgba(15,33,29,.92);color:var(--ink);
   font:inherit;font-size:12.5px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25)}
 .prodbar button svg{width:14px;height:14px;color:var(--c,var(--amber))}
 .prodbar button small{color:var(--muted);font-size:11px}
 .prodbar button.on{border-color:var(--c,var(--amber));background:color-mix(in srgb,var(--c,var(--amber)) 26%,rgba(15,33,29,.95))}
-body.tooling .prodbar,body.carded .prodbar{display:none}
+body.tooling .prodbar,body.carded .prodbar,body.sheeted .prodbar{display:none}
 #labels .pm{translate:-50% -50%;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--c);border:2px solid rgba(15,33,29,.85);
   box-shadow:0 2px 6px rgba(0,0,0,.3);font-style:normal}
 #labels .pm svg{width:13px;height:13px;color:#14231f}

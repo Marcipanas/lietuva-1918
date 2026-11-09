@@ -508,7 +508,7 @@ function housePart(k) {
   else if (k === 'woodRoof') { m.gable(0, 0, 0.3, 0.23, 0.1, 0.1, MC.white, MC.white, false, 0.02); m.cb(0.08, -0.04, 0.03, 0.03, 0.12, 0.22, '#b7a99a'); }
   else if (k === 'shed') { m.cb(0, 0, 0.14, 0.12, 0, 0.06, '#8a6a48').gable(0, 0, 0.14, 0.12, 0.06, 0.05, '#6d5038', '#8a6a48', true); }
   else if (k === 'far') { for (const [x, z, r] of [[-0.2, 0.2, 0], [0.2, 0.21, 0], [-0.19, -0.17, Math.PI / 2], [0.2, -0.18, 0]]) m.push(x, z, r).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#8a6a58', MC.white, false, 0.02).pop(); }
-  else if (k === 'farmFar') { m.push(-0.1, 0.2).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#8a6a58', MC.white, false, 0.02).pop(); m.cb(0, -0.2, 0.34, 0.2, 0, 0.1, '#9a7a5e').gable(0, -0.2, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#9a7a5e', false, 0.02); }
+  else if (k === 'farmFar') { m.push(-0.1, 0.2).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#7d6a4c', MC.white, false, 0.02).pop(); m.cb(0, -0.2, 0.34, 0.2, 0, 0.1, '#8a6c50').gable(0, -0.2, 0.34, 0.2, 0.1, 0.12, '#7f7350', '#8a6c50', false, 0.02); }
   else if (k === 'barn') { m.cb(0, 0, 0.34, 0.2, 0, 0.1, '#7d5c40', '#6a4c34').gable(0, 0, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#7d5c40', false, 0.02); m.quad([-0.05, 0, 0.1005], [0.05, 0, 0.1005], [0.05, 0.08, 0.1005], [-0.05, 0.08, 0.1005], '#4a3526'); }
   else if (k === 'brick') { m.cb(0, 0, 0.36, 0.26, 0, 0.24, '#b05a42', '#7d6a5c').boxWins(0, 0, 0.36, 0.26, 0.01, 0.23, 3, 4, 3, '#f1deb2', 0.45).hip(0, 0, 0.36, 0.26, 0.24, 0.07, '#7d6a5c', 0.014); }
   /* ---- cities: plastered masonry tenements of two or three storeys (walls tinted, roofs apart), and a courtyard wing ---- */
@@ -637,7 +637,7 @@ const CITY_WALL = ['#e8d9b0', '#d9c9a3', '#c9d1b3', '#e2c4b0', '#d3d6d8', '#ece5
 const TOWN_WALL = ['#a6713f', '#8a5a3a', '#6f8f6a', '#7f97ad', '#c49a5c', '#9b4f3a', '#b9a98a'], TOWN_ROOF = ['#6f6a63', '#5a6b58', '#8b4a33', '#55524e'];
 const VIL_WALL = ['#7a5a3e', '#6e5039', '#8a6a4a', '#5f4a36', '#8f7a62'], THATCH = ['#a8935f', '#968458', '#8a7d62', '#b29b66'];
 const PART_PAL = { woodWalls: WALL_TINT, woodRoof: ROOF_TINT, ten2: CITY_WALL, ten3: CITY_WALL, tenW: CITY_WALL, ten2R: CITY_ROOF, ten3R: CITY_ROOF, tenWR: CITY_ROOF,
-  thW: TOWN_WALL, thL: TOWN_WALL, thR: TOWN_ROOF, thLR: TOWN_ROOF, trW: VIL_WALL, klW: VIL_WALL, kbW: VIL_WALL, trR: THATCH, klR: THATCH, kbR: THATCH, cityFar: CITY_WALL, townFar: TOWN_WALL };
+  thW: TOWN_WALL, thL: TOWN_WALL, thR: TOWN_ROOF, thLR: TOWN_ROOF, trW: VIL_WALL, klW: VIL_WALL, kbW: VIL_WALL, trR: THATCH, klR: THATCH, kbR: THATCH, cityFar: CITY_WALL, townFar: TOWN_WALL, farmFar: VIL_WALL };
 
 /* ---------- trees ---------- */
 const TREE_GEO = {};

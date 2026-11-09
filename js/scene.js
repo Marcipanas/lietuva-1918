@@ -146,7 +146,7 @@ function snowy(mat, mul, patchy) {
       .replace('#include <project_vertex>', '#include <project_vertex>\n  vWxz = (modelMatrix * vec4(transformed, 1.0)).xz;');
     sh.fragmentShader = 'uniform float uSnow;\nuniform float uSnowMul;\nuniform sampler2D uNoise;\nvarying float vUp;\nvarying vec2 vWxz;\n' + sh.fragmentShader
       .replace('#include <color_fragment>', `#include <color_fragment>
-  float sCover = ${patchy ? 'smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3))' : 'uSnow'};
+  float sCover = ${patchy ? 'smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3)) * smoothstep(0.0, 0.04, uSnow)' : 'uSnow'};
   ${patchy ? 'diffuseColor.rgb *= 0.9 + 0.2 * texture2D(uNoise, vWxz * 1.3).r;' : ''}
   float sn = clamp(sCover * uSnowMul * smoothstep(0.45, 0.85, vUp), 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.88, 0.91), sn);`);
@@ -270,7 +270,8 @@ function groundMat() {
   vec4 pol = texture2D(uPolTex, vWxz / uMap);
   float po = uPol * pol.a;
   diffuseColor.rgb = mix(diffuseColor.rgb, pol.rgb, po * 0.8);
-  float sCover = smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3)) * (1.0 - max(max(po, pol.a * 0.35), uPol * 0.25));
+  /* no snow at all in summer: where the noise dips near zero, the patch edge let faint specks through */
+  float sCover = smoothstep(-0.04, 0.12, uSnow * 1.25 - (texture2D(uNoise, vWxz * 0.045).r * 0.7 + texture2D(uNoise, vWxz * 0.29).r * 0.3)) * smoothstep(0.0, 0.04, uSnow) * (1.0 - max(max(po, pol.a * 0.35), uPol * 0.25));
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.88, 0.91), clamp(sCover, 0.0, 1.0));`);
   };
   mat.customProgramCacheKey = () => 'ground';
@@ -503,7 +504,7 @@ function bridgeRuns() {
 }
 function buildLines() {
   const wk = Math.round(Math.log(Math.max(1, cam.dist * 0.0034 / 0.055)) / 0.3);
-  const key = WV.net + ':' + wk;
+  const key = WV.net + ':' + wk + ':' + (cam.dist < 45);
   if (key === lineKey) return;
   lineKey = key;
   LINES.forEach(m => { SCENE.remove(m); m.geometry.dispose(); });
@@ -520,7 +521,8 @@ function buildLines() {
     const g = groups[k];
     const m = new THREE.Mesh(flatGeo(g.out), g.mat);
     m.renderOrder = k.startsWith('rail') ? 4 : 3; m.receiveShadow = true; SCENE.add(m); LINES.push(m);
-    if (g.nodes.size) {
+    /* discs round the joins, only up close: far out the lines are drawn wide and the discs would show as pale blobs */
+    if (g.nodes.size && cam.dist < 45) {
       const disc = new THREE.CircleGeometry(g.w / 2, 12).rotateX(-Math.PI / 2), nodes = [...g.nodes];
       const im = new THREE.InstancedMesh(disc, LINE_MAT.node[+k.slice(4)], nodes.length);
       nodes.forEach((id, i) => { const n = NODES.get(id); im.setMatrixAt(i, new THREE.Matrix4().makeTranslation(n.x, 0, n.z)); });
@@ -580,14 +582,16 @@ function bldView() {
   return [Math.floor((bb[0] - m) / q) * q, Math.floor((bb[1] - m) / q) * q, Math.ceil((bb[2] + m) / q) * q, Math.ceil((bb[3] + m) / q) * q];
 }
 function buildBuildings() {
-  const box = bldView(), far = cam.dist > 40;
-  const key = WV.bld + ':' + NET.ver + ':' + (SEASON.aut > 0.5 ? 1 : 0) + ':' + far + ':' + box.map(v => v.toFixed(1)).join(',');
+  /* once the map turns political, house lots are left to the town labels */
+  const box = bldView(), far = cam.dist > 40, noHomes = cam.dist > 90 * MAPK;
+  const key = WV.bld + ':' + NET.ver + ':' + (SEASON.aut > 0.5 ? 1 : 0) + ':' + far + ':' + noHomes + ':' + box.map(v => v.toFixed(1)).join(',');
   if (key === bldKey) return;
   bldKey = key;
   BLD.begin(); FIELDP.begin(); FLAGS.begin(); FLAG_LIST = [];
   for (const b of S.bld) {
     if (b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3]) continue;
     if (b.t === 'house') {
+      if (noHomes) continue;
       if (far && b.lv === 1) {
         const st = lotStyle(b), fk = st === 'v' ? 'farmFar' : st === 'c' || st === 'm' ? 'cityFar' : 'townFar', pal = PART_PAL[fk];
         BLD.add('h:' + fk, housePart(fk), MAT.bld, b.x, 0, b.z, b.rot, 1, 1, 1, pal ? pal[Math.floor(hash2(b.id, 40, 77) * pal.length)] : undefined); continue;
