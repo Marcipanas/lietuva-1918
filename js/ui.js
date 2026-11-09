@@ -185,6 +185,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'dq':{const x=S.deals.find(y=>y.id===+d.d);if(x)x.q=Math.max(1,x.q+(+d.q>0?(x.q>=10?5:1):(x.q>10?-5:-1)));break}
     case 'ddel':S.deals=S.deals.filter(y=>y.id!==+d.d);toast('Deal ended');break;
     case 'dlim':{const x=S.deals.find(y=>y.id===+d.d);if(x)x.lim=+d.q;break}
+    case 'prodshow':VIEW.prod=d.r;prodBar();if(!WIDE())setSheet(0);toast(`Where ${RI[d.r].n.toLowerCase()} is made: zoom out to see each town's amount`);return;
     case 'reset':S.confirmReset=true;break;case 'cancelr':S.confirmReset=false;break;
     case 'reset2':{newGame();NOTES.length=0;VIEW.oldSave=false;analyze();initScene();VIEW.sel=null;VIEW.route=null;setTool('inspect');camHome();setSheet(0);showCard();break}
     case 'confirm':return doConfirm();case 'cancelp':return clearPreview();case 'rotg':return rotateGhost();
@@ -218,6 +219,10 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)autosave();if(carded()){acc=0;save();break}}if(NET.dirty)analyze();showCard();
   VOFF.ty=coverBottom()/2;updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick();updateTask();if(NOTES.length&&!toastBusy()&&!carded()&&!S.intro&&!S.eraCard)toast(NOTES.shift())}requestAnimationFrame(frame)}
+/* the production view's switch and its row of goods, each with how many buildings make it */
+function prodBar(){const bar=$('prodbar'),btn=$('prodbtn');if(!bar)return;const on=!!VIEW.prod;btn.setAttribute('aria-pressed',on?'true':'false');bar.hidden=!on;if(!on)return;
+  const made={};S.bld.forEach(b=>{const T0=BT[b.t];if(b.town<0||!T0.out||b.t==='house')return;for(const r in T0.out)made[r]=(made[r]||0)+1});
+  bar.innerHTML=`<button data-prod="all" class="${VIEW.prod==='all'?'on':''}">All goods</button>`+RES.filter(r=>made[r]).map(r=>`<button data-prod="${r}" class="${VIEW.prod===r?'on':''}" style="--c:var(--r-${r})">${ic(RI[r].ic)}${RI[r].n}<small>${made[r]}</small></button>`).join('')}
 /* the ministry task on the map, above the bottom bar: tap it to see all tasks */
 let taskTxt=null;
 function updateTask(){const el=$('task');if(!el)return;const base=!S.intro&&!S.eraCard&&!TUT.on&&TOOL.k==='inspect'&&(WIDE()||!VIEW.sheet)&&!S.hist.cards.length&&!S.hist.news.length;
@@ -238,6 +243,8 @@ function start(data){const old=dropOldSaves(),saved=data&&data.save?data.save:lo
     const a=e.target.closest('[data-act]');if(a&&(a.closest('#pbody')||a.closest('#shead')||a.closest('#bar')))act(a.dataset);
     const tl=e.target.closest('.tl');if(tl&&tl.closest('#labels'))selectTown(+tl.dataset.ti,true)});
   $('compass').addEventListener('click',()=>northUp());
+  $('prodbtn').innerHTML=ic('factory');$('prodbtn').addEventListener('click',()=>{VIEW.prod=VIEW.prod?null:'all';prodBar()});
+  $('prodbar').addEventListener('click',e=>{const b=e.target.closest('[data-prod]');if(!b)return;VIEW.prod=b.dataset.prod===VIEW.prod&&b.dataset.prod!=='all'?'all':b.dataset.prod;prodBar()});
   $('sp-play').addEventListener('click',()=>setSpeed(S.speed?0:VIEW.spd||1));
   $('sp-fast').addEventListener('click',()=>{VIEW.spd=VIEW.spd>=3?1:(VIEW.spd||1)+1;if(S.speed)S.speed=VIEW.spd;updateTop();save()});
   ['grab','shead'].forEach(id=>{const el=$(id);el.addEventListener('pointerdown',sheetDown);el.addEventListener('pointermove',sheetMove);el.addEventListener('pointerup',sheetUp);el.addEventListener('pointercancel',sheetUp)});

@@ -971,6 +971,48 @@ function updateLabels() {
     place(el, x, y, true); i++;
   }
   for (; i < STATUS.length; i++) place(STATUS[i], 0, 0, false);
+  prodMarks();
+}
+/* The production view (VIEW.prod: 'all' or one good): a marker over each building that makes goods, dimmed when it stands idle;
+   from far out, each town's main goods with what its buildings make a day. */
+const PMARK = [];
+let prodKey = '', PROD_T = null;
+function pmark(n) { let el = PMARK[n]; if (!el) { el = document.createElement('i'); el.className = 'pm'; LBL.appendChild(el); PMARK.push(el); } return el; }
+function townProd() {
+  const key = S.day + ':' + WV.bld;
+  if (key === prodKey && PROD_T) return PROD_T;
+  prodKey = key; PROD_T = S.towns.map(() => ({}));
+  S.bld.forEach(b => { const T0 = BT[b.t]; if (b.town < 0 || !T0.out) return; for (const r in T0.out) PROD_T[b.town][r] = (PROD_T[b.town][r] || 0) + T0.out[r] * LV[b.lv] * (b.k || 1) * b.eff; });
+  return PROD_T;
+}
+function prodMarks() {
+  let j = 0;
+  const want = VIEW.prod && VIEW.prod !== 'all' ? VIEW.prod : null;
+  if (VIEW.prod && cam.dist < 32) {
+    for (const b of S.bld) {
+      if (j >= 140) break;
+      const T0 = BT[b.t];
+      if (b.t === 'house' || !(T0.out || T0.pow) || (want && !(T0.out && T0.out[want]))) continue;
+      const r = T0.out ? Object.keys(T0.out)[0] : null, [x, y, ok] = toScreen(b.x, model(modelKey(b)).h + 0.05, b.z);
+      if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
+      const el = pmark(j++), idle = b.town < 0 || b.eff < 0.35, key = (r || 'pow') + idle;
+      if (el.dataset.k !== key) { el.dataset.k = key; el.className = 'pm' + (idle ? ' idle' : ''); el.style.setProperty('--c', r ? `var(--r-${r})` : 'var(--amber)'); el.innerHTML = ic(r ? RI[r].ic : 'bolt'); }
+      place(el, x, y, true);
+    }
+  } else if (VIEW.prod) {
+    const P = townProd();
+    S.towns.forEach((t, ti) => {
+      if (j >= 110 || t.lock) return;
+      const m = P[ti], top = (want ? [[want, m[want] || 0]] : Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 2)).filter(q => q[1] >= 0.1);
+      if (!top.length) return;
+      const [x, y, ok] = toScreen(t.x, 0, t.z);
+      if (!ok || x < -40 || x > cw + 40 || y < -20 || y > ch + 20) return;
+      const el = pmark(j++), key = 't' + top.map(q => q[0] + num(q[1])).join();
+      if (el.dataset.k !== key) { el.dataset.k = key; el.className = 'pm town'; el.innerHTML = top.map(([r, q]) => `<span style="--c:var(--r-${r})">${ic(RI[r].ic)}${num(q)}</span>`).join(''); }
+      place(el, x, y + 12, true);
+    });
+  }
+  for (; j < PMARK.length; j++) place(PMARK[j], 0, 0, false);
 }
 
 /* ---------- picking ---------- */
