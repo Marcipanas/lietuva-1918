@@ -623,27 +623,29 @@ function analyze() {
   }
   /* neighbours: towns whose catchments meet along a road or a railway, with the length of the way between them */
   const pairs = new Map();
-  const note = (k, a, b, d) => {
+  /* lv: the kind of line where the two catchments meet, which private traders use as the link's quality */
+  const note = (k, a, b, d, lv) => {
     if (a === b || a < 0 || b < 0 || a === undefined || b === undefined || !(d < Infinity)) return;
     const key = Math.min(a, b) + '_' + Math.max(a, b);
     let p = pairs.get(key);
     if (!p) pairs.set(key, p = { a: Math.min(a, b), b: Math.max(a, b), road: null, rail: null });
-    if (!p[k] || d < p[k].len) p[k] = { len: d };
+    if (!p[k] || d < p[k].len) p[k] = { len: d, lv: Math.max(lv || 1, p[k] ? p[k].lv : 1) };
+    else p[k].lv = Math.max(p[k].lv, lv || 1);
   };
   const meet = (k, R, src) => {
     EDGES.forEach(e => {
       if (e.k !== k || e.a === e.b || e.off) return;
       const oa = R.o.get(e.a), ob = R.o.get(e.b);
-      if (oa !== undefined && ob !== undefined && oa !== ob) note(k, oa, ob, R.d.get(e.a) + e.L + R.d.get(e.b));
+      if (oa !== undefined && ob !== undefined && oa !== ob) note(k, oa, ob, R.d.get(e.a) + e.L + R.d.get(e.b), e.lv);
     });
     const byEdge = new Map();
     src.forEach(q => { if (!byEdge.has(q.e)) byEdge.set(q.e, []); byEdge.get(q.e).push(q); });
     byEdge.forEach((list, e) => {
       const oa = R.o.get(e.a), ob = R.o.get(e.b);
       for (const q of list) {
-        if (oa !== undefined && oa !== q.o) note(k, q.o, oa, q.s + R.d.get(e.a));
-        if (ob !== undefined && ob !== q.o) note(k, q.o, ob, e.L - q.s + R.d.get(e.b));
-        for (const r of list) if (r.o !== q.o) note(k, q.o, r.o, Math.abs(q.s - r.s));
+        if (oa !== undefined && oa !== q.o) note(k, q.o, oa, q.s + R.d.get(e.a), e.lv);
+        if (ob !== undefined && ob !== q.o) note(k, q.o, ob, e.L - q.s + R.d.get(e.b), e.lv);
+        for (const r of list) if (r.o !== q.o) note(k, q.o, r.o, Math.abs(q.s - r.s), e.lv);
       }
     });
   };

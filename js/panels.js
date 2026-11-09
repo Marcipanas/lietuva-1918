@@ -96,6 +96,11 @@ function lockHTML(t){const o=S.own[t.rg],d=ymd(S.day),y=+d.slice(0,4),wait='<p c
     :'Part of Poland since 1922. Lithuania never accepts the loss and keeps no relations with Poland.'}</p>${wait}`;
   if(o==='by')return `<p class="lede">Held by the Soviet Union since September 1939, as part of Soviet Belarus.</p>${wait}`;
   return `<p class="lede">${heldTxt(t.rg)}.</p>${wait}`}
+/* what private merchants bring to a town and take from it, a day */
+function tradersTxt(t){const tr=t.tr||{},inn=[],out=[];RES.forEach(r=>{const q=tr[r]||0;if(q>0.02)inn.push([q,r]);else if(q<-0.02)out.push([-q,r])});
+  if(!inn.length&&!out.length)return 'Merchants carry nothing here now. They bring goods a town runs short of from neighbours with plenty, slowly.';
+  const ls=L0=>L0.sort((a,b)=>b[0]-a[0]).slice(0,3).map(([q,r])=>num(q)+' '+rname(r)).join(', ');
+  return `Merchants ${inn.length?'bring '+ls(inn):''}${inn.length&&out.length?' and ':''}${out.length?'take '+ls(out):''} a day.`}
 function townPanel(ti){const t=S.towns[ti];
   if(t.lock)return lockHTML(t);
   const iss=townIssues(ti),link=t.capital?(t.id==='vil'?'The capital':'The temporary capital'):NET.rail.has(ti)?'Linked by rail':NET.linked.has(ti)?'Linked by paved road':t.vil?'Village':'Not linked to '+capital().n;
@@ -110,6 +115,7 @@ function townPanel(ti){const t=S.towns[ti];
   if(urgent.length&&!t.hint)h+=`<p class="status">${ic('house')}${v(ti+'g',growthTxt(t))}</p>`;
   if(notes.length)h+=issuesHTML(notes,ti);
   h+=goodsHTML(goodsRows(ti),'t'+ti);
+  h+=`<p class="note tradn">${ic('cart')}${v('trd'+ti,tradersTxt(t))}</p>`;
   const prod=bOfTown(ti).filter(b=>b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'),lms=S.bld.filter(b=>b.lm&&b.t==='landmark'&&LANDMARKS[b.lm].town===t.n);
   h+=`<div class="sec"><h3>Buildings<span>${prod.length?prod.length+' · tap to manage':'nothing yet'}</span></h3><ul class="blist">${prod.map(b=>{const T0=BT[b.t],p=Math.round(b.eff*100),staffed=T0.w;
     return `<li><button class="bl" data-act="selb" data-id="${b.id}" style="--c:${bCol(b.t)}"><span class="bi">${ic(bIcon(b.t))}</span><span class="bn">${T0.n}${T0.noUp?'':` <em>Lv ${b.lv}</em>`}<span class="pct">${staffed?v('e'+b.id,p+'%'):''}</span></span>
@@ -222,6 +228,7 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li>Trade abroad goes through a border post near the border or a sea port, from that town’s stock. History opens and closes markets: the Depression, a German boycott, war.</li>
     <li>On key dates history asks you to decide. Some choices can avoid what happened, if Lithuania has enough security: allies, an army, friends in the West.</li>
     <li>People eat grain, potatoes, dairy, meat and fish. Each extra kind adds morale. In winter homes burn peat or timber.</li>
+    <li>Merchants carry goods on their own between neighbouring towns, from one with plenty to one that runs short, a few loads a day at most: more by paved road, most by rail. Routes move goods in bulk.</li>
     <li>Workers fill local jobs first, then walk to towns within ${kmTxt(WALK_KM)} km by road, or ride routes set to carry commuters.</li>
     <li>Factories and kilns pollute homes within ${kmTxt(POL_R)} km. Schools raise output; clinics lift morale and growth.</li>
     <li>Buildings join a town when a road links them to its town hall within ${kmTxt(TERRITORY)} km. Villages have few workers, so workplaces join a village only when no town is near.</li>
