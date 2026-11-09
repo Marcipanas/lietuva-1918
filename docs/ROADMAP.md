@@ -16,6 +16,10 @@ Done in v0.5: markets abroad (Britain, Germany, Latvia, Poland, the Union), bord
 ## 2. The interface: next steps
 
 Done in v0.10: an intro and a paused start for a new game, the current ministry task on the map, notes on screen for tasks, milestones and history that changes the map, a card for each new era, political colours from far out (readable in winter), and fixes found by an audit of the loop (see decision 36).
+Done in v0.11, from the owner's playthrough: the map drawn twice its size (38), merchants and surplus on routes (39), paved roads from 1918 (40), decisions confirmed and news cards for border changes (41), cities in blocks with no streets leading nowhere and railway turnouts (42), Lithuanian houses by place, a production view, money a day by kind (the army now shows in the balance), deals that keep a share of the store, the port task counting deals by sea, a road laid out to a new building no road reaches, statuses for stations and stores, a pill to hide a shown route, New game starting paused, the Klaipėda port on the city side, and the political colours matching beyond the map's edge.
+- **Playtest v0.11 on a phone:** whether the map drawn twice its size feels right to cross, whether merchants are too slow to notice, and whether the news cards come too often in 1919 and 1920.
+- **Merchants, next:** prices per town (so merchants follow a real price gap and the town card can show it), and a setting for how much they may carry.
+- **Cities, next:** an old town of short crooked streets inside the first blocks, and apartment courtyards that fill up as a city grows.
 - **Link a town in one step:** linking towns by railway is most of the work of the first era, and no fix builds it. A "Link to the network" fix could plan the shortest railway (or, in later eras, paved road) from the town to the nearest linked line and open it in the Railway tool for the player to confirm.
 - **Storage that fills with goods nobody needs yet** (flax before the linen mills of era 2) stops buildings early in the game; a note on the building could say so before the player builds it.
 

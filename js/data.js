@@ -1,7 +1,7 @@
 'use strict';
 /* Lietuva 1918 — game rules. Loaded after common.js. */
 /* SAVE_KEY carries the version: a new version starts a new game, and older saves are dropped (dropOldSaves in sim.js). */
-const SAVE_KEY='lietuva1918-0.10.0', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
+const SAVE_KEY='lietuva1918-0.11.0', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
 /* The world is continuous: x = km east, z = km south of the map corner at 20.75°E, 56.55°N. North is -z.
    The country is drawn MAPK times its real size, so towns have room between them: a drawn km is 1/MAPK of a real km.
    Towns and buildings keep their drawn size (a house lot is LOT_W km across), about five times larger than life.
