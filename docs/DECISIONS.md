@@ -14,7 +14,7 @@ A 144×144 grid, tiles about 3.5 km, north up, rotated 45°. Town scale is delib
 ## 4. Aggregated simulation, visual agents (2026-11)
 Towns are economic units (stock, workers, homes). Daily flows are computed as numbers, and walkers and vehicles only illustrate them. This keeps the game fast on phones and the rules easy to test headless. Cost: no individual traffic jams or vehicle-level logistics.
 
-## 5. Goods move only on routes (2026-11, v3)
+## 5. Goods move only on routes (2026-11, v3; changed by 39)
 Version 2 moved goods automatically along any road; that made logistics trivial. Routes with vehicles, capacity and cargo choices give the player real decisions. Historic 1918 railway and cart routes are created at the start so the economy runs before the player learns the system.
 
 ## 6. Panels as HTML strings with patched values (2026-11)
@@ -38,7 +38,7 @@ Roads and railways are polylines between nodes. Drawing a line attaches its ends
 ## 12. Exaggerated town scale on a real-size country (2026-11, v0.4)
 The country is its real size (400 × 310 km) but a house lot is 0.85 km across and holds a block of homes, about ten times larger than life. Real-scale towns would be specks; real-scale vehicles and people would be invisible. People, vehicles and trees use the same exaggeration, and vehicles grow further when zoomed out.
 
-## 13. Smaller towns rather than a bigger map (2026-11, v0.5)
+## 13. Smaller towns rather than a bigger map (2026-11, v0.5; the map was stretched in 38)
 The owner asked for a bigger map with more towns and villages. Stretching the country would have made every distance false and quadrupled the terrain raster. Instead towns and everything in them are drawn at half the size (a lot is 0.42 km, about five times larger than life), so the real-sized country holds four times as many places. Models keep their old numbers and are scaled by `MS` in one place. The terrain raster stays at 0.5 km: path planning around buildings is coarser, but exact checks (`exactBlock`) keep roads off buildings.
 
 ## 14. Every settlement feeds itself (2026-11, v0.5)
@@ -112,3 +112,18 @@ An audit of a game with no player input found 270 of 367 settlements hungry in s
 
 ## 37. Direction on the map (2026-11, v0.10)
 A player following only the game's own fixes grew the land Lithuania held from about 550k residents in 1919 to 917k by 1928, but never reached the second era: it needs railways to more towns, which no fix builds. The ministry tasks give that direction, but they sat at the bottom of the Lithuania view. The first task that makes sense now is shown on the map above the bottom bar, tasks run from easy to hard, and a finished task, a population milestone or a history event that changes the map shows as a short note on screen. A new era opens on a card that says what it brings.
+
+## 38. The country drawn twice its size (2026-11, v0.11; replaces 13)
+After playing, the owner found towns too close together and chose to stretch the map: every distance between places doubles, while towns, buildings and lots keep their drawn size, so the open land between towns doubles. `MAPK` = 2 in data.js scales `ll2xz` and the map's size. Rules that span the country are written in real km and scaled by `MAPK`: `TERRITORY`, `WALK_KM`, `HALL_GAP`, `VIL_OFF`, `TRIP_OVERHEAD`, `BORDER_KM`, line costs and upkeep per km (divided), vehicle speeds (multiplied), the terrain's big soil and forest patterns, lake radii, the planner's step limit, and the view's country-wide zoom thresholds (labels, political colours, camera range). Rules inside a town keep their drawn size (`ACCESS`, `POL_R`, lots, footprints, rivers' drawn width). The player sees real km everywhere (`kmTxt`), so the numbers, costs and travel times play as before: a passive game earns about the same each day. The terrain raster grew fourfold (1600 × 1240 cells), and generating it took about 1.9 s on a desktop, too slow for a phone at every start, so `npm run world` stores it in the start map, packed (`WORLD1918.ras`, about 130 KB), and `genTerrain` unpacks it in about 10 ms.
+
+## 39. Merchants as well as routes (2026-11, v0.11; changes 5)
+The owner asked for goods to flow along roads and railways without routes, like traders taking chances between a town with plenty and one that lacks, very slowly, with routes as the faster way. Private merchants work on every pair of neighbouring towns (`NET.edges`): from a town with more than a month of a good (or a quarter of its store, for a good it does not use) to one with under two weeks that is falling or under three days. They close a twentieth of the gap a day, and a link carries at most `TRADE_CAP` loads a day by the road where the towns' lands meet (0.35 dirt, 0.9 paved, 1.3 highway) or 1.5 by rail. A city's food or a factory's input still needs routes; merchants smooth small shortages and spread variety foods. The state neither pays nor earns. Routes on Auto also move a store's surplus (over 75% full) to a town with room, only from the fuller to the emptier, so goods still never go back and forth.
+
+## 40. Paved roads from 1918 (2026-11, v0.11)
+The second era asks for towns linked by railway or paved road, but paved roads came only with that era, and the owner could not find them. Lithuania had paved highways in 1918 (they are on the start map), so paved roads can be built from the start, at their price in bricks; the Road tool still starts on dirt roads in the first era, and the link fixes offer both track and a paved road.
+
+## 41. Decisions confirmed, history explained on cards (2026-11, v0.11)
+A slip of the finger picked a decision. A tap now marks an option, and Confirm applies it. History that moves a border or the capital (each time Vilnius changes hands, Klaipėda, the Palanga coast, the Soviet annexation, independence restored) opens a card that pauses the game, says what happened, what changed hands and what it means for the player, instead of a toast that is easy to miss. Events mark this with `news` (a headline) and `nd` (what it means).
+
+## 42. Cities in blocks, streets that lead somewhere (2026-11, v0.11)
+Cities had a 1 km grid of independent lines across a disk: streets ended in fields and at riverbanks, and the paved main streets met it at odd angles. The grid is now whole blocks, taken nearest the hall first and grown outward from the blocks the main streets run through, so each district hangs on a main street and crosses rivers only by its bridges; a block is taken only if it is dry and free of landmarks, so each of its sides runs corner to corner. A tidy pass at the end of generation joins loose ends that stop just short of another street, removes roads with a loose end that no building or lot uses (by their road access), and cuts back streets that run on past their last house. Highways leave cities by their paved streets. Railways joining other lines curve onto them like a switch (`turnouts`), in generation and in the Rail tool.

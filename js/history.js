@@ -27,7 +27,7 @@ const FOODS = new Set(FOOD);
    (East Prussia and the Klaipėda Region trade as Germany; Poland held the Belarusian side between the wars). */
 function borderOf(x, z) {
   let best = '', bd = 1e9;
-  forDisk(x, z, 3.5, (k, d) => { if ((CTY[k] > 1 || heldOff(k)) && d < bd) { bd = d; best = OWN_GATE[ownerOf(k)] || ''; } });
+  forDisk(x, z, BORDER_KM + 0.5, (k, d) => { if ((CTY[k] > 1 || heldOff(k)) && d < bd) { bd = d; best = OWN_GATE[ownerOf(k)] || ''; } });
   return best;
 }
 /* How town ti reaches markets: 'sea' for a port, a country code for a border post, 'rail' for a station. */
@@ -60,7 +60,9 @@ function newMarkets() {
 function setMkt(m, open, why, f) { const s = S.mkt[m]; s.open = open ? 1 : 0; s.why = open ? '' : why || 'Closed'; if (f !== undefined) s.f = f; }
 
 /* ---------- trade deals: a standing order to sell or buy so many loads a day through one town ---------- */
-function addDeal(m, r, dir, q, ti) { const d = { id: S.did++, m, r, dir, q, ti, done: 0, val: 0, why: '' }; S.deals.push(d); return d; }
+/* lim: a sale leaves this share of the town's storage in stock; a purchase fills the store up to this share */
+const DEAL_LIM = { out: [0, 0.25, 0.5, 0.75], in: [0.5, 0.75, 1] };
+function addDeal(m, r, dir, q, ti) { const d = { id: S.did++, m, r, dir, q, ti, lim: dir === 'out' ? 0.5 : 0.75, done: 0, val: 0, why: '' }; S.deals.push(d); return d; }
 function runDeals() {
   const vol = {};
   for (const d of S.deals) {
@@ -72,24 +74,26 @@ function runDeals() {
     const p = mktPrice(d.m, d.r, d.dir);
     if (!p) { d.why = 'Not traded there'; continue; }
     if (d.dir === 'out') {
-      const keep = (t.dem[d.r] || 0) * 10, q = Math.min(d.q, (t.stock[d.r] || 0) - keep);
-      if (q <= 0.01) { d.why = `No ${rname(d.r)} to spare in ${t.n}`; continue; }
+      const lim = d.lim === undefined ? 0.5 : d.lim, keep = Math.max((t.dem[d.r] || 0) * 10, t.cap * lim), q = Math.min(d.q, (t.stock[d.r] || 0) - keep);
+      if (q <= 0.01) { d.why = lim ? `Waits until ${t.n} has more than ${Math.round(lim * 100)}% of its store` : `No ${rname(d.r)} to spare in ${t.n}`; continue; }
       const k = d.m + d.r, v0 = vol[k] || 0, full = Math.max(0, Math.min(q, MKT_CAP - v0)), val = p * (full + (q - full) * 0.5);
-      t.stock[d.r] -= q; vol[k] = v0 + q; S.funds += val; d.done = q; d.val = val;
+      t.stock[d.r] -= q; vol[k] = v0 + q; S.funds += val; BUD.trade += val; d.done = q; d.val = val;
       S.hist.exp[d.m] = (S.hist.exp[d.m] || 0) + val;
+      /* sold by sea: counts for the port task */
+      if (MARKETS[d.m].gate.includes('sea') && townGates(d.ti).has('sea')) S.stats.portSales += val;
       if (d.m === 'su' && S.plan) S.plan.got[d.r] = (S.plan.got[d.r] || 0) + q;
     } else {
-      const q = Math.min(d.q, room(t, d.r)), cost = p * q;
-      if (q <= 0.01) { d.why = `Storage in ${t.n} is full`; continue; }
+      const lim = d.lim === undefined ? 1 : d.lim, q = Math.min(d.q, room(t, d.r), t.cap * lim - (t.stock[d.r] || 0)), cost = p * q;
+      if (q <= 0.01) { d.why = lim < 1 ? `The store in ${t.n} is ${Math.round(lim * 100)}% full` : `Storage in ${t.n} is full`; continue; }
       if (S.funds < cost) { d.why = 'Not enough money'; continue; }
-      S.funds -= cost; t.stock[d.r] = (t.stock[d.r] || 0) + q; d.done = q; d.val = -cost;
+      S.funds -= cost; BUD.trade -= cost; t.stock[d.r] = (t.stock[d.r] || 0) + q; d.done = q; d.val = -cost;
     }
   }
 }
 
 /* ---------- the state of history ---------- */
 function newHistory() {
-  return { path: 'free', kaunas: 0, sec: 15, def: 0, ally: 0, trust: 50, exp: {}, expY: 0, war: 0, purge: 0, collect: 0, mood: [], cards: [], spd: 1, picks: {}, unl: {}, proj: [], sup: 0 };
+  return { path: 'free', kaunas: 0, sec: 15, def: 0, ally: 0, trust: 50, exp: {}, expY: 0, war: 0, purge: 0, collect: 0, mood: [], cards: [], news: [], spd: 1, picks: {}, unl: {}, proj: [], sup: 0 };
 }
 /* Morale changes from history: [{v, until (day), vil (villages only), reg}] */
 function addMood(v, days, o) { S.hist.mood.push(Object.assign({ v, until: S.day + days }, o || {})); }
@@ -265,15 +269,26 @@ function pickCard(n) {
   log(`${c.t}: ${o.t.toLowerCase()}.`, 'hist', c.when.length === 4);
   o.go(ok);
   h.sec = clamp(h.sec, 0, 100); h.trust = clamp(h.trust, 0, 100);
-  if (!h.cards.length && h.spd) S.speed = h.spd;
+  if (!h.cards.length && !h.news.length && h.spd) S.speed = h.spd;
   NET.dirty = true;
   return true;
 }
 function queueCard(id) {
   const h = S.hist;
   if (h.picks[id] !== undefined || h.cards.includes(id) || !cardOK(id)) return;
-  if (!h.cards.length) h.spd = S.speed || h.spd || 1;
+  if (!h.cards.length && !h.news.length) h.spd = S.speed || h.spd || 1;
   h.cards.push(id); S.speed = 0;
+}
+/* A card that tells what just happened, for history that moves a border or the capital: it pauses the game until read. */
+function queueNews(id, more) {
+  const h = S.hist;
+  if (!h.cards.length && !h.news.length) h.spd = S.speed || h.spd || 1;
+  h.news.push({ id, more: more || '' }); S.speed = 0;
+}
+function readNews() {
+  const h = S.hist;
+  h.news.shift();
+  if (!h.cards.length && !h.news.length && h.spd) S.speed = h.spd;
 }
 /* The decisions taken so far, for the chronicle: [{id, t, o (option title), as (1 as in history, 0 not, -1 no clear answer)}] */
 function decisions() {
@@ -291,7 +306,7 @@ function project(type, near, r, year, grant, reward) {
 function checkProjects() {
   for (const p of S.hist.proj) {
     if (p.done) continue;
-    const t = S.towns[tIdx(p.near)], ok = t && S.bld.some(b => b.t === p.type && Math.hypot(b.x - t.x, b.z - t.z) <= p.r);
+    const t = S.towns[tIdx(p.near)], ok = t && S.bld.some(b => b.t === p.type && Math.hypot(b.x - t.x, b.z - t.z) <= p.r * MAPK);
     if (ok) { p.done = 1; S.hist.trust += p.type === 'nuclear' ? 20 : 15; S.funds += p.reward; log(`Moscow praises the new ${BT[p.type].n.toLowerCase()} and sends ${fmt(p.reward)} Lt.`, 'good'); }
     else if (dOf(S.day).getTime() > p.by) { p.done = -1; S.hist.trust -= 20; log(`The ${BT[p.type].n.toLowerCase()} is not ready on time. Party trust falls.`, 'warn'); }
   }
@@ -343,11 +358,11 @@ const HEV = [
     fx: () => { setOwner('lv', 'lv'); if (S.own.pal === 'de') setOwner('pal', 'lv'); } },
   { id: 'vol18', d: '1918-12-29', card: 'volunteers' },
   /* Vilnius changes hands: Soviet in January 1919, Polish in April 1919, Soviet again in July 1920, Lithuanian in August 1920 */
-  { id: 'gov19', d: '1919-01-02', t: 'With the Red Army closing in, the government leaves Vilnius for Kaunas. Kaunas is the temporary capital.',
+  { id: 'gov19', news: 'The government moves to Kaunas', nd: 'Kaunas is the temporary capital. Links to the capital now count to Kaunas.', d: '1919-01-02', t: 'With the Red Army closing in, the government leaves Vilnius for Kaunas. Kaunas is the temporary capital.',
     fx: () => { S.hist.kaunas = 1; fixCapital(); } },
-  { id: 'red19', d: '1919-01-05', t: 'The Red Army takes Vilnius from Polish self-defence units, and the Bolsheviks set up a Soviet government there.',
+  { id: 'red19', news: 'The Red Army takes Vilnius', nd: 'Towns in the Vilnius region wait, with all you built there, until the region comes back. Routes to them wait at no cost.', d: '1919-01-05', t: 'The Red Army takes Vilnius from Polish self-defence units, and the Bolsheviks set up a Soviet government there.',
     fx: () => { const o = S.own.vr === 'lt' ? vilnTo('ra') : null; setOwner('by', 'ra'); return o ? `The Vilnius region is lost: ${lostTxt(o)}.` : ''; } },
-  { id: 'pl19', d: '1919-04-19', t: 'Polish cavalry rides into Vilnius. After three days of street fighting the Red Army is gone, and Poland holds the city and its region.',
+  { id: 'pl19', news: 'Poland takes Vilnius', nd: 'The Vilnius region stays out of reach while Poland holds it. Its towns keep what you built there.', d: '1919-04-19', t: 'Polish cavalry rides into Vilnius. After three days of street fighting the Red Army is gone, and Poland holds the city and its region.',
     fx: () => { if (S.own.vr === 'ra') vilnTo('pl'); setOwner('by', 'pl'); } },
   { id: 'sejny19', d: '1919-08-23', t: 'Polish irregulars rise in Sejny, and the Polish army follows. The Suwałki region goes to Poland, along the line the Allies drew in July.',
     fx: () => setOwner('pl', 'pl') },
@@ -355,23 +370,23 @@ const HEV = [
   { id: 'kr20', d: '1920-02-15', t: 'Under the Treaty of Versailles, Germany gives up the Klaipėda Region. French troops take it over for the Allies.', when: held('kr', 'de'), fx: () => setOwner('kr', 'al') },
   { id: 'seimas20', d: '1920-05-15', t: 'The Constituent Assembly, the first parliament elected by the people of Lithuania, meets.' },
   { id: 'moscow20', d: '1920-07-12', t: 'In the Moscow Peace Treaty, Soviet Russia recognises Lithuania and its claim to Vilnius, and pays it three million roubles in gold.', fx: () => { S.funds += 1000; } },
-  { id: 'red20', d: '1920-07-14', t: 'Driving the Polish army back, the Red Army takes Vilnius. Lithuanian troops arrive a day later to find it in Soviet hands.',
+  { id: 'red20', news: 'The Red Army takes Vilnius again', nd: 'The Moscow treaty promised the city to Lithuania. For now its towns stay out of reach.', d: '1920-07-14', t: 'Driving the Polish army back, the Red Army takes Vilnius. Lithuanian troops arrive a day later to find it in Soviet hands.',
     fx: () => { if (S.own.vr === 'pl') vilnTo('ra'); setOwner('by', 'ra'); } },
-  { id: 'back20', d: '1920-08-26', t: 'As the Moscow treaty agreed, the Red Army hands Vilnius over to Lithuania. The government stays in Kaunas for now.',
+  { id: 'back20', news: 'Vilnius is Lithuanian again', nd: 'The towns of the Vilnius region are back, with what you built there. Their routes run again. The government stays in Kaunas for now.', d: '1920-08-26', t: 'As the Moscow treaty agreed, the Red Army hands Vilnius over to Lithuania. The government stays in Kaunas for now.',
     fx: () => S.own.vr === 'ra' ? `Back in Lithuania: ${landTxt(vilnTo('lt'))}.` : '' },
   { id: 'suwalki20', d: '1920-10-07', t: 'In the Suwałki Agreement, Poland and Lithuania agree a ceasefire line that leaves Vilnius to Lithuania.', when: () => S.own.vr === 'lt' },
   { id: 'vil20', d: '1920-10-08', card: 'vilnius' },
   { id: 'by20', d: '1920-10-09', fx: () => setOwner('by', 'pl') },
   { id: 'central20', d: '1920-10-12', t: 'Żeligowski proclaims the Republic of Central Lithuania in Vilnius, a state in name only, run from Warsaw. Lithuania keeps no relations with Poland, and the border stays closed.', when: held('vr', 'pl'), fx: () => setMkt('pl', 0, 'No relations with Poland') },
   { id: 'sirvintos20', d: '1920-11-21', t: 'The army stops Żeligowski’s advance at Širvintos and Giedraičiai. A ceasefire follows on 29 November.', when: held('vr', 'pl') },
-  { id: 'palanga21', d: '1921-03-30', t: 'Latvia hands Palanga and the coast up to Šventoji to Lithuania, as the British arbitrator James Young Simpson decided. Lithuania has a sea coast at last: a sea port can go there.', when: () => S.own.pal !== 'lt', fx: () => setOwner('pal', 'lt') },
+  { id: 'palanga21', news: 'A sea coast for Lithuania', nd: 'Build a sea port on the coast to trade with Britain and Germany by sea.', d: '1921-03-30', t: 'Latvia hands Palanga and the coast up to Šventoji to Lithuania, as the British arbitrator James Young Simpson decided. Lithuania has a sea coast at last: a sea port can go there.', when: () => S.own.pal !== 'lt', fx: () => setOwner('pal', 'lt') },
   { id: 'hymans21', d: '1921-09-03', card: 'hymans' },
   { id: 'land22', d: '1922-02-15', t: 'The Land Reform Law parcels out the great manor estates. Grain and potato farms produce 15% more.', fx: () => { S.mod.farm = 1.15; } },
   { id: 'annex22', d: '1922-03-24', t: 'The Polish Sejm annexes the Vilnius region.', when: held('vr', 'pl') },
   { id: 'litas22', d: '1922-10-02', card: 'litas' },
   { id: 'revolt23', d: '1923-01-09', card: 'revolt' },
   { id: 'kla23', d: '1923-01-15', t: 'The volunteers take Klaipėda.', when: () => picked('revolt', 0)() && S.own.kr === 'al' },
-  { id: 'kr23', d: '1923-02-16', t: 'The Allies transfer the Klaipėda Region to Lithuania, with self-rule. The country gains its sea port. Link Klaipėda by road or rail and route goods to it.',
+  { id: 'kr23', news: 'Klaipėda joins Lithuania', nd: 'Link Klaipėda by road or rail and route goods to its port.', d: '1923-02-16', t: 'The Allies transfer the Klaipėda Region to Lithuania, with self-rule. The country gains its sea port. Link Klaipėda by road or rail and route goods to it.',
     when: () => picked('revolt', 0)() && S.own.kr === 'al', fx: () => setOwner('kr', 'lt') },
   { id: 'line23', d: '1923-03-15', t: 'The Conference of Ambassadors recognises the line through the Vilnius region as Poland’s border. Lithuania never accepts it.', when: held('vr', 'pl') },
   { id: 'mark23', d: '1923-11-20', t: 'The German mark has collapsed: a dollar now costs 4.2 trillion marks. Lithuania still pays in marks, so the treasury loses half its money. This did not happen: the litas came in 1922.',
@@ -387,11 +402,11 @@ const HEV = [
   { id: 'boycott36', d: '1936-08-05', t: 'A new trade treaty with Germany ends the boycott. Germany buys our goods again.', when: () => !!S.hist.boycott && notSoviet(), fx: () => setMkt('de', 1) },
   { id: 'pol38', d: '1938-03-17', card: 'poland', when: notSoviet },
   { id: 'kla39', d: '1939-03-20', card: 'klaipeda', when: notSoviet },
-  { id: 'kla39al', d: '1939-03-23', t: 'German troops march into the Klaipėda Region, which the Allies still held. In history they took it from Lithuania that day.', when: held('kr', 'al'), fx: () => setOwner('kr', 'de') },
+  { id: 'kla39al', news: 'Germany takes Klaipėda', nd: 'The region and its port are out of reach. Routes to its towns wait at no cost.', d: '1939-03-23', t: 'German troops march into the Klaipėda Region, which the Allies still held. In history they took it from Lithuania that day.', when: held('kr', 'al'), fx: () => setOwner('kr', 'de') },
   { id: 'ww39', d: '1939-09-01', t: 'Germany invades Poland. War in Europe cuts shipping to Britain and trade with Poland.', when: () => notSoviet() && !S.hist.union, fx: () => { setMkt('gb', 0, 'War at sea'); setMkt('pl', 0, 'Poland is at war'); } },
   { id: 'ww39u', d: '1939-09-01', t: 'Germany invades Poland, and the union with Poland takes Lithuania into the war. This did not happen.', when: () => notSoviet() && !!S.hist.union,
     fx: () => { S.hist.war = 1; setMkt('gb', 0, 'War at sea'); setMkt('pl', 0, 'Poland is at war'); setMkt('de', 0, 'At war with Germany'); } },
-  { id: 'su39', d: '1939-09-17', t: 'The Red Army invades Poland from the east. On 19 September it takes Vilnius.', when: () => !S.hist.union,
+  { id: 'su39', news: 'The Red Army takes Vilnius from Poland', nd: 'The Vilnius region passes to Soviet Belarus.', d: '1939-09-17', t: 'The Red Army invades Poland from the east. On 19 September it takes Vilnius.', when: () => !S.hist.union,
     fx: () => { setOwner('by', 'by'); if (S.own.vr === 'pl') setOwner('vr', 'by'); if (S.own.vr2 === 'pl') setOwner('vr2', 'by'); } },
   { id: 'su39u', d: '1939-09-17', t: 'The Red Army invades from the east and occupies Lithuania along with eastern Poland. This did not happen.', when: () => !!S.hist.union,
     fx: () => { setOwner('by', 'by'); S.hist.war = 0; popHit(0.03); sovietize(); } },
@@ -399,19 +414,19 @@ const HEV = [
   { id: 'bases39b', d: '1939-10-10', card: 'bases2', when: notSoviet },
   /* the Suwałki region: handed by the Soviets to Germany, which annexed it, and taken by the Red Army in October 1944 */
   { id: 'sudauen39', d: '1939-10-12', fx: () => setOwner('pl', 'de') },
-  { id: 'vil39', d: '1939-10-28', t: 'The Lithuanian army enters Vilnius, the capital named in the Act of Independence.', when: () => !!S.hist.bases && S.own.vr !== 'lt',
+  { id: 'vil39', news: 'Vilnius returns to Lithuania', nd: 'The capital moves back to Vilnius. The region’s towns are back, with what you built there.', d: '1939-10-28', t: 'The Lithuanian army enters Vilnius, the capital named in the Act of Independence.', when: () => !!S.hist.bases && S.own.vr !== 'lt',
     fx: () => { const o = setOwner('vr', 'lt'); seatVilnius(); return `Back in Lithuania: ${landTxt(o)}.`; } },
   { id: 'ult40', d: '1940-06-14', card: 'ultimatum', when: notSoviet },
   /* the Soviet path, as it happened */
-  { id: 'annex40', d: '1940-08-03', t: 'Lithuania is annexed by the Soviet Union as the Lithuanian SSR. Private trade ends; goods now go where Moscow plans.', when: onPath('soviet') },
-  { id: 'vr40', d: '1940-11-06', t: 'Moscow hands Švenčionys, Druskininkai and the rest of the Vilnius region held by Soviet Belarus to Soviet Lithuania.',
+  { id: 'annex40', news: 'Lithuania becomes a Soviet republic', nd: 'Trade abroad ends. Deliver the plan to the Union through railway stations, with deals in the Plan view.', d: '1940-08-03', t: 'Lithuania is annexed by the Soviet Union as the Lithuanian SSR. Private trade ends; goods now go where Moscow plans.', when: onPath('soviet') },
+  { id: 'vr40', news: 'The rest of the Vilnius region joins', nd: 'Švenčionys, Druskininkai and their villages are part of Lithuania again.', d: '1940-11-06', t: 'Moscow hands Švenčionys, Druskininkai and the rest of the Vilnius region held by Soviet Belarus to Soviet Lithuania.',
     when: () => S.hist.path === 'soviet' && S.own.vr2 !== 'lt', fx: () => { setOwner('vr', 'lt'); setOwner('vr2', 'lt'); seatVilnius(); } },
   { id: 'plan41', d: '1941-01-01', when: onPath('soviet'), fx: () => openPlan(1941) },
   { id: 'dep41', d: '1941-06-14', t: 'Soviet security forces deport about 17,000 people from Lithuania to Siberia.', when: onPath('soviet'), fx: () => popHit(0.008) },
-  { id: 'war41', d: '1941-06-22', t: "Germany attacks the Soviet Union and occupies Lithuania within days. Under German rule over 90 percent of Lithuania's Jews are murdered in the Holocaust.", when: onPath('soviet'), fx: () => { S.hist.war = 1; S.plan = null; setMkt('su', 0, 'War'); } },
-  { id: 'vilnius44', d: '1944-07-13', t: 'The Red Army retakes Vilnius. Soviet rule returns.', when: onPath('soviet'), fx: () => { S.hist.war = 0.5; popHit(0.05); setMkt('su', 1); } },
+  { id: 'war41', news: 'Germany occupies Lithuania', nd: 'The plan stops. Factories and farms work at reduced strength until the war ends.', d: '1941-06-22', t: "Germany attacks the Soviet Union and occupies Lithuania within days. Under German rule over 90 percent of Lithuania's Jews are murdered in the Holocaust.", when: onPath('soviet'), fx: () => { S.hist.war = 1; S.plan = null; setMkt('su', 0, 'War'); } },
+  { id: 'vilnius44', news: 'Soviet rule returns', nd: 'The war is not over, and the plan restarts slowly.', d: '1944-07-13', t: 'The Red Army retakes Vilnius. Soviet rule returns.', when: onPath('soviet'), fx: () => { S.hist.war = 0.5; popHit(0.05); setMkt('su', 1); } },
   { id: 'suwalki44', d: '1944-10-23', fx: () => setOwner('pl', 'pl') },
-  { id: 'kla45', d: '1945-01-28', t: 'The Red Army takes Klaipėda. The region becomes part of Soviet Lithuania.', when: () => S.hist.path === 'soviet' && S.own.kr !== 'lt', fx: () => setOwner('kr', 'lt') },
+  { id: 'kla45', news: 'Klaipėda joins Soviet Lithuania', nd: 'Link Klaipėda by road or rail and route goods to its port.', d: '1945-01-28', t: 'The Red Army takes Klaipėda. The region becomes part of Soviet Lithuania.', when: () => S.hist.path === 'soviet' && S.own.kr !== 'lt', fx: () => setOwner('kr', 'lt') },
   { id: 'end45', d: '1945-05-09', t: 'The war in Europe is over. For years to come, partisans fight Soviet rule from the forests.', when: onPath('soviet'), fx: () => { S.hist.war = 0; } },
   { id: 'potsdam45', d: '1945-08-02', t: 'At Potsdam the Allies put the south of East Prussia under Poland and the north, with Königsberg, under the Soviet Union.',
     fx: () => { setOwner('ep', 'pl'); setOwner('ru', 'ru'); } },
@@ -425,7 +440,7 @@ const HEV = [
   { id: 'nuc74', d: '1974-01-01', y: 1, card: 'nuclear' },
   { id: 'sajudis88', d: '1988-06-03', t: 'Sąjūdis, the reform movement, is founded in Vilnius.', when: onPath('soviet') },
   { id: 'way89', d: '1989-08-23', t: 'In the Baltic Way, about two million people join hands from Vilnius to Tallinn.', when: onPath('soviet') },
-  { id: 'restore90', d: '1990-03-11', t: 'The Supreme Council restores the independence of Lithuania. The plan economy ends.', when: onPath('soviet'),
+  { id: 'restore90', news: 'Independence restored', nd: 'The plan economy ends. Trade abroad opens again, once Moscow ends its blockade.', d: '1990-03-11', t: 'The Supreme Council restores the independence of Lithuania. The plan economy ends.', when: onPath('soviet'),
     fx: () => { S.plan = null; S.hist.path = 'free'; S.hist.restored = 1; } },
   { id: 'blockade90', d: '1990-04-18', t: 'Moscow blockades Lithuania: oil stops coming in, and gas and raw materials are cut.', when: () => !!S.hist.restored, fx: () => setMkt('su', 0, 'Soviet blockade') },
   { id: 'lift90', d: '1990-07-02', t: 'The blockade is lifted. Lithuania trades with the West again.', when: () => !!S.hist.restored,
@@ -440,24 +455,31 @@ const HEV = [
 ];
 
 /* ---------- once a day ---------- */
+/* What the state pays each day for the army, allies and support schemes. The day tick takes it before it counts the day's balance.
+   Security: an army makes the country harder to bully. */
+function histSpend() {
+  const h = S.hist;
+  let s = 0;
+  if (h.path !== 'soviet') {
+    s += h.def + h.ally;
+    if (h.def > 0) h.sec = Math.min(100, h.sec + h.def / 25 * 5 / 365);
+  }
+  if (h.sup && S.day <= h.sup) s += 15;
+  return s;
+}
 function histTick() {
   const h = S.hist, today = ymd(S.day);
   for (const e of HEV) {
     if (S.ev[e.id] || today < e.d) continue;
     S.ev[e.id] = 1;
     if (e.when && !e.when()) continue;
-    const more = e.fx ? e.fx() : '';
-    if (e.t) log(typeof more === 'string' && more ? e.t + ' ' + more : e.t, 'hist', e.y);
-    /* events that change the map or the markets also show on screen, by their first sentence */
-    if (e.t && e.fx && NOTES.length < 3) { const i = e.t.indexOf('. '); NOTES.push(i > 0 ? e.t.slice(0, i + 1) : e.t); }
+    const more = e.fx ? e.fx() : '', mt = typeof more === 'string' ? more : '';
+    if (e.t) log(mt ? e.t + ' ' + mt : e.t, 'hist', e.y);
+    /* history that moves a border or the capital opens a card; other events that change something show on screen briefly */
+    if (e.t && e.news) queueNews(e.id, mt);
+    else if (e.t && e.fx && NOTES.length < 3) { const i = e.t.indexOf('. '); NOTES.push(i > 0 ? e.t.slice(0, i + 1) : e.t); }
     if (e.card) queueCard(e.card);
   }
-  /* security: an army and allies make the country harder to bully */
-  if (h.path !== 'soviet') {
-    const spend = h.def + h.ally;
-    if (spend > 0) { S.funds -= spend; h.sec = Math.min(100, h.sec + h.def / 25 * 5 / 365); }
-  }
-  if (h.sup && S.day <= h.sup) S.funds -= 15;
   h.mood = h.mood.filter(m => S.day <= m.until);
   const d = dOf(S.day);
   if (d.getUTCMonth() === 0 && d.getUTCDate() === 1) {

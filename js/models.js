@@ -45,8 +45,16 @@ class MB {
     const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, y1 = y + h, yo = y - o * 0.7;
     this.quad([x0 - o, yo, z1 + o], [x1 + o, yo, z1 + o], [x1 + o, y1, z], [x0 - o, y1, z], roof);
     this.quad([x1 + o, yo, z0 - o], [x0 - o, yo, z0 - o], [x0 - o, y1, z], [x1 + o, y1, z], roof);
+    if (end === null) return this;
     this.tri([x1, y, z1], [x1, y, z0], [x1, y1, z], end);
     return this.tri([x0, y, z0], [x0, y, z1], [x0, y1, z], end);
+  }
+  /* the two gable ends of a gable roof (for walls drawn apart from their roof) */
+  gableEnds(x, z, w, d, y, h, col, alongZ) {
+    if (alongZ) { this.push(x, z, Math.PI / 2); this.gableEnds(0, 0, d, w, y, h, col, false); return this.pop(); }
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2, y1 = y + h;
+    this.tri([x1, y, z1], [x1, y, z0], [x1, y1, z], col);
+    return this.tri([x0, y, z0], [x0, y, z1], [x0, y1, z], col);
   }
   /* pyramid (hip) roof */
   hip(x, z, w, d, y, h, col, o) {
@@ -97,11 +105,11 @@ class MB {
   /* flat quad on the ground (y), centred */
   pad(x, z, w, d, y, col) { return this.quad([x - w / 2, y, z - d / 2], [x - w / 2, y, z + d / 2], [x + w / 2, y, z + d / 2], [x + w / 2, y, z - d / 2], col); }
   /* windows along a wall from (x0, z0) to (x1, z1), facing outward to the right of that direction */
-  wins(x0, z0, x1, z1, y0, y1, rows, cols, col, wf) {
-    wf = wf || 0.45;
-    const L = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / L, dz = (z1 - z0) / L, nx = -dz * 0.003, nz = dx * 0.003, hh = (y1 - y0) / rows;
+  wins(x0, z0, x1, z1, y0, y1, rows, cols, col, wf, off, g) {
+    wf = wf || 0.45; off = off || 0.003; g = g || 0;
+    const L = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / L, dz = (z1 - z0) / L, nx = -dz * off, nz = dx * off, hh = (y1 - y0) / rows;
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-      const u0 = (c + 0.5 - wf / 2) / cols * L, u1 = (c + 0.5 + wf / 2) / cols * L, v0 = y0 + hh * (r + 0.28), v1 = y0 + hh * (r + 0.78);
+      const u0 = (c + 0.5 - wf / 2) / cols * L - g, u1 = (c + 0.5 + wf / 2) / cols * L + g, v0 = y0 + hh * (r + 0.28) - g, v1 = y0 + hh * (r + 0.78) + g;
       const p = u => [x0 + dx * u + nx, z0 + dz * u + nz];
       const a = p(u0), b = p(u1);
       this.quad([a[0], v0, a[1]], [b[0], v0, b[1]], [b[0], v1, b[1]], [a[0], v1, a[1]], col);
@@ -503,13 +511,103 @@ function housePart(k) {
   else if (k === 'farmFar') { m.push(-0.1, 0.2).cb(0, 0, 0.3, 0.23, 0, 0.1, MC.white).gable(0, 0, 0.3, 0.23, 0.1, 0.1, '#8a6a58', MC.white, false, 0.02).pop(); m.cb(0, -0.2, 0.34, 0.2, 0, 0.1, '#9a7a5e').gable(0, -0.2, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#9a7a5e', false, 0.02); }
   else if (k === 'barn') { m.cb(0, 0, 0.34, 0.2, 0, 0.1, '#7d5c40', '#6a4c34').gable(0, 0, 0.34, 0.2, 0.1, 0.12, '#9a8a62', '#7d5c40', false, 0.02); m.quad([-0.05, 0, 0.1005], [0.05, 0, 0.1005], [0.05, 0.08, 0.1005], [-0.05, 0.08, 0.1005], '#4a3526'); }
   else if (k === 'brick') { m.cb(0, 0, 0.36, 0.26, 0, 0.24, '#b05a42', '#7d6a5c').boxWins(0, 0, 0.36, 0.26, 0.01, 0.23, 3, 4, 3, '#f1deb2', 0.45).hip(0, 0, 0.36, 0.26, 0.24, 0.07, '#7d6a5c', 0.014); }
+  /* ---- cities: plastered masonry tenements of two or three storeys (walls tinted, roofs apart), and a courtyard wing ---- */
+  else if (TEN[k]) { const [w, d, h, rows, cols] = TEN[k]; m.cb(0, 0, w, d, 0, h, MC.white).cb(0, 0, w + 0.01, d + 0.01, h - 0.014, h, MC.white).cb(0, 0, w + 0.006, d + 0.006, 0, 0.012, MC.white)
+    .boxWins(0, 0, w, d, 0.014, h - 0.016, rows, cols, 2, MC.glass, 0.4).quad([-0.022, 0, d / 2 + 0.004], [0.022, 0, d / 2 + 0.004], [0.022, 0.07, d / 2 + 0.004], [-0.022, 0.07, d / 2 + 0.004], MC.door); }
+  else if (k.endsWith('R') && TEN[k.slice(0, -1)]) { const [w, d, h] = TEN[k.slice(0, -1)]; m.hip(0, 0, w + 0.012, d + 0.012, h, w > 0.3 ? 0.06 : 0.075, MC.white, 0.004).cb(-w * 0.28, 0, 0.026, 0.026, h, h + 0.09, MC.white).cb(w * 0.3, 0.02, 0.026, 0.026, h, h + 0.08, MC.white); }
+  else if (k === 'wing') { m.cb(0, 0, 0.14, 0.34, 0, 0.13, '#d8ccb2').wins(0.07, 0.17, 0.07, -0.17, 0.015, 0.12, 1, 4, MC.glass, 0.4).wins(-0.07, -0.17, -0.07, 0.17, 0.015, 0.12, 1, 4, MC.glass, 0.4)
+    .gable(0, 0, 0.14, 0.34, 0.13, 0.06, '#8f3f2c', '#d8ccb2', true, 0.008); }
+  /* ---- towns: single-storey wooden houses, the gable end to the street (walls tinted, white frames, roof apart) ---- */
+  else if (k === 'thW') { m.cb(0, 0, 0.17, 0.3, 0, 0.1, MC.white).gableEnds(0, 0, 0.17, 0.3, 0.1, 0.085, MC.white, true)
+    .wins(-0.085, 0.15, 0.085, 0.15, 0.018, 0.092, 1, 2, '#2f3a42', 0.34).wins(0.085, 0.15, 0.085, -0.15, 0.018, 0.092, 1, 3, '#2f3a42', 0.3).wins(-0.085, -0.15, -0.085, 0.15, 0.018, 0.092, 1, 3, '#2f3a42', 0.3); }
+  else if (k === 'thT') { m.wins(-0.085, 0.15, 0.085, 0.15, 0.018, 0.092, 1, 2, '#f1ece0', 0.34, 0.0022, 0.009).wins(0.085, 0.15, 0.085, -0.15, 0.018, 0.092, 1, 3, '#f1ece0', 0.3, 0.0022, 0.009)
+    .wins(-0.085, -0.15, -0.085, 0.15, 0.018, 0.092, 1, 3, '#f1ece0', 0.3, 0.0022, 0.009).wins(-0.04, 0.151, 0.04, 0.151, 0.105, 0.16, 1, 1, '#2f3a42', 0.35)
+    .quad([0.086, 0, 0.02], [0.086, 0, 0.08], [0.086, 0.075, 0.08], [0.086, 0.075, 0.02], MC.door); }
+  else if (k === 'thR') { m.gable(0, 0, 0.17, 0.3, 0.1, 0.085, MC.white, null, true, 0.016).cb(0, -0.05, 0.022, 0.022, 0.12, 0.2, MC.white); }
+  else if (k === 'thL') { m.cb(0, 0, 0.3, 0.16, 0, 0.1, MC.white).gableEnds(0, 0, 0.3, 0.16, 0.1, 0.08, MC.white).boxWins(0, 0, 0.3, 0.16, 0.018, 0.092, 1, 4, 1, '#2f3a42', 0.32); }
+  else if (k === 'thLT') { m.boxWins(0, 0, 0.3, 0.16, 0.018, 0.092, 1, 4, 1, '#f1ece0', 0.32).cb(0, 0.11, 0.08, 0.06, 0, 0.01, '#9a8a72').cb(-0.035, 0.135, 0.008, 0.008, 0.01, 0.1, '#e9e2d3').cb(0.035, 0.135, 0.008, 0.008, 0.01, 0.1, '#e9e2d3')
+    .gable(0, 0.11, 0.09, 0.06, 0.1, 0.04, '#6f6a63', '#e9e2d3', true, 0.006); }
+  else if (k === 'thLR') { m.gable(0, 0, 0.3, 0.16, 0.1, 0.08, MC.white, null, false, 0.016).cb(0.06, 0, 0.022, 0.022, 0.12, 0.19, MC.white); }
+  /* ---- villages: the troba (log farmhouse) under thatch, a granary (klėtis) with its porch, a barn, a well sweep, a cross ---- */
+  else if (k === 'trW') { m.cb(0, 0, 0.38, 0.18, 0, 0.09, MC.white).gableEnds(0, 0, 0.38, 0.18, 0.09, 0.13, MC.white)
+    .wins(-0.19, 0.09, 0.19, 0.09, 0.014, 0.084, 1, 4, '#2c333b', 0.26).wins(0.19, -0.09, -0.19, -0.09, 0.014, 0.084, 1, 2, '#2c333b', 0.2); }
+  else if (k === 'trT') { m.wins(-0.19, 0.09, 0.19, 0.09, 0.014, 0.084, 1, 4, '#f1ece0', 0.26, 0.0022, 0.008).quad([-0.02, 0, 0.0925], [0.02, 0, 0.0925], [0.02, 0.07, 0.0925], [-0.02, 0.07, 0.0925], '#5a3e2a')
+    .cb(0.04, 0, 0.03, 0.03, 0.15, 0.25, '#a85d47');
+    /* žirgeliai: crossed boards with horse heads above both ends of the ridge */
+    for (const x of [-0.195, 0.195]) for (const s2 of [-1, 1]) m.quad([x, 0.205, s2 * 0.005], [x, 0.205, -s2 * 0.04], [x, 0.215, -s2 * 0.045], [x, 0.215, s2 * 0.0], '#6d4a31')
+      .quad([x, 0.205, -s2 * 0.04], [x, 0.205, s2 * 0.005], [x, 0.215, s2 * 0.0], [x, 0.215, -s2 * 0.045], '#6d4a31'); }
+  else if (k === 'trR') { m.gable(0, 0, 0.38, 0.18, 0.09, 0.13, MC.white, null, false, 0.03); }
+  else if (k === 'klW') { m.cb(0, -0.02, 0.2, 0.12, 0, 0.08, MC.white).quad([-0.025, 0, 0.0405], [0.025, 0, 0.0405], [0.025, 0.065, 0.0405], [-0.025, 0.065, 0.0405], '#4a3526');
+    for (const x of [-0.085, -0.03, 0.03, 0.085]) m.cb(x, 0.07, 0.01, 0.01, 0, 0.08, '#8a6a48');
+    m.cb(0, 0.065, 0.2, 0.05, 0, 0.008, '#8a6a48').gableEnds(0, 0.005, 0.2, 0.17, 0.08, 0.085, MC.white); }
+  else if (k === 'klR') { m.gable(0, 0.005, 0.2, 0.17, 0.08, 0.085, MC.white, null, false, 0.024); }
+  else if (k === 'kbW') { m.cb(0, 0, 0.44, 0.22, 0, 0.1, MC.white).gableEnds(0, 0, 0.44, 0.22, 0.1, 0.16, MC.white).quad([-0.06, 0, 0.1105], [0.06, 0, 0.1105], [0.06, 0.09, 0.1105], [-0.06, 0.09, 0.1105], '#4a3526'); }
+  else if (k === 'kbR') { m.gable(0, 0, 0.44, 0.22, 0.1, 0.16, MC.white, null, false, 0.03); }
+  else if (k === 'well') { m.cb(0, 0, 0.05, 0.05, 0, 0.035, '#8a6a48').cb(-0.045, 0, 0.012, 0.012, 0, 0.12, '#6d4a31');
+    for (const s2 of [-1, 1]) m.quad([-0.12, 0.05, s2 * 0.003], [0.06, 0.2, s2 * 0.003], [0.06, 0.208, s2 * 0.003], [-0.12, 0.058, s2 * 0.003], '#5a4030');
+    m.cb(0.055, 0, 0.004, 0.004, 0.07, 0.2, '#5a4030'); }
+  else if (k === 'cross') { m.cb(0, 0, 0.014, 0.014, 0, 0.19, '#6d4a31').cb(0, 0, 0.04, 0.04, 0.15, 0.185, '#7a5a3c').hip(0, 0, 0.05, 0.05, 0.185, 0.03, '#4f4b47', 0.006)
+    .cb(0, 0, 0.006, 0.006, 0.21, 0.26, '#6d4a31').cb(0, 0, 0.032, 0.006, 0.235, 0.242, '#6d4a31'); }
+  else if (k === 'fence') { m.cb(0, 0, 0.8, 0.006, 0.03, 0.036, '#8a7458').cb(0, 0, 0.8, 0.006, 0.055, 0.061, '#8a7458'); for (let x = -0.4; x <= 0.401; x += 0.1) m.cb(x, 0, 0.009, 0.009, 0, 0.072, '#7a6448'); }
+  else if (k === 'fruit') { m.cb(0, 0, 0.012, 0.012, 0, 0.05, '#5a4030').blob(0, 0.085, 0, 0.055, 0.05, 0.055, '#5f8a4b'); }
+  /* far out: a whole city lot as one tinted block, a town lot as four houses */
+  else if (k === 'cityFar') { m.cb(0, 0.28, 0.8, 0.22, 0, 0.24, MC.white).hip(0, 0.28, 0.8, 0.22, 0.24, 0.06, '#8f5a48').cb(-0.33, -0.12, 0.14, 0.36, 0, 0.13, '#d8ccb2').cb(0.33, -0.12, 0.14, 0.36, 0, 0.13, '#d8ccb2'); }
+  else if (k === 'townFar') { for (const x of [-0.3, -0.1, 0.1, 0.3]) m.cb(x, 0.24, 0.17, 0.3, 0, 0.1, MC.white).gable(x, 0.24, 0.17, 0.3, 0.1, 0.085, '#6f6a63', MC.white, true, 0.016); }
   else if (k === 'panel') { m.cb(0, 0, 0.62, 0.22, 0, 0.55, MC.panel, MC.panel2).boxWins(0, 0, 0.62, 0.22, 0.02, 0.54, 9, 7, 2, '#5f7891', 0.55).cb(0.2, 0, 0.08, 0.08, 0.55, 0.6, MC.panel2); }
   return HOUSE_PARTS[k] = m.geometry();
+}
+/* Tenements: [width, depth, height, rows of windows, windows across the front] */
+const TEN = { ten2: [0.26, 0.2, 0.2, 2, 4], ten3: [0.28, 0.22, 0.3, 3, 4], tenW: [0.4, 0.22, 0.24, 2, 6] };
+/* What a house lot looks like where it stands: tenements in a city's centre ('c'), wooden town houses in towns and the outer
+   streets of cities ('t'), farmhouses in villages ('v'). Worked out once for each lot (not saved). */
+function lotStyle(b) {
+  if (b._sty) return b._sty;
+  if (b.f) return (b._sty = 'v');
+  const ti = b.town >= 0 ? b.town : nearestTown(b.x, b.z), t = S.towns[ti];
+  if (!t) return (b._sty = 't');
+  if (t.vil) return (b._sty = 'v');
+  const d = Math.hypot(b.x - t.x, b.z - t.z), R = t.R || 1, big = t.capital || CITY_PLAN[t.n] || t.pop0 >= 15;
+  return (b._sty = big && d < R * 0.75 ? 'c' : !big && t.pop0 >= 5 && d < Math.min(0.9, R * 0.35) ? 'm' : 't');
 }
 /* Positions of the parts on a house lot, in the lot's local frame at drawn size: [part, x, z, rot, tint index]. */
 function lotLayout(b) { return lotLayout2(b).map(q => [q[0], q[1] * MS, q[2] * MS, q[3], q[4]]); }
 function lotLayout2(b) {
-  const h = q => hash2(b.id, q, 77), out = [];
+  const h = q => hash2(b.id, q, 77), out = [], sty = b.lv === 1 ? lotStyle(b) : '';
+  if (sty === 'c' || sty === 'm') {
+    /* a city block front: tenements wall to wall along the street, a wing or two round the courtyard behind. On a town's
+       market square ('m') two masonry houses with gardens behind. */
+    const seq = sty === 'm' ? (h(1) < 0.5 ? ['ten2', 'ten2'] : ['tenW']) : h(1) < 0.22 ? ['tenW', 'tenW'] : h(1) < 0.48 ? ['ten2', 'ten3', 'ten2'] : h(1) < 0.74 ? ['ten3', 'ten2', 'ten2'] : ['ten2', 'ten2', 'ten3'];
+    const tot = seq.reduce((a, k) => a + TEN[k][0], 0) + (seq.length - 1) * (sty === 'm' ? 0.08 : 0);
+    let x = -tot / 2;
+    seq.forEach((k, q) => { const [w, d] = TEN[k]; x += w / 2; out.push([k, x, 0.42 - d / 2 - 0.02, 0, Math.floor(h(40 + q) * 8)], [k + 'R', x, 0.42 - d / 2 - 0.02, 0, Math.floor(h(50 + q) * 4)]); x += w / 2 + (sty === 'm' ? 0.08 : 0); });
+    if (sty === 'c') { if (h(2) < 0.75) out.push(['wing', -0.34, -0.12, 0]); if (h(3) < 0.5) out.push(['wing', 0.34, -0.12, 0]); if (h(4) < 0.5) out.push(['fruit', 0, -0.25, 0]); }
+    else out.push(['fruit', -0.2, -0.22, 0], ['fruit', 0.15, -0.28, 0], ['shed', 0.3, -0.3, Math.PI / 2]);
+    return out;
+  }
+  if (sty === 't') {
+    /* a town street: wooden houses close together, their gable ends to the street; now and then one turned along it */
+    const n = h(1) < 0.6 ? 4 : 3, xs = n === 4 ? [-0.3, -0.1, 0.1, 0.3] : [-0.26, 0, 0.26];
+    xs.forEach((x0, q) => {
+      const x = x0 + (h(10 + q) - 0.5) * 0.03, along = n === 3 && q === 1 && h(5) < 0.5, wt = Math.floor(h(40 + q) * 7), rt = Math.floor(h(50 + q) * 4);
+      if (along) out.push(['thL', x, 0.31, 0, wt], ['thLT', x, 0.31, 0], ['thLR', x, 0.31, 0, rt]);
+      else out.push(['thW', x, 0.25, 0, wt], ['thT', x, 0.25, 0], ['thR', x, 0.25, 0, rt]);
+    });
+    out.push(['shed', -0.24 + h(6) * 0.1, -0.24, (h(7) - 0.5) * 0.3], ['fruit', 0.12 + h(8) * 0.15, -0.3, 0]);
+    if (h(9) < 0.6) out.push(['fruit', -0.05, -0.33, 0]);
+    return out;
+  }
+  if (sty === 'v') {
+    /* a farmstead: the troba along the road behind a fence, the granary beside it, the barn at the back, a well sweep,
+       fruit trees, and at some a wooden cross by the road */
+    const vt = Math.floor(h(40) * 5), th = Math.floor(h(41) * 4), sx = h(2) < 0.5 ? 1 : -1;
+    out.push(['fence', 0, 0.4, 0], ['trW', -0.06 * sx, 0.2, 0, vt], ['trT', -0.06 * sx, 0.2, 0], ['trR', -0.06 * sx, 0.2, 0, th]);
+    out.push(['klW', 0.3 * sx, 0.02, sx * Math.PI / 2, Math.floor(h(42) * 5)], ['klR', 0.3 * sx, 0.02, sx * Math.PI / 2, th]);
+    out.push(['kbW', (h(3) - 0.5) * 0.1, -0.26, (h(4) - 0.5) * 0.1, Math.floor(h(43) * 5)], ['kbR', (h(3) - 0.5) * 0.1, -0.26, (h(4) - 0.5) * 0.1, Math.floor(h(44) * 4)]);
+    out.push(['well', -0.3 * sx, 0.02, h(5) * 6], ['fruit', -0.34 * sx, -0.12, 0], ['fruit', 0.12 * sx, -0.02, 0]);
+    if (h(6) < 0.6) out.push(['fruit', -0.18 * sx, -0.06, 0]);
+    if (h(7) < 0.3) out.push(['cross', 0.37 * sx, 0.37, 0]);
+    return out;
+  }
   if (b.lv === 1 && b.f) {
     /* a farmstead: one or two cottages, a barn, a shed and trees */
     const two = h(1) < 0.45, spots = two ? [[-0.2, 0.2], [0.21, 0.17]] : [[-0.08 + (h(2) - 0.5) * 0.2, 0.2]];
@@ -534,6 +632,12 @@ function lotLayout2(b) {
   return out;
 }
 const WALL_TINT = ['#c4955a', '#9fb07f', '#8aa7c2', '#b8735a', '#d8c08a', '#e2dccb'], ROOF_TINT = ['#7a3a2b', '#5d5048', '#8b4a2d', '#4f5d4a'];
+/* colours of the lot styles: plaster and roofs in cities, painted boards and shingle or tin in towns, logs and thatch in villages */
+const CITY_WALL = ['#e8d9b0', '#d9c9a3', '#c9d1b3', '#e2c4b0', '#d3d6d8', '#ece5d6', '#d8b98c', '#bfcbd3'], CITY_ROOF = ['#9a4a32', '#7b3d2c', '#5b6062', '#4f6a5a'];
+const TOWN_WALL = ['#a6713f', '#8a5a3a', '#6f8f6a', '#7f97ad', '#c49a5c', '#9b4f3a', '#b9a98a'], TOWN_ROOF = ['#6f6a63', '#5a6b58', '#8b4a33', '#55524e'];
+const VIL_WALL = ['#7a5a3e', '#6e5039', '#8a6a4a', '#5f4a36', '#8f7a62'], THATCH = ['#a8935f', '#968458', '#8a7d62', '#b29b66'];
+const PART_PAL = { woodWalls: WALL_TINT, woodRoof: ROOF_TINT, ten2: CITY_WALL, ten3: CITY_WALL, tenW: CITY_WALL, ten2R: CITY_ROOF, ten3R: CITY_ROOF, tenWR: CITY_ROOF,
+  thW: TOWN_WALL, thL: TOWN_WALL, thR: TOWN_ROOF, thLR: TOWN_ROOF, trW: VIL_WALL, klW: VIL_WALL, kbW: VIL_WALL, trR: THATCH, klR: THATCH, kbR: THATCH, cityFar: CITY_WALL, townFar: TOWN_WALL };
 
 /* ---------- trees ---------- */
 const TREE_GEO = {};

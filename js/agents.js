@@ -60,8 +60,27 @@ function step(m, dt) {
   if (m.s <= 0) { m.s = 0; m.dir = 1; m.wait = 1; return true; }
   return false;
 }
+/* Merchants' carts: one on each of the busiest trading links (TRADES, from the day tick), refreshed every few seconds. They carry
+   the colour of the good that moves most. */
+const TVEH = [];
+let tvehT = 0;
+function rebuildTraders() {
+  const by = new Map();
+  for (const [L, r, q] of TRADES) { const o = by.get(L) || { L, q: 0, r: null, best: 0, dir: q > 0 ? 1 : -1 }; o.q += Math.abs(q); if (Math.abs(q) > o.best) { o.best = Math.abs(q); o.r = r; o.dir = q > 0 ? 1 : -1; } by.set(L, o); }
+  const top = [...by.values()].filter(o => o.q > 0.04).sort((a, b) => b.q - a.q).slice(0, 24), keep = new Set(top.map(o => o.L));
+  for (let n = TVEH.length - 1; n >= 0; n--) if (!keep.has(TVEH[n].L)) TVEH.splice(n, 1);
+  for (const o of top) {
+    const old = TVEH.find(v => v.L === o.L);
+    if (old) { old.r.mAB = { [o.r]: 1 }; old.r.mBA = { [o.r]: 1 }; continue; }
+    const p = pairPath(o.L.road ? 'road' : 'rail', o.L.a, o.L.b);
+    if (!p || p.path.length < 2) continue;
+    const c = polyCum(p.path), L = c[c.length - 1], rail = !o.L.road;
+    TVEH.push({ L: o.L, r: { mode: rail ? 'rail' : 'road', vt: rail ? 'steam' : 'cart', pax: 0, mAB: { [o.r]: 1 }, mBA: { [o.r]: 1 } }, p: p.path, c, L, s: Math.random() * L, dir: o.dir, wait: 0, speed: rail ? 1.2 : 0.3, puff: Math.random() });
+  }
+}
 function updateAgents(dt) {
-  if (agentVer !== NET.ver) { agentVer = NET.ver; WALK.length = 0; vehKey = ''; }
+  if (agentVer !== NET.ver) { agentVer = NET.ver; WALK.length = 0; vehKey = ''; TVEH.length = 0; }
+  if ((tvehT -= dt) <= 0) { tvehT = 6; rebuildTraders(); }
   const key = S.routes.map(r => r.id + ':' + r.n + ':' + r.vt + ':' + (r.ok ? 1 : 0) + ':' + Math.round(r.len || 0)).join(',');
   if (key !== vehKey) { vehKey = key; rebuildVeh(); }
   const f = [0, 1, 1.5, 2.2][S.speed];
@@ -78,6 +97,7 @@ function updateAgents(dt) {
     if (step(w, dt * f) && --w.life <= 0) WALK.splice(n, 1);
   }
   for (const v of VEH) step(v, dt * f);
+  for (const v of TVEH) step(v, dt * f);
 }
 /* draw: called by the renderer each frame */
 function drawAgents() {
@@ -89,7 +109,7 @@ function drawAgents() {
     AG.add('legs', agentGeo('legs'), MAT.agent, x, bob, z, rot, 1, 1, 1);
     AG.add('body', agentGeo('body'), MAT.agent, x, bob, z, rot, 1, 1, 1, SEASON.snow > 0.4 ? '#5b4a3a' : w.col);
   }
-  if (vehicles) for (const v of VEH) {
+  if (vehicles) for (const v of VEH.concat(TVEH)) {
     const r = v.r, rec = v.dir > 0 ? r.mAB : r.mBA;
     let best = null, bv = 0.3;
     if (rec) for (const k in rec) if (rec[k] > bv) { bv = rec[k]; best = k; }

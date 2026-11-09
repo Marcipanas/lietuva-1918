@@ -1,6 +1,6 @@
 {
   "name": "lietuva-1918",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "Gridless 3D economy and city builder of Lithuania from 1918. Plain JavaScript and three.js, no build step.",
   "scripts": {

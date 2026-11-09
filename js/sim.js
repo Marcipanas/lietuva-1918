@@ -11,14 +11,14 @@ function newGame(){
   analyze();homesAtStart();
   HIST_ROUTES.forEach(([a,b,m,vt,n])=>addRoute(tIdx(a),tIdx(b),m,vt,n,true));
   S.log=[
-    {d:0,t:'Goods only move on transport routes. Open the Routes tab to see the old railway lines and cart routes, and add your own.',k:''},
+    {d:0,t:'Merchants carry a little between neighbouring towns on their own, slowly. Routes move goods in bulk: open the Routes tab to see the old railway lines and cart routes, and add your own.',k:''},
     {d:0,t:'Every town and village feeds and heats its people from its own fields and woodlots, so it keeps its size without help. To grow it needs more food, homes and work.',k:''},
     {d:0,t:'Dirt roads join every town and village. Railways and the old paved highways link the main towns to Vilnius. Bring them to the rest.',k:''},
     {d:0,t:'People are happier with more kinds of food on the table: grain, potatoes, dairy, meat and fish. In winter every home burns peat or timber.',k:''},
     {d:0,t:'Borders move with history. Vilnius will change hands several times from 1919, and the Klaipėda Region and the Palanga coast are not yet Lithuanian. Nothing can be built where others hold the land.',k:''},
     {d:0,t:'The Council of Lithuania signs the Act of Independence in Vilnius. The new state must build an economy almost from nothing.',k:'hist'}];
   /* one day of figures for the dashboards, without moving the date: the game starts paused on 16 February */
-  const f0=S.funds;tick();S.inc=S.funds-f0;S.day=0;
+  const f0=S.funds;tick();S.inc=S.funds-f0;S.bud={...BUD};S.day=0;
 }
 /* The start map puts some of a city's houses nearer a village hall. A town with fewer homes than people on the first day gets
    houses on its own zoned lots, nearest first, so no one starts overcrowded. */
@@ -53,7 +53,9 @@ function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
 /* Towns are saved without what every day recomputes (dem, ate, and the made, used and growth figures the dashboards show),
    without empty stock, and without the 1918 descriptions, which come back from the start map. */
 const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
-const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg']);
+const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg','tr','_tr']);
+/* the day's money by kind (the tick fills it; S.bud keeps a smoothed copy for the Lithuania view) */
+const BUD={tax:0,trade:0,bld:0,lines:0,routes:0,army:0,homes:0};
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
   o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
 /* A save of this version back into S: the world is decoded, and what the save leaves out (DAILY, the 1918 descriptions) is
@@ -108,12 +110,35 @@ const isMat=r=>r==='timber'||r==='bricks';
 function moveCargo(A,B0,spec,cap,rec){if(cap<=0)return 0;let left=cap;const auto=spec==='auto',list=auto?RES:spec;
   const cand=[];list.forEach(r=>{const sa=A.stock[r]||0,da=A.dem[r]||0,db=B0.dem[r]||0,sb=B0.stock[r]||0,sp=room(B0,r);let amt;
     if(auto){amt=0;if(db>0.01&&sb/db<(sa/(da+1e-3))*0.8)amt=Math.min((sa*db-sb*da)/(da+db),db*25-sb);
-      if(isMat(r)&&sb<40&&sa>60)amt=Math.max(amt,Math.min(40-sb,sa-60));amt=Math.min(amt,sa-da*5,sp)}
+      if(isMat(r)&&sb<40&&sa>60)amt=Math.max(amt,Math.min(40-sb,sa-60));
+      /* a store filling up sends its surplus on to a town with room (only from the fuller to the emptier, so nothing goes back) */
+      const ca=A.cap||STORE_BASE,cb=B0.cap||STORE_BASE,fa=sa/ca,fb=sb/cb;if(fa>0.75&&fa-fb>0.25)amt=Math.max(amt,Math.min((fa-fb)/2*Math.min(ca,cb),sa-ca*0.6));
+      amt=Math.min(amt,sa-da*5,sp)}
     else amt=Math.min(sa-da*5,sp);if(amt>0.05)cand.push([r,amt,db>0?sb/db:99])});
   if(auto)cand.sort((x,y)=>x[2]-y[2]);
   cand.forEach(([r,amt])=>{const m=Math.min(amt,left);if(m<=0)return;A.stock[r]-=m;B0.stock[r]=(B0.stock[r]||0)+m;rec[r]=(rec[r]||0)+m;left-=m});return cap-left}
 function runRoutes(){S.routes.forEach(r=>{r.mAB={};r.mBA={};r.used=0;if(!r.ok)return;const A=S.towns[r.a],B0=S.towns[r.b],gc=r.pax?r.cap*0.5:r.cap;
   const u=moveCargo(A,B0,r.ab,gc,r.mAB)+moveCargo(B0,A,r.ba,gc,r.mBA);r.used=gc>0?u/(2*gc):0})}
+/* ---------- private traders ----------
+   Merchants carry goods on their own between neighbouring towns joined by road or rail: from a town with plenty (more than a
+   month of stock, or a store filling up) to one that runs short (under two weeks). They close a twentieth of the gap a day, and a
+   link carries only so many loads a day: TRADE_CAP by the kind of road where the towns' lands meet, more by rail. Routes stay the
+   fast way. The state neither pays nor earns. TRADES lists the day's flows for the carts on the map. */
+const TRADE_CAP=[0,0.35,0.9,1.3],TRADE_RAIL=1.5,TRADES=[];
+function runTraders(){TRADES.length=0;
+  for(const L of NET.edges){const A=S.towns[L.a],B0=S.towns[L.b];if(!A||!B0||A.lock||B0.lock)continue;
+    let left=Math.max(L.road?TRADE_CAP[Math.min(3,L.road.lv||1)]:0,L.rail?TRADE_RAIL:0);if(left<=0)continue;
+    const cand=[];
+    for(const r of RES)for(const [X,Y,dir] of [[A,B0,1],[B0,A,-1]]){
+      /* short: under two weeks of stock and falling (or under three days); plenty: over a month of the town's own use, or a store
+         a quarter full of a good the town does not use */
+      const dy=Y.dem[r]||0;if(dy<0.01)continue;const sy=Y.stock[r]||0;if(sy>=dy*14||((Y.dl[r]||0)>=-dy*0.02&&sy>=dy*3))continue;
+      const sx=X.stock[r]||0,dx=X.dem[r]||0,cx=X.cap||STORE_BASE,spare=sx-Math.max(dx*30,dx>0.01?0:cx*0.25);
+      if(spare<=0.05)continue;
+      const q=Math.min(spare,dy*20-sy,room(Y,r))*0.05;if(q>0.005)cand.push([r,X,Y,dir,q,sy/dy])}
+    cand.sort((p,q)=>p[5]-q[5]);
+    for(const [r,X,Y,dir,q0] of cand){const q=Math.min(q0,left);if(q<=0.005)break;X.stock[r]-=q;Y.stock[r]=(Y.stock[r]||0)+q;left-=q;
+      const tx=X._tr||(X._tr={}),ty=Y._tr||(Y._tr={});tx[r]=(tx[r]||0)-q;ty[r]=(ty[r]||0)+q;TRADES.push([L,r,q*dir])}}}
 
 /* ---------- labour: local jobs first, then commuting on foot or by passenger route ---------- */
 function commute(act){act.forEach(n=>{const t=S.towns[n];t.comIn=0;t.comOut=0;t.free=Math.max(0,t.wf-t.jobs);t.vac=Math.max(0,t.jobs-t.wf)});
@@ -130,6 +155,14 @@ function houseCap(b){return b.f&&b.lv===1?FARMSTEAD_CAP:HOUSE.cap[b.lv]}
 function useInputs(b,e,st,dem,fill,us){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';
   for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const q=(st[r]||0)/need;if(q<ir){ir=q;b.lack=r}}}
   ir=clamp(ir,0,1);for(const r in T0.in){const q=T0.in[r]*im*e*ir;st[r]=(st[r]||0)-q;us[r]=(us[r]||0)+q}return ir}
+/* buildings that make nothing themselves: what they do for their town */
+const IDLE=new Set(['station','warehouse','customs','port']);
+function idleWhy(b,t){if(!b.on)return 'Paused';
+  if(b.t==='station')return `Trains stop here for ${t.n}`;
+  if(b.t==='warehouse')return `Stores goods for ${t.n}`;
+  if(b.t==='port')return `Ships load here for ${t.n}`;
+  const m=b.gate?Object.keys(MARKETS).filter(k=>MARKETS[k].gate.includes(b.gate)).map(k=>MARKETS[k].n):[];
+  return m.length?`Trade with ${m.join(' and ')} crosses here`:'No border near'}
 function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
 const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall'};
 function naTxt(b){return b.na==='locked'?heldTxt(rgnAt(b.x,b.z)):NA_TXT[b.na]||'Not connected'}
@@ -137,7 +170,7 @@ let BYT=[];
 function phase1(ti){const t=S.towns[ti];let house=0,jobs=0,cap=STORE_BASE,sch=0,cli=0,pol=0,hn=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(b.t==='house'){house+=houseCap(b);pol+=polAt(b.x,b.z);hn++}else if(T0.w&&b.on)jobs+=T0.w;
     if(T0.store)cap+=WH_CAP[b.lv];if(T0.svc==='school'&&b.on)sch++;if(T0.svc==='clinic'&&b.on)cli++});
-  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={};t._mk={};t._us={}}
+  t.house=house;t.cap=cap;t.wf=t.pop*0.5;t.jobs=jobs;t.pol=hn?pol/hn:0;t.nsch=sch;t.ncli=cli;t.dem={};t._mk={};t._us={};t._tr={}}
 function phase1b(ti){const t=S.towns[ti],st=t.stock;t.edu=Math.min(1,t.nsch*50*t.fill/Math.max(1,t.pop));t.med=Math.min(1,t.ncli*70*t.fill/Math.max(1,t.pop));
   t.pm=(0.7+0.6*t.h/100)*(1+0.1*t.edu);t.powS=0;t.powD=0;
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.pow)return;if(!b.on){b.eff=0;b.why='Paused';return}
@@ -179,8 +212,8 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0),full=FOOD.some(r=>(st[r]||0)>=t.cap*0.95);
   if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&(fbal>=need*0.015||full))))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
-  S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();
-  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
+  const tax=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();S.funds+=tax;BUD.tax+=tax;
+  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station'){const c=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3);S.funds-=c;BUD.bld-=c}});
   if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.food.push(t.n)}
   else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.cold.push(t.n)}
   RES.forEach(r=>{if((st[r]||0)<1e-4)st[r]=0;if(st[r]>t.cap)st[r]=t.cap})}
@@ -196,9 +229,9 @@ function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.f
   for(let q=0;q<n;q++){let best=null,bd=1e9;
     for(const l of S.lots){if(l.town!==ti)continue;const sc=l.cd*0.5+hash2(l.id,7,3)*1.5+polAt(l.x,l.z)*4;if(sc<bd){bd=sc;best=l}}
     if(best){if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to build homes`;return}
-      pay(cost,t);useMat(t,cost);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
+      pay(cost,t);BUD.homes-=cost.lt||0;useMat(t,cost);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
     if(lv>=2){const old=BYT[ti].filter(b=>b.t==='house'&&b.lv<lv);if(old.length){const b=old[Math.floor(Math.random()*old.length)];
-      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);useMat(t,cost);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
+      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);BUD.homes-=cost.lt||0;useMat(t,cost);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
     t.hint='No room to grow: zone more land along its streets';return}}
 
 /* ---------- history, chance and ministry tasks ---------- */
@@ -261,21 +294,24 @@ function curTask(){return OBJ.find(o=>!S.obj[o.id]&&(!o.can||o.can()))||null}
 
 function tick(){
   if(NET.dirty)analyze();
-  S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);
+  S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);for(const k in BUD)BUD[k]=0;
   RES.forEach(r=>{const base=RI[r].p*depAt(r);let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
-  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b)}});
+  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock){BYT[b.town].push(b);if(IDLE.has(b.t)){b.eff=b.on?1:0;b.why=idleWhy(b,S.towns[b.town])}}else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b)}});
   act.forEach(n=>{before[n]={...S.towns[n].stock};before[n].pop=S.towns[n].pop;phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
   act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
   act.forEach(n=>phase2(n,sea));
-  runRoutes();runDeals();warnLog();
+  runRoutes();runTraders();runDeals();warnLog();
   act.forEach(n=>{const t=S.towns[n];if(t.pop>=t.house*0.92&&t.fed>=0.99&&t.h>=45){if(++t.dev>=5){t.dev=0;develop(n)}}else if(t.pop<t.house*0.85)t.hint=''});
   /* smoothed per-day figures: net change of each good (routes and trade included), made, used, and population growth */
-  act.forEach(n=>{const t=S.towns[n],b0=before[n],mk=t.mk||(t.mk={}),us=t.us||(t.us={});RES.forEach(r=>{const d=(t.stock[r]||0)-(b0[r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2;
-    mk[r]=(mk[r]||0)*0.8+(t._mk[r]||0)*0.2;us[r]=(us[r]||0)*0.8+(t._us[r]||0)*0.2});t.gr=(t.gr||0)*0.9+(t.pop-b0.pop)*0.1});
-  S.funds-=NET.up;S.routes.forEach(r=>{if(!r.held)S.funds-=r.n*VT[r.vt].up});
+  act.forEach(n=>{const t=S.towns[n],b0=before[n],mk=t.mk||(t.mk={}),us=t.us||(t.us={}),tr=t.tr||(t.tr={});RES.forEach(r=>{const d=(t.stock[r]||0)-(b0[r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2;
+    mk[r]=(mk[r]||0)*0.8+(t._mk[r]||0)*0.2;us[r]=(us[r]||0)*0.8+(t._us[r]||0)*0.2;tr[r]=(tr[r]||0)*0.8+((t._tr||{})[r]||0)*0.2});t.gr=(t.gr||0)*0.9+(t.pop-b0.pop)*0.1});
+  S.funds-=NET.up;BUD.lines=-NET.up;S.routes.forEach(r=>{if(!r.held){const c=r.n*VT[r.vt].up;S.funds-=c;BUD.routes-=c}});
+  /* the army, allies and support schemes are paid before the day's balance is counted, so the top bar shows them */
+  const hs=histSpend();S.funds-=hs;BUD.army=-hs;
   S.inc=S.inc*0.9+(S.funds-f0)*0.1;
+  const bu=S.bud||(S.bud={});for(const k in BUD)bu[k]=(bu[k]||0)*0.9+BUD[k]*0.1;
   if(S.funds<0&&S.day-(S.ms.broke||-999)>90){S.ms.broke=S.day;log('The treasury is empty and upkeep runs up a debt. Remove routes or buildings you do not need, or sell goods abroad.','warn');NOTES.push('The treasury is empty')}
   histTick();
   if(S.day>=S.nextRnd){S.nextRnd=S.day+170+Math.floor(Math.random()*170);const r=pick(REV)();if(r)log(r[0],r[1])}

@@ -10,10 +10,11 @@ const TOOL = { k: 'inspect', bt: null, rot: 0, ti: -1, lv: { road: 0, rail: 0 },
 let PEND = null, TRACE = [], K0 = 0, ZONES = [], lastPlan = 0, planTimer = 0;
 const FIND_R = 15;
 const isLine = () => TOOL.k === 'road' || TOOL.k === 'rail', isBrush = () => TOOL.k === 'zone' || TOOL.k === 'bull';
-function roadMax() { return S.era >= 3 ? 3 : S.era >= 2 ? 2 : 1; }
+function roadMax() { return S.era >= 3 ? 3 : 2; }
 function railMax() { return S.era >= 3 ? 2 : 1; }
-/* the level the line tool builds: the player's choice, or the best the era allows */
-function lineLevel(k) { const mx = k === 'road' ? roadMax() : railMax(), c = TOOL.lv[k]; return c >= 1 && c <= mx ? c : mx; }
+/* the level the line tool builds: the player's choice, or else the best the era allows (for roads, the era's own kind:
+   dirt roads in the first era, though paved roads can be picked, at a price in bricks) */
+function lineLevel(k) { const mx = k === 'road' ? roadMax() : railMax(), c = TOOL.lv[k]; return c >= 1 && c <= mx ? c : k === 'road' ? Math.min(mx, S.era) : mx; }
 /* what the ground overlay highlights while placing a building: where it can go, or where it does best */
 function needKey(bt) { const T0 = BT[bt]; if (!T0) return null; return T0.need === 'clay' || T0.need === 'bog' || T0.need === 'forest' ? T0.need : T0.bonus || null; }
 
@@ -26,6 +27,7 @@ function setTool(k, bt, ti) {
   showBar();
 }
 function clearPreview() {
+  TOOL.free0 = false;
   VIEW.path = null; VIEW.lines = null; VIEW.hit = null; VIEW.snaps = []; VIEW.zone = null; VIEW.bull = null; VIEW.brush = null; VIEW.ghost = null; VIEW.ver++;
   PEND = null; TRACE = []; K0 = 0; ZONES = []; showBar();
 }
@@ -144,7 +146,8 @@ function snapEnd(x, z, k, r) {
 }
 function planLine() {
   const k = TOOL.k, r = snapR(), tr = TRACE.slice(), n = tr.length;
-  const s0 = snapEnd(tr[0][0], tr[0][1], k, r), s1 = n > 1 ? snapEnd(tr[n - 1][0], tr[n - 1][1], k, r) : null;
+  /* a road laid out to a new building starts at the building, not on the streets nearby (TOOL.free0) */
+  const s0 = TOOL.free0 ? null : snapEnd(tr[0][0], tr[0][1], k, r), s1 = n > 1 ? snapEnd(tr[n - 1][0], tr[n - 1][1], k, r) : null;
   if (s0) tr[0] = [s0.x, s0.z];
   if (s1) tr[n - 1] = [s1.x, s1.z];
   /* ends on the network leave it where it faces the next point, clear of houses */
@@ -153,7 +156,9 @@ function planLine() {
   if (s1 && n > 1) { const ex = exitPoint(tr[n - 1][0], tr[n - 1][1], tr[n - 2][0], tr[n - 2][1], k, reach(tr[n - 1], tr[n - 2])); if (ex) tr[n - 1] = ex; }
   VIEW.snaps = tr.map((q, i) => [q[0], q[1], i === 0 ? !!s0 : i === tr.length - 1 ? !!s1 : false, i > 0 && i < tr.length - 1]);
   let pts = null, pieces = null;
-  if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = routePieces(pts, k); }
+  if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = TOOL.free0 ? [{ net: false, p: pts }] : routePieces(pts, k); }
+  /* new track that meets old track curves onto it, as a switch does */
+  if (pieces && k === 'rail') pieces.forEach(P => { if (!P.net && polyLen(P.p) > 0.6) P.p = turnouts(P.p); });
   VIEW.path = pts || (tr.length > 1 ? tr : null); VIEW.pathOk = !!pts; VIEW.pathMode = k; VIEW.hit = null;
   VIEW.lines = pieces ? pieces.map(q => ({ p: q.p, k: q.net ? (q.segs.some(g => g.e.lv < lineLevel(k)) ? 'up' : 'use') : 'new' })) : null;
   VIEW.ver++;
@@ -314,7 +319,7 @@ function prepareZone() {
   const lots = ZONES.flat();
   PEND = { kind: 'zone', lots, n: lots.length, cost: { lt: lots.length * ZONE_COST } };
   if (!lots.length) PEND.bad = 'Nothing here can be zoned. Tap beside a street, on dry land inside Lithuania.';
-  else if (lots.every(c => townAtPoint(c.x, c.z) < 0)) PEND.warn = `These lots are more than ${TERRITORY} km by road from a town hall, so no town will build here.`;
+  else if (lots.every(c => townAtPoint(c.x, c.z) < 0)) PEND.warn = `These lots are more than ${kmTxt(TERRITORY)} km by road from a town hall, so no town will build here.`;
   VIEW.brush = null; VIEW.ver++;
   showBar();
 }
@@ -356,7 +361,8 @@ function setGhost(x, z, rot) {
   }
   const ti = payTown(gx, gz), jt = t === 'hall' ? -1 : townAtPoint(gx, gz, true);
   VIEW.ghost = { t, x: gx, z: gz, rot: r, ok: v.ok }; VIEW.ver++;
-  PEND = { kind: 'place', t, x: gx, z: gz, rot: r, ok: v.ok, why: v.why, bonus: v.bonus, ti, jt, cost: T0.cost, fx: x, fz: z };
+  const acc = t === 'hall' || !!accessOf({ x: gx, z: gz, rot: r, w, d }, 'road');
+  PEND = { kind: 'place', t, x: gx, z: gz, rot: r, ok: v.ok, why: v.why, bonus: v.bonus, ti, jt, acc, cost: T0.cost, fx: x, fz: z };
   TOOL.built = '';
   showBar();
 }
@@ -374,7 +380,7 @@ function nearMask(kind) {
   if (NEARM.v !== WV.own) { for (const q in NEARM) delete NEARM[q]; NEARM.v = WV.own; }
   if (NEARM[kind]) return NEARM[kind];
   const src = kind === 'border' ? k => CTY[k] > 1 || heldOff(k) : kind === 'coast' ? k => TT[k] === T_SEA || TT[k] === T_LAGOON : kind === 'lake' ? k => TT[k] === T_LAKE : k => isWaterT(TT[k]);
-  const reach = Math.ceil((kind === 'border' ? 3 : kind === 'lake' ? 0.8 : kind === 'coast' ? 0.7 : 0.6) / CELL) + 1, d = new Uint8Array(GW * GH).fill(255), q = [];
+  const reach = Math.ceil((kind === 'border' ? BORDER_KM : kind === 'lake' ? 0.8 : kind === 'coast' ? 0.7 : 0.6) / CELL) + 1, d = new Uint8Array(GW * GH).fill(255), q = [];
   for (let k = 0; k < GW * GH; k++) if (src(k)) { d[k] = 0; q.push(k); }
   for (let h = 0; h < q.length; h++) {
     const k = q[h], v = d[k];
@@ -448,12 +454,12 @@ function findGhost(initial) {
   const from = !initial && PEND && PEND.kind === 'place' ? [PEND.x, PEND.z] : T ? [T.x, T.z] : [cam.x, cam.z];
   /* nothing near: look further out, for any town (bogs, clay pits and borders can be far away) */
   let s = findSpot(t, from[0], from[1], TOOL.ti);
-  if (!s && BT[t].need) for (const R of [45, 90, 160, 260]) { s = findSpot(t, from[0], from[1], -1, R); if (s) break; }
+  if (!s && BT[t].need) for (const R of [45, 90, 160, 260]) { s = findSpot(t, from[0], from[1], -1, R * MAPK); if (s) break; }
   if (s) {
     setGhost(s[0], s[1], s[2]);
     const far = cam.dist > 14, d = Math.hypot(s[0] - from[0], s[1] - from[1]);
     if (far || !onScreen(s[0], s[1])) focusAt(s[0], s[1], far ? 8 : cam.dist);
-    if (d > FIND_R) { const jt = PEND && PEND.jt >= 0 ? S.towns[PEND.jt] : null; toast(`The nearest good spot is ${Math.round(d)} km away${jt ? ', by ' + jt.n : ''}.`); }
+    if (d > FIND_R) { const jt = PEND && PEND.jt >= 0 ? S.towns[PEND.jt] : null; toast(`The nearest good spot is ${Math.round(d / MAPK)} km away${jt ? ', by ' + jt.n : ''}.`); }
   } else {
     setGhost(from[0], from[1]);
     /* the search above went 260 km out: no coast at all means others hold all of it (before 1921, or after losing it) */
@@ -464,6 +470,7 @@ function findGhost(initial) {
 
 function doConfirm() {
   const p = PEND;
+  let placed = null;
   if (!p || p.bad) return;
   const town = p.ti >= 0 ? S.towns[p.ti] : null;
   if (p.kind === 'line' || p.kind === 'up') {
@@ -471,11 +478,11 @@ function doConfirm() {
     const m = missing(p.cost, town);
     if (m) return toast(m);
     pay(p.cost, town);
-    if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${num(p.km)} km to ${p.name.toLowerCase()}`); log(`${num(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
+    if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${kmTxt(p.km)} km to ${p.name.toLowerCase()}`); log(`${kmTxt(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
     else {
       if (p.ups && p.ups.length) applyUps(p.ups, p.lv);
       p.runs.forEach(r => afterLine(buildLine(p.mode, p.lv, r.p, 0.12)));
-      const what = [p.km > 0.05 ? `${num(p.km)} km built` : '', p.upKm > 0.05 ? `${num(p.upKm)} km upgraded` : ''].filter(Boolean).join(', ');
+      const what = [p.km > 0.05 ? `${kmTxt(p.km)} km built` : '', p.upKm > 0.05 ? `${kmTxt(p.upKm)} km upgraded` : ''].filter(Boolean).join(', ');
       toast(`${p.name}: ${what}`); log(`${p.name} near ${town.n}: ${what}.`); tutEvent(p.mode);
     }
     clearPreview();
@@ -489,7 +496,7 @@ function doConfirm() {
     const q = p.plan, nb = q.b.length;
     applyBull(q);
     if (VIEW.sel && VIEW.sel.kind === 'b' && !BMAP.get(VIEW.sel.id)) VIEW.sel = null;
-    toast(`Removed ${nb} building${nb === 1 ? '' : 's'}${q.road + q.rail > 0.05 ? `, ${num(q.road + q.rail)} km of line` : ''}${q.lots.length ? `, ${q.lots.length} lots` : ''}`);
+    toast(`Removed ${nb} building${nb === 1 ? '' : 's'}${q.road + q.rail > 0.05 ? `, ${kmTxt(q.road + q.rail)} km of line` : ''}${q.lots.length ? `, ${q.lots.length} lots` : ''}`);
     clearPreview();
   } else if (p.kind === 'place') {
     const v = validPlace(p.t, p.x, p.z, p.rot);
@@ -499,10 +506,30 @@ function doConfirm() {
     if (m) return toast(m);
     pay(p.cost, town);
     if (p.t === 'hall') newTownAt(p.x, p.z, p.rot);
-    else { addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
+    else { placed = addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
     VIEW.ghost = null; PEND = null; VIEW.ver++; TOOL.built = BT[p.t].n;
   }
   analyze(); save(); renderPanel(true); showBar();
+  /* built with no road to a town: lay out the road to it, for the player to confirm */
+  if (placed && placed.na === 'noroad' && offerAccess(placed)) toast(`${BT[placed.t].n} built. It needs a road to town: build the road shown, or draw your own.`);
+}
+/* A dirt road from a building that no road reaches to the nearest street of the town that would take it, planned in the Road
+   tool. A station's front faces its track, so its road leaves from the back or a side. Returns true when there is a plan. */
+function offerAccess(b) {
+  const o = bOBB(b), [rx, rz, fx, fz] = obbAxes(o);
+  let ti = townAtPoint(b.x, b.z, true);
+  if (ti < 0) ti = nearestTown(b.x, b.z, true);
+  if (ti < 0) return false;
+  const sides = [[fx, fz, o.d / 2], [-fx, -fz, o.d / 2], [rx, rz, o.w / 2], [-rx, -rz, o.w / 2]].filter((q, i) => !(b.t === 'station' && i === 0));
+  let best = null;
+  sides.forEach(([dx, dz, h]) => {
+    const px = b.x + dx * (h + 0.1), pz = b.z + dz * (h + 0.1), tg = nearestTownRoad(ti, px, pz);
+    if (tg && (!best || tg.d < best.d)) best = { x: px, z: pz, tx: tg.x, tz: tg.z, d: tg.d };
+  });
+  if (!best || best.d > 6) return false;
+  setTool('road');
+  TRACE = [[best.x, best.z], [best.tx, best.tz]]; K0 = 1; TOOL.free0 = true; prepareLine();
+  return !!(PEND && !PEND.bad);
 }
 function newTownAt(x, z, rot) {
   const [lo, la] = xz2ll(x, z);

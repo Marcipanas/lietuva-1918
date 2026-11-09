@@ -2,11 +2,12 @@
 /* Lietuva 1918 — hand-drawn land data in [lon, lat], edited directly (js/geo.js is generated). Soils, forests and deposits
    follow the real pattern of the country only roughly: fertile Suvalkija and central plain, sandy pine forests in Dzūkija,
    the Aukštaitija flax belt, bogs and clay pits where the real ones are. */
-/* lakes too small for the outlines in geo.js: lon, lat, radius east–west km, radius north–south km, turn in degrees */
+/* lakes too small for the outlines in geo.js: lon, lat, radius east–west km, radius north–south km (real km, scaled to the
+   drawn map), turn in degrees */
 const LAKES = [[25.83, 55.79, 1.1, 4.0, 10], [25.80, 55.45, 4.0, 0.8, -15], [25.46, 55.06, 0.6, 6.5, 20], [24.928, 54.658, 1.6, 1.2, 20],
   [24.945, 54.645, 0.8, 1.0, 0], [21.84, 56.04, 2.0, 1.6, 0], [22.36, 55.79, 1.6, 1.1, 0], [22.248, 55.993, 1.3, 0.7, 30], [23.29, 55.86, 2.0, 1.6, 0],
   [23.326, 55.940, 0.5, 0.35, 30], [24.77, 56.225, 0.6, 2.0, 20], [22.73, 54.43, 2.4, 2.0, 0], [23.60, 54.46, 1.4, 1.0, 0], [26.26, 55.72, 1.2, 0.8, 0],
-  [25.55, 55.20, 1.5, 0.8, 30], [25.24, 55.58, 1.5, 1.1, 0], [25.70, 55.61, 1.4, 1.0, 20], [24.32, 54.37, 1.6, 1.2, 0]];
+  [25.55, 55.20, 1.5, 0.8, 30], [25.24, 55.58, 1.5, 1.1, 0], [25.70, 55.61, 1.4, 1.0, 20], [24.32, 54.37, 1.6, 1.2, 0]].map(([lo, la, rx, ry, rot]) => [lo, la, rx * MAPK, ry * MAPK, rot]);
 /* forest clusters: lon, lat, radius in degrees */
 const FOR = [[24.45, 54.15, .33], [23.95, 54.05, .16], [25.75, 55.25, .2], [23.55, 54.75, .18], [25.10, 54.40, .2], [21.95, 56.00, .15], [23.15, 55.62, .14],
   [25.80, 54.95, .18], [22.90, 55.15, .15], [24.80, 56.08, .12], [22.45, 55.35, .16], [21.45, 55.50, .12], [25.45, 55.70, .15], [26.35, 55.35, .18],

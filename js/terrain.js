@@ -91,6 +91,8 @@ let TERRAIN_READY = false;
 /* The terrain is the same in every game, so it is generated once; later calls only reset the features. */
 function genTerrain() {
   if (TERRAIN_READY) { TF.set(TF0); return; }
+  /* the start map carries the raster it was made on: unpacking it takes milliseconds, building it a few seconds on a phone */
+  if (typeof WORLD1918 !== 'undefined' && WORLD1918 && WORLD1918.ras && WORLD1918.ras.n === GW * GH) { rasUnpack(WORLD1918.ras); TF0.set(TF); TERRAIN_READY = true; return; }
   /* water first, then each country's land; cells left over from simplified outlines take a neighbour's value */
   const UNK = 255;
   TT.fill(UNK); TF.fill(0); CTY.fill(0);
@@ -142,9 +144,10 @@ function genTerrain() {
       return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
     };
   };
-  const N1 = lattice(2, 24, 3), N2 = lattice(1.5, 9, 5), N3 = lattice(1, 2.4, 8);
+  /* the coarse patterns follow the geography (scaled with the map); the finest one is the ragged edge seen near a town */
+  const N1 = lattice(2 * MAPK, 24 * MAPK, 3), N2 = lattice(1.5 * MAPK, 9 * MAPK, 5), N3 = lattice(1, 2.4, 8);
   /* soils: fertile plains, the flax belt (centres converted to km once) */
-  const toKm = (list, f) => list.map(([lo, la, r]) => { const c = ll2xz(lo, la); return [c[0], c[1], r * f]; });
+  const toKm = (list, f) => list.map(([lo, la, r]) => { const c = ll2xz(lo, la); return [c[0], c[1], r * f * MAPK]; });
   const fields = toKm(FIELDS, 85), flaxr = toKm(FLAXR, 1), fors = toKm(FOR, 95), bogs = toKm(BOGS, 1), clays = toKm(CLAYS, 1);
   /* distance to the nearest centre, with wobbly edges so soils and bogs are not circles */
   const wobble = (x, z) => 0.62 + N2(x, z) * 0.55 + N3(x, z) * 0.2;
@@ -210,6 +213,53 @@ function waterHit(o, pad) {
     if (pts.some(q => pip(L.p, q[0], q[1]))) return true;
   }
   return false;
+}
+/* ---------- the raster, packed for the start map ----------
+   tools/build-world.js stores the generated raster in WORLD1918.ras: a palette of cell values (terrain, country, region and
+   features as generated), then runs of [palette index, run length as a 7-bit varint], in base64. */
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function rasPack() {
+  const runs = [], pal = [], ix = new Map(), bytes = [];
+  let cur = -1, len = 0;
+  for (let k = 0; k < GW * GH; k++) {
+    const v = TT[k] | CTY[k] << 4 | RGN[k] << 8 | TF0[k] << 12;
+    if (v === cur) { len++; continue; }
+    if (len) runs.push(cur, len);
+    cur = v; len = 1;
+  }
+  runs.push(cur, len);
+  for (let i = 0; i < runs.length; i += 2) if (!ix.has(runs[i])) { ix.set(runs[i], pal.length); pal.push(runs[i]); }
+  const wide = pal.length > 255;
+  for (let i = 0; i < runs.length; i += 2) {
+    const p = ix.get(runs[i]);
+    if (wide) bytes.push(p >> 8); bytes.push(p & 255);
+    let n = runs[i + 1];
+    for (; n >= 128; n = Math.floor(n / 128)) bytes.push(n % 128 + 128);
+    bytes.push(n);
+  }
+  let d = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i], b = bytes[i + 1], c = bytes[i + 2], q = a << 16 | (b || 0) << 8 | (c || 0);
+    d += B64[q >> 18 & 63] + B64[q >> 12 & 63] + (b === undefined ? '=' : B64[q >> 6 & 63]) + (c === undefined ? '=' : B64[q & 63]);
+  }
+  return { n: GW * GH, p: pal, d };
+}
+function rasUnpack(o) {
+  const s = o.d, rev = new Uint8Array(128), pal = o.p, wide = pal.length > 255;
+  for (let i = 0; i < 64; i++) rev[B64.charCodeAt(i)] = i;
+  const pad = s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0, b = new Uint8Array(s.length / 4 * 3 - pad);
+  for (let i = 0, j = 0; i < s.length; i += 4) {
+    const q = rev[s.charCodeAt(i)] << 18 | rev[s.charCodeAt(i + 1)] << 12 | rev[s.charCodeAt(i + 2)] << 6 | rev[s.charCodeAt(i + 3)];
+    if (j < b.length) b[j++] = q >> 16 & 255; if (j < b.length) b[j++] = q >> 8 & 255; if (j < b.length) b[j++] = q & 255;
+  }
+  for (let i = 0, k = 0; k < o.n && i < b.length;) {
+    const p = wide ? b[i++] << 8 | b[i++] : b[i++];
+    let n = 0, m = 1, c;
+    do { c = b[i++]; n += (c & 127) * m; m *= 128; } while (c & 128);
+    const v = pal[p], e = Math.min(o.n, k + n);
+    TT.fill(v & 15, k, e); CTY.fill(v >> 4 & 15, k, e); RGN.fill(v >> 8 & 15, k, e); TF.fill(v >> 12 & 255, k, e);
+    k = e;
+  }
 }
 /* Saved games store only the cells whose features changed since generation: pairs of [cells skipped, new value]. */
 function tfDiff() {
@@ -278,7 +328,7 @@ function planPath(ax, az, bx, bz, mode, gen) {
   const cost = k => (k === a || k === b) ? Math.min(1, planCost(k, mode, gen)) || 1 : planCost(k, mode, gen);
   ST[a] = st; G[a] = 0; P[a] = -1; push(a, h(ai, aj));
   let exp = 0;
-  while (hk.length && exp < 400000) {
+  while (hk.length && exp < 400000 * MAPK) {
     const k = pop(); exp++;
     if (k === b) break;
     const i = k % GW, j = (k / GW) | 0, g = G[k];

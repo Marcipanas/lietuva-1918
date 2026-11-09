@@ -66,10 +66,12 @@ assert(true, `loaded ${order.length} scripts in index.html order`);
 /* ---- play session (runs inside the game's global scope) ---- */
 const session = `(function(){const out={};let t=0;
   /* the player answers each decision card as history went */
-  const hopt=id=>Math.max(0,CARDS[id].opts.findIndex(o=>o.h)),answer=()=>{while(S.hist.cards.length)act({act:'card',o:String(hopt(S.hist.cards[0]))})};
+  const hopt=id=>Math.max(0,CARDS[id].opts.findIndex(o=>o.h));out.news=[];
+  /* news cards (history that moves a border) are read; decision cards are answered as history went */
+  const answer=()=>{for(;;){if(S.hist.news.length){out.news.push(S.hist.news[0].id);act({act:'newsok'})}else if(S.hist.cards.length)act({act:'card',o:String(hopt(S.hist.cards[0]))});else break}};
   const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t);answer()}};
   /* history without the economy, a day at a time, answering cards as history went unless pick says otherwise */
-  const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
+  const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.news.length)readNews();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
   const keep=()=>JSON.stringify(serialize(),SAVE_NUM),back=s=>{restore(JSON.parse(s));analyze()},T=n=>S.towns.find(x=>x.n===n);
   /* a new game opens on its intro, paused on 16 February 1918, with every town housed and a first ministry task */
   showCard();out.intro=S.intro===1&&S.speed===0&&S.day===0&&document.getElementById('card').innerHTML.includes('Act of Independence');{const K=T('Kaunas');out.kauHomes=K.house>=K.pop0&&K.note!=='Overcrowded'}
@@ -187,7 +189,44 @@ const session = `(function(){const out={};let t=0;
   out.saveKB=Math.round(str.length/1024);out.saved=!!localStorage.getItem(SAVE_KEY);
   /* a new version drops the saves of older ones and keeps the tutorial's note */
   localStorage.setItem('lietuva1918-v6','{}');localStorage.setItem('lietuva1918-tutorial','done');
-  out.drop=dropOldSaves()&&localStorage.getItem('lietuva1918-v6')===null&&localStorage.getItem('lietuva1918-tutorial')==='done'&&!!localStorage.getItem(SAVE_KEY)&&!dropOldSaves();return out})()`;
+  out.drop=dropOldSaves()&&localStorage.getItem('lietuva1918-v6')===null&&localStorage.getItem('lietuva1918-tutorial')==='done'&&!!localStorage.getItem(SAVE_KEY)&&!dropOldSaves();
+  /* ---- v0.11, on a fresh game ---- */
+  newGame();analyze();S.intro=0;S.speed=0;setTool('inspect');
+  /* the army's budget is paid before the day's balance is counted, so the balance shows it */
+  S.hist.def=25;for(let q=0;q<60;q++)tick();out.budArmy=Math.round(S.bud.army);out.budGap=Math.abs(Object.values(S.bud).reduce((a,x)=>a+x,0)-S.inc);S.hist.def=0;
+  /* stations, warehouses and border posts say what they do */
+  out.idle=S.bld.filter(b=>IDLE.has(b.t)&&b.town>=0&&!S.towns[b.town].lock).map(b=>b.why);
+  /* a drawn map twice the real size, shown in real km, its terrain shipped packed; paved roads from 1918, dirt by default */
+  out.km=[MAPK,kmTxt(TERRITORY),Math.round(MAPU)].join(',');out.ras=!!(WORLD1918.ras&&WORLD1918.ras.n===GW*GH);out.paved1=S.era===1&&roadMax()===2&&lineLevel('road')===1;
+  /* houses by place: city tenements, town houses, farmsteads */
+  out.sty=[...new Set(S.bld.filter(b=>b.t==='house'&&b.lv===1).map(lotStyle))].sort().join('');
+  /* streets: in towns, few loose ends that serve nothing */
+  {space();const used=new Set();S.bld.forEach(b=>{const a=accessOf(bOBB(b),'road');if(a)used.add(a.e.id)});S.lots.forEach(l=>{const a=accessOf(lotOBB(l),'road');if(a)used.add(a.e.id)});let loose=0;
+   EDGES.forEach(e=>{if(e.k!=='road'||used.has(e.id))return;const A=NODES.get(e.a),B=NODES.get(e.b);if((A.e.length===1)!==(B.e.length===1)){const n=A.e.length===1?A:B,t=S.towns[nearestTown(n.x,n.z)];if(t&&!t.vil&&Math.hypot(n.x-t.x,n.z-t.z)<(t.R||1)+0.5)loose++}});out.loose=loose}
+  /* a deal keeps half the store; a sale by sea counts for the port task */
+  {setOwner('kr','lt');analyze();const kl=S.towns.findIndex(t=>t.n==='Klaipėda'),KL=S.towns[kl];KL.stock.timber=KL.cap;S.deals=[];const d=addDeal('gb','timber','out',100,kl);
+   for(let q=0;q<3;q++){runDeals();checkObj()}out.keep=Math.round((KL.stock.timber||0)/KL.cap*100);out.portTask=!!S.obj.port&&S.stats.portSales>0;S.deals=[]}
+  /* merchants carry a full store's dairy to its neighbours; a route in auto mode moves a full store's surplus */
+  {const kd=S.towns.findIndex(t=>t.n==='Kėdainiai'),KD=S.towns[kd];KD.stock.dairy=KD.cap;let mv=0;for(let q=0;q<10;q++){tick();TRADES.forEach(([L,r,qq])=>{if(r==='dairy')mv+=Math.abs(qq)})}out.trade=mv;
+   const jn=S.towns.findIndex(t=>t.n==='Jonava'),r=addRoute(kd,jn,'rail','steam',1,false);routeEval(r);KD.stock.timber=KD.cap;S.towns[jn].stock.timber=5;for(let q=0;q<10;q++)tick();out.surplus=[Math.round(KD.stock.timber),Math.round(S.towns[jn].stock.timber)];S.routes.splice(S.routes.indexOf(r),1)}
+  /* a new railway into old track curves onto it, like a switch */
+  {let best=null;EDGES.forEach(e=>{if(e.k!=='rail'||e.L<12||e.off)return;const q=polyAt(e.p,e.c,e.L/2),ti=nearestTown(q[0],q[1]),d=Math.hypot(S.towns[ti].x-q[0],S.towns[ti].z-q[1]);if(d>6&&(!best||e.L>best.e.L))best={e,q}});
+   const {q}=best,P=[q[0]-q[3]*4,q[1]+q[2]*4];S.funds+=1e5;S.towns.forEach(t=>{t.stock.timber=600});cam.dist=12;setTool('rail');tapTool(P[0],P[1]);tapTool(q[0],q[1]);const before=new Set(EDGES.keys());doConfirm();analyze();setTool('inspect');
+   const made=[...EDGES.values()].filter(x=>x.k==='rail'&&!before.has(x.id)),nl=made.find(m=>NODES.get(m.a).e.length===1||NODES.get(m.b).e.length===1),ang=[];
+   if(nl){const jid=NODES.get(nl.a).e.length===1?nl.b:nl.a,tm=nl.a===jid?polyAt(nl.p,nl.c,0.05):polyAt(nl.p,nl.c,nl.L-0.05);
+     NODES.get(jid).e.map(i=>EDGES.get(i)).filter(x=>x!==nl&&x.k==='rail').forEach(o=>{const to=o.a===jid?polyAt(o.p,o.c,0.05):polyAt(o.p,o.c,o.L-0.05);ang.push(Math.acos(Math.min(1,Math.abs(tm[2]*to[2]+tm[3]*to[3])))*180/Math.PI)})}
+   out.turn=ang.length?Math.min(...ang):99}
+  /* a station placed away from the streets gets its road laid out in the Road tool */
+  {cam.dist=12;setTool('place','station');let spot=null;
+   for(const e of EDGES.values()){if(spot)break;if(e.k!=='rail'||e.off)continue;for(let s=0.3;s<e.L&&!spot;s+=0.4){const q=polyAt(e.p,e.c,s);setGhost(q[0]-q[3]*0.3,q[1]+q[2]*0.3);if(PEND&&PEND.ok&&PEND.jt>=0&&!PEND.acc)spot=PEND}}
+   out.ghostAcc=spot?spot.acc:null;if(spot){S.towns[spot.ti].stock.timber=600;S.funds+=1e4;doConfirm()}out.access=TOOL.k==='road'&&!!PEND&&PEND.kind==='line'&&!PEND.bad;setTool('inspect')}
+  /* a decision card waits for a choice and a confirm; a shown route can be hidden from its pill; the production view draws */
+  {S.hist.cards=['volunteers'];showCard();const h=document.getElementById('card').innerHTML;out.confirm=h.includes('data-confirm')&&h.includes('data-pick');S.hist.cards=[];showCard();
+   VIEW.route=S.routes[0].id;VIEW.sheet=0;updateTask();out.pill=document.getElementById('task').dataset.k==='route';VIEW.route=null;
+   VIEW.prod='all';for(const d of [10,300]){cam.dist=d;applyCam();draw(0.016)}VIEW.prod='grain';draw(0.016);VIEW.prod=null;out.prodOk=true}
+  /* New game waits on its intro, paused, whatever the clock did before */
+  S.speed=3;act({act:'reset'});act({act:'reset2'});out.restart=S.speed===0&&S.intro===1&&S.day===0;
+  return out})()`;
 let o;
 const LANDMARKS_N = vm.runInContext('LANDMARKS', sandbox);
 try { o = vm.runInContext(session, sandbox, { filename: 'session' }); }
@@ -226,6 +265,7 @@ assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`)
 assert(o.post, `a border post in Kybartai trades with Germany (${o.postWhy})`);
 assert(o.deal, `a deal sells grain to Germany (${o.dealWhy})`);
 assert(o.vil19 === 'pl,pl,pl,lv,lv,' + (o.sejny ? 'pl' : 'de') + ',Kaunas,1' && o.red19, `the government moves to Kaunas, the Red Army takes Vilnius in January 1919 and Poland in April; Latvia takes the Palanga coast (${o.vil19})`);
+assert(['gov19', 'red19', 'pl19'].every(k => o.news.includes(k)), `a card explains each change: the government in Kaunas, the Red Army and then Poland in Vilnius (${o.news.join(', ')})`);
 assert(o.red20 === 'ra,ra,Kaunas' && o.back20 === 'lt,lt,Kaunas,0', `the Red Army takes Vilnius in July 1920 and hands it to Lithuania in August, while the government stays in Kaunas (${o.red20}; ${o.back20})`);
 assert(o.vol && o.card0 === 'vilnius', `the 1918 volunteers card is answered in play, and Żeligowski's march on Vilnius comes on 8 October 1920 (${o.card0})`);
 assert(o.defend && o.defendFail, 'defending Vilnius holds the city with security 40, and fails with security 10');
@@ -248,5 +288,15 @@ assert(o.drop, 'a new version removes saves of older versions and keeps the tuto
 assert(o.intro && o.introGone && o.kauHomes && o.task0 === 'route', `a new game opens on the Act of Independence, paused, with Kaunas housed and a first ministry task (${o.task0})`);
 assert(o.hungry <= 3 && o.coldSummer === 0 && o.warnDays <= 1 && o.heldRoute, `no hunger from starting stocks (${o.hungry} hungry in March 1920), no cold homes in summer, one warning line a day, and the route to Vilnius waits at no cost`);
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
+assert(o.budArmy <= -24 && o.budGap < 0.5, `the army's 25 Lt a day is in the day's balance, which adds up from its parts (army ${o.budArmy}, off by ${o.budGap.toFixed(2)})`);
+assert(o.idle.length > 0 && o.idle.every(w => w && w !== 'Starting'), `stations, warehouses and border posts say what they do (${[...new Set(o.idle)].slice(0, 2).join('; ')})`);
+assert(o.km === '2,15,800' && o.ras && o.paved1, `the map is drawn twice its size and shown in real km (${o.km}), its terrain ships packed, and paved roads can be built from 1918`);
+assert(o.sty === 'ctv' || o.sty === 'cmtv', `house lots take their place's style: city tenements, town houses and farmsteads (${o.sty})`);
+assert(o.loose <= 12, `few streets in towns end without serving anything (${o.loose})`);
+assert(o.keep >= 49 && o.portTask, `a sale abroad keeps half the store (${o.keep}% left), and selling by sea counts for the port task`);
+assert(o.trade > 0.3 && o.surplus[0] < 140 && o.surplus[1] > 30, `merchants carry dairy from a full store (${o.trade.toFixed(1)} in 10 days), and a route takes a full store's timber to a town with room (${o.surplus.join(' and ')})`);
+assert(o.turn < 15, `a new railway curves onto old track at ${o.turn.toFixed(1)} degrees`);
+assert(o.ghostAcc === false && o.access, 'a station with no road to town gets a road laid out to confirm');
+assert(o.confirm && o.pill && o.prodOk && o.restart, 'decision cards wait for Confirm, a shown route hides from its pill, the production view draws, and New game starts paused');
 if (failed) { console.error(`\n${failed} check${failed > 1 ? 's' : ''} failed`); process.exit(1); }
 console.log('\nSmoke test passed.');

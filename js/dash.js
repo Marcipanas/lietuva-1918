@@ -40,7 +40,7 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   else if((t.fdays||99)<6&&fbal<-0.01)add('lowfood',1,'grain','Food runs low',`Food for ${num(t.fdays)} days, and stocks are falling.`,[F(suggestRoute,ti,FOOD),F(buildFix,'farm',ti)]);
   if(heatOn&&t.heat!==undefined&&t.heat<0.9)add('cold',2,'fire','Cold homes',`${pct(t.heat)} of homes are warm. Homes burn peat or timber.`,[F(suggestRoute,ti,FUEL),F(buildFix,'forestry',ti),F(buildFix,'peat',ti)]);
   if(!t.vil&&S.era>=2&&t.pr!==undefined&&t.pr<0.95)add('power',t.pr<0.8?2:1,'bolt','Short of power',`It gets ${pct(t.pr)} of the power it needs.`,
-    [NET.linked.has(ti)?F(buildFix,'power',ti):{t:'Link it by paved road',a:{act:'tool',tool:'road',ti}}]);
+    [NET.linked.has(ti)?F(buildFix,'power',ti):{t:'Link it by paved road',a:{act:'tool',tool:'road',ti,lv:2}}]);
   if(t.pop>(t.house||0)+0.3)add('crowd',1,'house','Overcrowded',`${popStr(t.pop-t.house)} more people than homes.`,[zone]);
   else if(t.hint&&t.hint.startsWith('No room'))add('room',1,'zone','No land to build on','Every zoned lot has houses. Zone land along its streets so it can keep growing.',[zone]);
   if(t.hint&&t.hint.startsWith('Needs')){const r=S.era>=2?'bricks':'timber';add('mat',1,RI[r].ic,'Can’t build homes',t.hint+'.',[F(suggestRoute,ti,[r]),F(buildFix,PRODUCER[r],ti)])}
@@ -62,8 +62,8 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   if(S.era>=3&&t.note==='Want electronics')add('want:electronics',1,'chip','Wants electronics','Morale suffers without them.',[F(suggestRoute,ti,['electronics']),F(buildFix,'elec',ti)]);
   if(t.h<45)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below 45% a town stops growing.`,[]);
   /* dirt roads never link a town: before industrialization only a railway does */
-  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,S.era>=2?'Bring a railway or a paved road to its streets.':'Bring a railway to its streets. Paved roads come with industrialization.',
-    [S.era>=2?{t:'Build a paved road',a:{act:'tool',tool:'road',ti}}:null,{t:'Lay track',a:{act:'tool',tool:'rail',ti}}]);
+  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,'Bring a railway or a paved road to its streets. Dirt roads do not count.',
+    [{t:'Lay track',a:{act:'tool',tool:'rail',ti}},{t:'Build a paved road',a:{act:'tool',tool:'road',ti,lv:2}}]);
   /* the Vilnius region before a loss history brought: build there knowing it */
   if(t.rg==='vr'||t.rg==='vr2'){const d=ymd(S.day);
     if(d<'1919-01-05')add('front',0,'flag','Front line','In history the Red Army took Vilnius in January 1919, and Poland held it for most of the years until 1939. What is built here may be lost for years.');

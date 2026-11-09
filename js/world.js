@@ -376,7 +376,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
     case 'lake': if (!ring(0.8, tt => tt === T_LAKE)) return bad('Must be next to a lake'); break;
     case 'water': if (!ring(0.6, tt => isWaterT(tt))) return bad('Must be on a shore'); break;
-    case 'border': { let c = 0; forCellsIn(o, 3, k => { if (CTY[k] > 1 || heldOff(k)) c++; }); if (!c) return bad('Must be within 3 km of the border'); break; }
+    case 'border': { let c = 0; forCellsIn(o, BORDER_KM, k => { if (CTY[k] > 1 || heldOff(k)) c++; }); if (!c) return bad(`Must be within ${kmTxt(BORDER_KM)} km of the border`); break; }
   }
   if (t === 'hall') for (const tw of S.towns) if (Math.hypot(tw.x - x, tw.z - z) < HALL_GAP) return bad(`Too close to ${tw.n}`);
   return { ok: true, bonus: (B0.bonus === 'fertile' && fert >= n * 0.4) || (B0.bonus === 'flaxland' && flx >= n * 0.4) };
@@ -623,27 +623,29 @@ function analyze() {
   }
   /* neighbours: towns whose catchments meet along a road or a railway, with the length of the way between them */
   const pairs = new Map();
-  const note = (k, a, b, d) => {
+  /* lv: the kind of line where the two catchments meet, which private traders use as the link's quality */
+  const note = (k, a, b, d, lv) => {
     if (a === b || a < 0 || b < 0 || a === undefined || b === undefined || !(d < Infinity)) return;
     const key = Math.min(a, b) + '_' + Math.max(a, b);
     let p = pairs.get(key);
     if (!p) pairs.set(key, p = { a: Math.min(a, b), b: Math.max(a, b), road: null, rail: null });
-    if (!p[k] || d < p[k].len) p[k] = { len: d };
+    if (!p[k] || d < p[k].len) p[k] = { len: d, lv: Math.max(lv || 1, p[k] ? p[k].lv : 1) };
+    else p[k].lv = Math.max(p[k].lv, lv || 1);
   };
   const meet = (k, R, src) => {
     EDGES.forEach(e => {
       if (e.k !== k || e.a === e.b || e.off) return;
       const oa = R.o.get(e.a), ob = R.o.get(e.b);
-      if (oa !== undefined && ob !== undefined && oa !== ob) note(k, oa, ob, R.d.get(e.a) + e.L + R.d.get(e.b));
+      if (oa !== undefined && ob !== undefined && oa !== ob) note(k, oa, ob, R.d.get(e.a) + e.L + R.d.get(e.b), e.lv);
     });
     const byEdge = new Map();
     src.forEach(q => { if (!byEdge.has(q.e)) byEdge.set(q.e, []); byEdge.get(q.e).push(q); });
     byEdge.forEach((list, e) => {
       const oa = R.o.get(e.a), ob = R.o.get(e.b);
       for (const q of list) {
-        if (oa !== undefined && oa !== q.o) note(k, q.o, oa, q.s + R.d.get(e.a));
-        if (ob !== undefined && ob !== q.o) note(k, q.o, ob, e.L - q.s + R.d.get(e.b));
-        for (const r of list) if (r.o !== q.o) note(k, q.o, r.o, Math.abs(q.s - r.s));
+        if (oa !== undefined && oa !== q.o) note(k, q.o, oa, q.s + R.d.get(e.a), e.lv);
+        if (ob !== undefined && ob !== q.o) note(k, q.o, ob, e.L - q.s + R.d.get(e.b), e.lv);
+        for (const r of list) if (r.o !== q.o) note(k, q.o, r.o, Math.abs(q.s - r.s), e.lv);
       }
     });
   };
@@ -818,7 +820,10 @@ function layoutTown(t, n) {
   ring.forEach(nd => { if (nd) dropNode(nd); });
   afterLine(made);
 }
-/* A big city: its landmarks are already standing; the town hall, the real main streets, then a street grid around them. */
+/* A big city: its landmarks are already standing; the town hall, the real main streets (paved), then whole blocks of a street
+   grid turned by the plan's angle, nearest the hall first, until there is room for the city's homes. Each grid street is the
+   side of a block, so it meets other streets at both ends. A side that would cross water or a landmark, or run along a main
+   street, is left out; streets left dangling by that are taken out again (tidyStreets). */
 function layoutCity(t, n, plan) {
   let hall = S.bld.find(b => b.t === 'hall' && b.lm && LANDMARKS[b.lm].town === t.n);
   if (!hall) {
@@ -826,32 +831,131 @@ function layoutCity(t, n, plan) {
     hall = addB('hall', cx, cz, 0, 1, true);
   }
   hall.ti = n; t.x = hall.x; t.z = hall.z;
-  const R = townRadius(t.pop0) + 0.4;
+  const rnd = rng(9000 + n * 337), need = homesFor(t.pop0), zoneN = Math.max(3, Math.ceil(need * 0.5)), R = townRadius(t.pop0) + 0.4;
   t.R = R;
-  const made = [];
-  plan.streets.forEach(s => made.push(...buildLine('road', 2, s.map(p => ll2xz(p[0], p[1])), 0.06)));
-  afterLine(made);
-  /* the grid: streets 1 km apart, a block of houses on each side, kept away from the main streets */
-  const a = plan.a * Math.PI / 180, ux = Math.cos(a), uz = -Math.sin(a), SP = 1.0, K = Math.ceil(R / SP) + 1, grid = [];
-  for (const [dx, dz, px, pz] of [[ux, uz, -uz, ux], [-uz, ux, ux, uz]]) for (let k = -K; k < K; k++) {
-    const off = (k + 0.5) * SP, L = Math.sqrt(Math.max(0, (R + 0.3) ** 2 - off * off));
-    if (L < 0.4) continue;
-    const ox = t.x + px * off, oz = t.z + pz * off;
-    for (const run of clearRuns([[ox - dx * L, oz - dz * L], [ox + dx * L, oz + dz * L]], 0.6)) {
-      let near = 0;
-      for (const q of run) { const ne = nearestEdge(q[0], q[1], 'road', 0.4); if (ne) { const tg = polyAt(ne.e.p, ne.e.c, ne.s); if (Math.abs(tg[2] * dx + tg[3] * dz) > 0.8) near++; } }
-      if (near > run.length * 0.4) continue;
-      grid.push(...buildLine('road', 1, [run[0], run[run.length - 1]], 0.1));
-    }
+  const main = [];
+  plan.streets.forEach(s => main.push(...buildLine('road', 2, s.map(p => ll2xz(p[0], p[1])), 0.06)));
+  afterLine(main);
+  /* the lattice: one of its streets runs just in front of the hall */
+  const a = plan.a * Math.PI / 180, ux = Math.cos(a), uz = -Math.sin(a), vx = -uz, vz = ux, SP = 0.95;
+  const [, , fx, fz] = obbAxes(bOBB(hall)), front = Math.abs(fx * vx + fz * vz) > Math.abs(fx * ux + fz * uz) ? Math.sign(fx * vx + fz * vz) || 1 : 0;
+  const ox = t.x + vx * front * 0.38 - ux * SP / 2, oz = t.z + vz * front * 0.38 - uz * SP / 2;
+  const P = (i, j) => [ox + (i * ux + j * vx) * SP, oz + (i * uz + j * vz) * SP];
+  const dry = q => passable(q[0], q[1]) && !waterHit({ x: q[0], z: q[1], rot: 0, w: 0, d: 0 }, 0.05);
+  /* a block is taken whole or not at all: dry along all its sides and inside, with no landmark in it (the town hall may stand
+     in one, facing the street in front of it), so each of its sides runs from corner to corner */
+  const K = Math.ceil(R / SP) + 3, blocks = [];
+  space();
+  for (let i = -K; i < K; i++) for (let j = -K; j < K; j++) {
+    const c = P(i + 0.5, j + 0.5), d = Math.hypot(c[0] - t.x, c[1] - t.z);
+    if (d > R + SP * 1.5) continue;
+    let ok = true;
+    for (let di = 0; di <= 1 && ok; di += 0.25) for (let dj = 0; dj <= 1 && ok; dj += 0.25) if (!dry(P(i + di, j + dj))) ok = false;
+    if (!ok) continue;
+    const o = { x: c[0], z: c[1], rot: a, w: SP + 0.1, d: SP + 0.1 }, bb = obbBounds(o, 0);
+    BH.query(bb[0], bb[1], bb[2], bb[3], b => { if (ok && b.t !== 'hall' && obbOverlap(o, bOBB(b), 0)) ok = false; });
+    if (ok) blocks.push({ i, j, d: d + rnd() * 0.35 });
   }
+  blocks.sort((p, q) => p.d - q.d);
+  /* about seven lots fit along the inside of a block. The grid grows outward from the blocks the main streets run through (and
+     the one before the hall), so every district hangs on a main street, across a river by its bridge. */
+  const want = Math.ceil((need + zoneN) / 7), take = new Set(), byKey = new Map(blocks.map(b => [b.i + ',' + b.j, b])), open = new Set();
+  const cellOf = (x, z) => { const rx = x - ox, rz = z - oz; return Math.floor((rx * ux + rz * uz) / SP) + ',' + Math.floor((rx * vx + rz * vz) / SP); };
+  main.forEach(e => { for (let q = 0; q <= e.L; q += 0.15) { const p = polyAt(e.p, e.c, q), k = cellOf(p[0], p[1]); if (byKey.has(k)) open.add(k); } });
+  if (blocks.length) open.add(blocks[0].i + ',' + blocks[0].j);
+  while (take.size < want && open.size) {
+    let best = null;
+    for (const k of open) { const b = byKey.get(k); if (!best || b.d < best.d) best = b; }
+    const k = best.i + ',' + best.j;
+    open.delete(k); take.add(k);
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nk = (best.i + di) + ',' + (best.j + dj); if (byKey.has(nk) && !take.has(nk)) open.add(nk); }
+  }
+  const sides = new Map();
+  for (const key of take) {
+    const [i, j] = key.split(',').map(Number);
+    for (const [a0, b0] of [[[i, j], [i + 1, j]], [[i + 1, j], [i + 1, j + 1]], [[i, j + 1], [i + 1, j + 1]], [[i, j], [i, j + 1]]]) sides.set(a0.join(',') + '|' + b0.join(','), [a0, b0]);
+  }
+  /* a side that runs along a main street, or crosses one at a slant, is left to the main street */
+  const alongMain = (p0, p1) => {
+    const dx = (p1[0] - p0[0]) / SP, dz = (p1[1] - p0[1]) / SP;
+    let near = 0;
+    for (let q = 0; q <= 8; q++) {
+      const x = p0[0] + (p1[0] - p0[0]) * q / 8, z = p0[1] + (p1[1] - p0[1]) * q / 8, ne = nearestEdge(x, z, 'road', 0.32, e => e.lv < 2);
+      if (!ne) continue;
+      const tg = polyAt(ne.e.p, ne.e.c, ne.s), dot = Math.abs(tg[2] * dx + tg[3] * dz);
+      if (dot > 0.82 || (ne.d < 0.12 && dot > 0.5)) near++;
+    }
+    return near >= 3;
+  };
+  const grid = [];
+  for (const [a0, b0] of sides.values()) {
+    const p0 = P(a0[0], a0[1]), p1 = P(b0[0], b0[1]), runs = clearRuns([p0, p1], 0.2);
+    if (runs.length !== 1 || polyLen(runs[0]) < SP - 0.08 || alongMain(p0, p1)) continue;
+    grid.push(...buildLine('road', 1, [p0, p1], 0.12));
+  }
+  afterLine(grid.filter(e => EDGES.has(e.id)));
   /* streets cut off by water (across a river with no bridge, out on the spit) are dropped */
   const ha = accessOf(bOBB(hall), 'road', ACCESS + 0.15);
   if (ha) {
     const seen = new Set([ha.e.a, ha.e.b]), todo = [ha.e.a, ha.e.b];
     while (todo.length) for (const eid of NODES.get(todo.pop()).e) { const e = EDGES.get(eid); if (e.k === 'road') for (const id of [e.a, e.b]) if (!seen.has(id)) { seen.add(id); todo.push(id); } }
-    roadsNear(t.x, t.z, R + 1).forEach(e => { if (EDGES.has(e.id) && !seen.has(e.a)) removeEdge(e); });
+    roadsNear(t.x, t.z, R + 2).forEach(e => { if (EDGES.has(e.id) && !seen.has(e.a)) removeEdge(e); });
   }
-  afterLine(grid.filter(e => EDGES.has(e.id)));
+  /* grid streets left with a loose end: back to the junction */
+  for (let pass = 0; pass < 12; pass++) {
+    let cut = 0;
+    roadsNear(t.x, t.z, R + 2).forEach(e => {
+      if (!EDGES.has(e.id) || e.lv > 1) return;
+      const A = NODES.get(e.a), B = NODES.get(e.b);
+      if (A.e.length === 1 || B.e.length === 1) { removeEdge(e); cut++; }
+    });
+    if (!cut) break;
+  }
+}
+/* Streets that lead nowhere, once the map is laid out: a loose end near another street is joined to it; a road whose loose
+   end has no home, lot or building along it is taken back to the junction before it. Roads to the border stay. */
+function tidyStreets() {
+  let joined = 0, cut = 0;
+  /* the streets that serve something: for every building and lot, the stretch of road it reaches (edge id -> positions) */
+  let usedE = new Map();
+  const mapUse = () => {
+    space(); usedE = new Map();
+    const add = a => { if (!a) return; if (!usedE.has(a.e.id)) usedE.set(a.e.id, []); usedE.get(a.e.id).push(a.s); };
+    S.bld.forEach(b => add(accessOf(bOBB(b), 'road')));
+    S.lots.forEach(l => add(accessOf(lotOBB(l), 'road')));
+  };
+  const atBorder = nd => { let c = false; forDisk(nd.x, nd.z, 1.2, k => { if (CTY[k] > 1 || !(TF[k] & F_LT)) c = true; }); return c; };
+  /* join loose ends that stop just short of another street */
+  const loose = [];
+  EDGES.forEach(e => { if (e.k !== 'road') return; for (const id of [e.a, e.b]) { const nd = NODES.get(id); if (nd.e.length === 1) loose.push([nd, e]); } });
+  for (const [nd, e] of loose) {
+    if (!NODES.has(nd.id) || nd.e.length !== 1 || atBorder(nd)) continue;
+    const ne = nearestEdge(nd.x, nd.z, 'road', 0.4, x => x === e || x.a === nd.id || x.b === nd.id);
+    if (!ne || ne.d < 0.02) continue;
+    if (clearRuns([[nd.x, nd.z], [ne.x, ne.z]], 0.01).length !== 1) continue;
+    afterLine(buildLine('road', e.lv, [[nd.x, nd.z], [ne.x, ne.z]], 0.05)); joined++;
+  }
+  /* roads with a loose end that nothing uses go, back to the junction, again and again */
+  const isTail = e => { if (e.k !== 'road') return false; const A = NODES.get(e.a), B = NODES.get(e.b), la = A.e.length === 1; return la !== (B.e.length === 1) && !atBorder(la ? A : B); };
+  for (let pass = 0; pass < 40; pass++) {
+    mapUse();
+    const drop = [];
+    EDGES.forEach(e => { if (isTail(e) && !usedE.has(e.id)) drop.push(e); });
+    if (!drop.length) break;
+    drop.forEach(e => { if (EDGES.has(e.id)) { removeEdge(e); cut++; } });
+  }
+  /* a loose end that runs on past the last building or lot it serves is cut back to just beyond them */
+  mapUse();
+  const tails = [];
+  EDGES.forEach(e => { if (isTail(e) && usedE.has(e.id)) tails.push([e, usedE.get(e.id)]); });
+  for (const [e, ss] of tails) {
+    if (!EDGES.has(e.id)) continue;
+    const deadA = NODES.get(e.a).e.length === 1, s0 = Math.min(...ss), s1 = Math.max(...ss);
+    if (!deadA && e.L - s1 > 0.6) { const n = splitEdge(e, s1 + 0.35), tail = n.e.map(id => EDGES.get(id)).find(x => x && x !== e); if (tail) { removeEdge(tail); cut++; } }
+    else if (deadA && s0 > 0.6) { splitEdge(e, s0 - 0.35); removeEdge(e); cut++; }
+  }
+  space();
+  return { joined, cut };
 }
 /* Roads near a town that its hall reaches by road within lim km: homes go only where the town can reach them. */
 function townRoads(n, r, lim) {
@@ -870,7 +974,7 @@ function townRoads(n, r, lim) {
 function settleTown(t, n) {
   const rnd = rng(7000 + n * 613), need = homesFor(t.pop0), zoneN = Math.max(3, Math.ceil(need * 0.5)), R = t.R || 1;
   let h = settle(townRoads(n, R + 1.5, R * 2 + 3), t.x, t.z, R + 0.6, need, zoneN, rnd, false);
-  for (let k = 0; k < 12 && h < need; k++) {
+  for (let k = 0; k < 12 && h < need && !CITY_PLAN[t.n]; k++) {
     const a = rnd() * Math.PI * 2, pts = [];
     for (let r = 0.45; r <= R + 0.8; r += 0.2) pts.push(dirAt(t.x, t.z, a, r));
     const run = clearRuns(pts, 0.6)[0];
@@ -935,25 +1039,38 @@ function nearestTownRoad(n, x, z) {
   const t = S.towns[n];
   let best = null;
   EDGES.forEach(e => {
-    if (e.k !== 'road') return;
+    if (e.k !== 'road' || e.off) return;
     const q = polyClosest(e.p, e.c, x, z);
     if (Math.hypot(q.x - t.x, q.z - t.z) > (t.R || 1) + 6) return;
     if (!best || q.d < best.d) best = { x: q.x, z: q.z, d: q.d };
   });
   return best;
 }
-/* Give a building a road to town n, from its front (side 1) or back (side -1). */
+/* Road distance from a box's road access to the town hall of town n (Infinity when no road joins them). */
+function roadToHall(o, n) {
+  const hall = S.bld.find(b => b.t === 'hall' && b.ti === n), a = accessOf(o, 'road');
+  const h = hall && accessOf(bOBB(hall), 'road', ACCESS + 0.15);
+  if (!a || !h) return Infinity;
+  const src = [{ e: h.e, s: h.s, o: n }], q = distTo(dijkstra(src, 'road'), a.e, a.s, src);
+  return q.o < 0 ? Infinity : q.d;
+}
+/* Give a building a road to town n, from its front (side 1) or back (side -1). A road beside it counts only when it leads to
+   the town without a long way round (the road on the Curonian Spit does not lead to Klaipėda). */
 function connectToTown(b, n, side) {
-  const o = bOBB(b);
-  if (accessOf(o, 'road')) return true;
+  const o = bOBB(b), t = S.towns[n], near = () => roadToHall(o, n) <= Math.hypot(b.x - t.x, b.z - t.z) * 2 + 3;
+  if (accessOf(o, 'road')) return near();
   const [, , fx, fz] = obbAxes(o), s = side || 1, d = o.d / 2 + 0.16, px = b.x + fx * d * s, pz = b.z + fz * d * s;
   const tgt = nearestTownRoad(n, px, pz);
   if (!tgt) return false;
   blk();
   const p = planPath(px, pz, tgt.x, tgt.z, 'road', true);
   if (!p) return false;
-  afterLine(buildLine('road', 1, p, 0.15));
-  return !!accessOf(o, 'road');
+  const made = buildLine('road', 1, p, 0.15);
+  afterLine(made);
+  if (accessOf(o, 'road') && near()) return true;
+  /* no good: take the new road away again, so no road is left leading nowhere */
+  made.forEach(e => { if (EDGES.has(e.id)) removeEdge(e); });
+  return false;
 }
 function placeNear(n, type) {
   const t = S.towns[n], rnd = rng(5000 + n * 131 + S.bld.length * 7), need = BT[type].need, r0 = (t.R || 1) + 0.6;
@@ -1037,16 +1154,54 @@ function railBetween(ia, ib) {
   blk();
   const p = planPath(ea.x, ea.z, eb.x, eb.z, 'rail', true);
   if (!p) return false;
-  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
+  buildPlanned('rail', 1, turnouts(smoothLine(p, 'rail', true, 2)));
   return true;
 }
+/* ---------- railway turnouts ----------
+   A railway that joins another curves onto it at a shallow angle, as a switch does, instead of meeting it in a T: the last
+   stretch of the new line becomes a curve that runs onto the old track a little further along, the way a train would go on.
+   At the end of a line it carries the line straight on. pts ends on the track (within 0.16 km). The curve must stay on dry land
+   clear of buildings; when it does not fit, pts comes back unchanged. */
+function turnoutEnd(pts) {
+  const n = pts.length;
+  if (n < 2) return pts;
+  const B = pts[n - 1], ne = nearestEdge(B[0], B[1], 'rail', 0.16);
+  if (!ne) return pts;
+  const e = ne.e, c = polyCum(pts), L = c[c.length - 1];
+  const back = polyAt(pts, c, Math.max(0, L - 0.5)), dl = Math.hypot(B[0] - back[0], B[1] - back[1]);
+  if (dl < 0.1) return pts;
+  const dx = (B[0] - back[0]) / dl, dz = (B[1] - back[1]) / dl, q = polyAt(e.p, e.c, ne.s);
+  const atA = ne.s < 0.05 && NODES.get(e.a).e.length === 1, atB = ne.s > e.L - 0.05 && NODES.get(e.b).e.length === 1;
+  const sg = atA ? 1 : atB ? -1 : dx * q[2] + dz * q[3] >= 0 ? 1 : -1, cs = (dx * q[2] + dz * q[3]) * sg;
+  if (cs > Math.cos(14 * Math.PI / 180)) return pts;
+  /* sharper turns need longer curves; the merge point lies along the track the way the train goes on */
+  const ang = Math.acos(clamp(cs, -1, 1)), Lc = clamp(0.5 + ang / Math.PI * 1.8, 0.5, 1.6);
+  if (L < Lc * 0.9) return pts;
+  const sm = atA || atB ? ne.s : clamp(ne.s + sg * Lc * 0.75, 0.03, e.L - 0.03), M = polyAt(e.p, e.c, sm);
+  if (!atA && !atB && Math.abs(sm - ne.s) < Lc * 0.4) return pts;
+  const sc = L - Lc * 0.85, C = polyAt(pts, c, sc), tx = M[2] * sg, tz = M[3] * sg;
+  /* the curve comes in from the side it starts on, so it touches the track only where it joins it */
+  const side = Math.sign((C[0] - M[0]) * -tz + (C[1] - M[1]) * tx) || 1, k1 = Lc * 0.5, k2 = Lc * 0.45;
+  const P1 = [C[0] + dx * k1, C[1] + dz * k1], P2 = [M[0] - tx * k2 - tz * side * 0.03, M[1] - tz * k2 + tx * side * 0.03];
+  const curve = [];
+  for (let i = 1; i <= 20; i++) {
+    const t = i / 20, u = 1 - t, a = u * u * u, b = 3 * u * u * t, d = 3 * u * t * t, f = t * t * t;
+    curve.push([a * C[0] + b * P1[0] + d * P2[0] + f * M[0], a * C[1] + b * P1[1] + d * P2[1] + f * M[1]]);
+  }
+  for (const p of densify([[C[0], C[1]]].concat(curve), 0.05)) {
+    if (!passable(p[0], p[1]) || terrAt(p[0], p[1]) === T_RIVER || waterHit({ x: p[0], z: p[1], rot: 0, w: 0, d: 0 }, 0.03) || nearBld(p[0], p[1], 0.05)) return pts;
+  }
+  return polySlice(pts, c, 0, sc).concat(curve);
+}
+/* both ends of a new railway */
+function turnouts(pts) { return turnoutEnd(turnoutEnd(pts).slice().reverse()).reverse(); }
 /* The last point inside Lithuania on the way from (x, z) toward a place abroad. */
 function borderPoint(x, z, tx, tz) {
   const L = Math.hypot(tx - x, tz - z);
   let last = null;
   for (let s = 0; s <= L; s += 0.25) {
     const px = x + (tx - x) * s / L, pz = z + (tz - z) * s / L;
-    if (passable(px, pz)) last = [px, pz, s]; else if (last && s - last[2] > 3) break;
+    if (passable(px, pz)) last = [px, pz, s]; else if (last && s - last[2] > 3 * MAPK) break;
   }
   if (!last) return null;
   const back = Math.min(0.6, last[2]);
@@ -1060,22 +1215,22 @@ function railToBorder(ia, lon, lat) {
   blk();
   const p = planPath(e.x, e.z, bp[0], bp[1], 'rail', true);
   if (!p) return false;
-  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
+  buildPlanned('rail', 1, turnouts(smoothLine(p, 'rail', true, 2)));
   return true;
 }
 /* The road node of town n nearest to another place. */
-function townExit(n, toward) {
-  const t = S.towns[n], lim = (t.R || 1) + 1.5;
+function townExit(n, toward, lv) {
+  const t = S.towns[n], lim = (t.R || 1) + 1.5, paved = lv >= 2 && CITY_PLAN[t.n] && CITY_PLAN[t.n].streets.length;
   let best = null, bd = 1e9;
   NODES.forEach(nd => {
-    if (Math.hypot(nd.x - t.x, nd.z - t.z) > lim || !nd.e.some(id => EDGES.get(id).k === 'road')) return;
+    if (Math.hypot(nd.x - t.x, nd.z - t.z) > lim || !nd.e.some(id => { const e = EDGES.get(id); return e.k === 'road' && (!paved || e.lv >= 2); })) return;
     const d = Math.hypot(nd.x - toward.x, nd.z - toward.z);
     if (d < bd) { bd = d; best = nd; }
   });
   return best;
 }
 function roadBetween(ia, ib, lv) {
-  const A = S.towns[ia], B = S.towns[ib], na = townExit(ia, B), nb = townExit(ib, A);
+  const A = S.towns[ia], B = S.towns[ib], na = townExit(ia, B, lv), nb = townExit(ib, A, lv);
   if (!na || !nb) return false;
   blk();
   const p = planPath(na.x, na.z, nb.x, nb.z, 'road', true);
@@ -1084,7 +1239,7 @@ function roadBetween(ia, ib, lv) {
   return true;
 }
 function roadToBorder(ia, lon, lat, lv) {
-  const [tx, tz] = ll2xz(lon, lat), na = townExit(ia, { x: tx, z: tz }), bp = na && borderPoint(na.x, na.z, tx, tz);
+  const [tx, tz] = ll2xz(lon, lat), na = townExit(ia, { x: tx, z: tz }, lv), bp = na && borderPoint(na.x, na.z, tx, tz);
   if (!bp) return false;
   blk();
   const p = planPath(na.x, na.z, bp[0], bp[1], 'road', true);
@@ -1120,7 +1275,7 @@ function linkSettlements() {
   const T = S.towns, n = T.length, near = [];
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
     const d = Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z);
-    if (d < 32) near.push([i, j, d]);
+    if (d < 32 * MAPK) near.push([i, j, d]);
   }
   const dist = (i, j) => Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z), pairs = [];
   for (const [i, j, d] of near) {
@@ -1277,6 +1432,8 @@ function genWorld(log) {
   say(`dirt roads: ${built} links, ${Math.round(S.edges.filter(e => e.k === 'road' && e.lv === 1).reduce((a, e) => a + e.L, 0))} km`);
   S.towns.forEach((t, n) => { if (!t.vil) settleTown(t, n); });
   TOWNS0.forEach(d => { const n = tIdx(d.id); d.ind.forEach(type => placeNear(n, type)); });
+  const td = tidyStreets();
+  say(`streets: ${td.joined} loose ends joined, ${td.cut} leading nowhere taken out`);
   say(`homes: ${S.bld.filter(b => b.t === 'house').length}, lots: ${S.lots.length}, buildings: ${S.bld.length}`);
   NET.dirty = true;
 }
