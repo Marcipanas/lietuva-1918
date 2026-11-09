@@ -201,7 +201,7 @@ function townsBlock(){const sort=VIEW.tsort||'need',heatOn=seasonOf(S.day).heat>
     ${L0.length>10?`<button class="btn sm ghost wide" data-act="tall">${VIEW.tall?'Show fewer':'Show all '+L0.length+' towns'}</button>`:''}
     <p class="note">${vils.length} villages with ${v('tvp',popStr(vils.reduce((a,n)=>a+S.towns[n].pop,0)))} people farm the land between the towns${vp.length?`. ${vp.length} need help: ${vp.slice(0,6).map(n=>`<button class="link sm" data-act="seltown" data-ti="${n}">${S.towns[n].n}</button>`).join(', ')}${vp.length>6?' and more':''}`:''}.</p></div>`}
 /* where the treasury's money comes from and goes, a day (smoothed over about ten days) */
-const BUD_ROWS=[['tax','Taxes'],['trade','Trade abroad'],['bld','Building upkeep'],['lines','Roads and railways'],['routes','Route vehicles'],['army','Army and allies']];
+const BUD_ROWS=[['tax','Taxes'],['trade','Trade abroad'],['homes','New homes'],['bld','Building upkeep'],['lines','Roads and railways'],['routes','Route vehicles'],['army','Army and allies']];
 function budgetHTML(){const b=S.bud||{},st=x=>x<-0.05?'neg':x>0.05?'pos':'';
   return `<div class="sec"><h3>Money a day</h3><div class="bud">${BUD_ROWS.map(([k,n])=>`<span>${n}</span><b${sc('bc'+k,st(b[k]||0))}>${v('bu'+k,fd(b[k]||0)+' Lt')}</b>`).join('')}
     <span class="tot">Balance</span><b class="tot"${sc('bctot',st(S.inc))}>${v('butot',fd(S.inc)+' Lt')}</b></div></div>`}

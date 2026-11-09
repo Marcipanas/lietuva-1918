@@ -27,6 +27,7 @@ function setTool(k, bt, ti) {
   showBar();
 }
 function clearPreview() {
+  TOOL.free0 = false;
   VIEW.path = null; VIEW.lines = null; VIEW.hit = null; VIEW.snaps = []; VIEW.zone = null; VIEW.bull = null; VIEW.brush = null; VIEW.ghost = null; VIEW.ver++;
   PEND = null; TRACE = []; K0 = 0; ZONES = []; showBar();
 }
@@ -145,7 +146,8 @@ function snapEnd(x, z, k, r) {
 }
 function planLine() {
   const k = TOOL.k, r = snapR(), tr = TRACE.slice(), n = tr.length;
-  const s0 = snapEnd(tr[0][0], tr[0][1], k, r), s1 = n > 1 ? snapEnd(tr[n - 1][0], tr[n - 1][1], k, r) : null;
+  /* a road laid out to a new building starts at the building, not on the streets nearby (TOOL.free0) */
+  const s0 = TOOL.free0 ? null : snapEnd(tr[0][0], tr[0][1], k, r), s1 = n > 1 ? snapEnd(tr[n - 1][0], tr[n - 1][1], k, r) : null;
   if (s0) tr[0] = [s0.x, s0.z];
   if (s1) tr[n - 1] = [s1.x, s1.z];
   /* ends on the network leave it where it faces the next point, clear of houses */
@@ -154,7 +156,7 @@ function planLine() {
   if (s1 && n > 1) { const ex = exitPoint(tr[n - 1][0], tr[n - 1][1], tr[n - 2][0], tr[n - 2][1], k, reach(tr[n - 1], tr[n - 2])); if (ex) tr[n - 1] = ex; }
   VIEW.snaps = tr.map((q, i) => [q[0], q[1], i === 0 ? !!s0 : i === tr.length - 1 ? !!s1 : false, i > 0 && i < tr.length - 1]);
   let pts = null, pieces = null;
-  if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = routePieces(pts, k); }
+  if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = TOOL.free0 ? [{ net: false, p: pts }] : routePieces(pts, k); }
   /* new track that meets old track curves onto it, as a switch does */
   if (pieces && k === 'rail') pieces.forEach(P => { if (!P.net && polyLen(P.p) > 0.6) P.p = turnouts(P.p); });
   VIEW.path = pts || (tr.length > 1 ? tr : null); VIEW.pathOk = !!pts; VIEW.pathMode = k; VIEW.hit = null;
@@ -526,7 +528,7 @@ function offerAccess(b) {
   });
   if (!best || best.d > 6) return false;
   setTool('road');
-  TRACE = [[best.x, best.z], [best.tx, best.tz]]; K0 = 1; prepareLine();
+  TRACE = [[best.x, best.z], [best.tx, best.tz]]; K0 = 1; TOOL.free0 = true; prepareLine();
   return !!(PEND && !PEND.bad);
 }
 function newTownAt(x, z, rot) {

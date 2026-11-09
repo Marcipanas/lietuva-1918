@@ -55,7 +55,7 @@ function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
 const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
 const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg','tr','_tr']);
 /* the day's money by kind (the tick fills it; S.bud keeps a smoothed copy for the Lithuania view) */
-const BUD={tax:0,trade:0,bld:0,lines:0,routes:0,army:0};
+const BUD={tax:0,trade:0,bld:0,lines:0,routes:0,army:0,homes:0};
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
   o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
 /* A save of this version back into S: the world is decoded, and what the save leaves out (DAILY, the 1918 descriptions) is
@@ -229,9 +229,9 @@ function develop(ti){const t=S.towns[ti],lv=S.era,cost=HOUSE.cost[lv],n=1+Math.f
   for(let q=0;q<n;q++){let best=null,bd=1e9;
     for(const l of S.lots){if(l.town!==ti)continue;const sc=l.cd*0.5+hash2(l.id,7,3)*1.5+polAt(l.x,l.z)*4;if(sc<bd){bd=sc;best=l}}
     if(best){if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to build homes`;return}
-      pay(cost,t);useMat(t,cost);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
+      pay(cost,t);BUD.homes-=cost.lt||0;useMat(t,cost);removeLot(best);const b=addB('house',best.x,best.z,best.rot,lv,true);b.town=ti;b.cd=best.cd;t.hint='';continue}
     if(lv>=2){const old=BYT[ti].filter(b=>b.t==='house'&&b.lv<lv);if(old.length){const b=old[Math.floor(Math.random()*old.length)];
-      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);useMat(t,cost);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
+      if(missing(cost,t)){t.hint=`Needs ${costTxt(cost)} to rebuild homes`;return}pay(cost,t);BUD.homes-=cost.lt||0;useMat(t,cost);b.lv=lv;b.f=0;WV.bld++;t.hint='';continue}}
     t.hint='No room to grow: zone more land along its streets';return}}
 
 /* ---------- history, chance and ministry tasks ---------- */
