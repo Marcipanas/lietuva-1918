@@ -21,7 +21,7 @@ const CLAYS = [[23.95, 54.97, 7], [23.30, 56.00, 7], [25.35, 54.72, 7], [22.85, 
 const FLAXR = [[24.40, 55.80, 28], [25.55, 55.50, 24], [24.85, 55.30, 18], [25.60, 55.85, 20]];
 /* Names on the map beyond Lithuania, in Lithuanian: [name, lon, lat, kind] with kind c country, s water, t town.
    The Kaliningrad region was German East Prussia until 1945; the game names it so. */
-const MAP_LBL = [['LATVIJA', 24.3, 56.49, 'c'], ['RYTŲ PRŪSIJA', 21.75, 54.75, 'c'], ['LENKIJA', 22.85, 53.93, 'c'], ['BALTARUSIJA', 26.3, 54.2, 'c'],
+const MAP_LBL = [['LATVIJA', 24.3, 56.49, 'c'], ['RYTŲ PRŪSIJA', 21.75, 54.75, 'c'], ['LENKIJA', 22.85, 53.93, 'c'], ['BALTARUSIJA', 26.3, 54.2, 'c'], ['MOZŪRIJA', 21.9, 54.03, 'c'],
   ['BALTIJOS JŪRA', 20.85, 56.15, 's'], ['KURŠIŲ MARIOS', 20.98, 55.02, 's'],
   ['Ryga', 24.127, 56.959, 't'], ['Jelgava', 23.713, 56.651, 't'], ['Bauskė', 24.192, 56.405, 't'], ['Liepoja', 21.007, 56.51, 't'], ['Daugpilis', 26.518, 55.871, 't'],
   ['Ilūkstė', 26.295, 55.977, 't'], ['Kraslava', 27.17, 55.894, 't'], ['Aknīstė', 25.747, 56.162, 't'], ['Saldus', 22.494, 56.665, 't'], ['Dobelė', 23.28, 56.628, 't'],

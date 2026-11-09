@@ -89,7 +89,7 @@ function runDeals() {
 
 /* ---------- the state of history ---------- */
 function newHistory() {
-  return { path: 'free', sec: 15, def: 0, ally: 0, trust: 50, exp: {}, expY: 0, war: 0, purge: 0, collect: 0, mood: [], cards: [], spd: 1, picks: {}, unl: {}, proj: [], sup: 0 };
+  return { path: 'free', kaunas: 0, sec: 15, def: 0, ally: 0, trust: 50, exp: {}, expY: 0, war: 0, purge: 0, collect: 0, mood: [], cards: [], spd: 1, picks: {}, unl: {}, proj: [], sup: 0 };
 }
 /* Morale changes from history: [{v, until (day), vil (villages only), reg}] */
 function addMood(v, days, o) { S.hist.mood.push(Object.assign({ v, until: S.day + days }, o || {})); }
@@ -120,11 +120,13 @@ const held = (rg, o) => () => S.own[rg] === o;
 const picked = (id, n) => () => S.hist.picks[id] === n;
 /* What a change of hands meant, for the chronicle: "23 towns and villages with 160k people" */
 function landTxt(o) { return `${o.n} town${o.n === 1 ? '' : 's'} and villages with ${popStr(o.pop)} people`; }
-/* The Vilnius region goes to Poland (both parts): the capital moves to Kaunas. */
-function loseVilnius() {
-  const a = setOwner('vr', 'pl'), b = setOwner('vr2', 'pl');
-  log(`Poland holds Vilnius and its region: ${landTxt({ n: a.n + b.n, pop: a.pop + b.pop })}${a.b + b.b ? `, and ${a.b + b.b} of your buildings` : ''}. Kaunas is the temporary capital.`, 'warn');
-}
+/* The Vilnius region, both parts, to a new holder. Returns what Lithuania lost or got back there. */
+function vilnTo(o) { const a = setOwner('vr', o), b = setOwner('vr2', o); return { n: a.n + b.n, pop: a.pop + b.pop, b: a.b + b.b }; }
+const lostTxt = o => `${landTxt(o)}${o.b ? `, and ${o.b} of your buildings` : ''}`;
+/* Żeligowski takes Vilnius for Poland (both parts of the region). */
+function loseVilnius() { log(`Poland holds Vilnius and its region: ${lostTxt(vilnTo('pl'))}.`, 'warn'); }
+/* The government moves back to Vilnius, which is the capital again. */
+function seatVilnius() { S.hist.kaunas = 0; fixCapital(); }
 
 /* ---------- decision cards ---------- */
 /* Each card: t title, when (date shown; a year alone when only the year is certain), txt, when2 (shown only if true), opts.
@@ -144,7 +146,7 @@ const CARDS = {
       { t: 'Hold the line at Širvintos', h: 1, d: 'What happened. Vilnius and its region go to Poland. Kaunas, the seat of government since January 1919, stays the temporary capital. The army stops the advance in November. Security +5. Morale −5 for three years.',
         go: () => { loseVilnius(); S.hist.sec += 5; addMood(-5, 3 * 365); } },
       { t: 'Defend Vilnius', d: 'Did not happen. Costs 2,500 Lt. Works with security 35 or more: the city holds, and Poland stays an enemy. If not, Vilnius falls all the same, security −10 and morale −8 for three years.', risk: { sec: 35 },
-        go: ok => { S.funds -= 2500; if (ok) { S.hist.sec += 5; log('The army holds Vilnius. Żeligowski’s troops fall back, and the League of Nations draws a ceasefire line south of the city. This did not happen.', 'good'); }
+        go: ok => { S.funds -= 2500; if (ok) { S.hist.sec += 5; seatVilnius(); log('The army holds Vilnius. Żeligowski’s troops fall back, the League of Nations draws a ceasefire line south of the city, and the government returns to Vilnius. This did not happen.', 'good'); }
           else { loseVilnius(); S.hist.sec -= 10; addMood(-8, 3 * 365); } } }] },
   hymans: { t: 'The Hymans plan', when: '1921-09-03',
     txt: 'At the League of Nations, the Belgian Paul Hymans proposes that Vilnius return to Lithuania as an autonomous region, with foreign policy and defence bound to Poland.',
@@ -152,8 +154,8 @@ const CARDS = {
     opts: [
       { t: 'Reject the plan', h: 1, d: 'What happened: Lithuania said no in December 1921, and Poland kept Vilnius. Nothing changes.', go: () => {} },
       { t: 'Accept a union with Poland', d: 'Did not happen. Vilnius and its region come back, and the Polish border opens for trade. But Lithuania takes on Poland’s enemies: security −15, morale −6 for four years, and war if Poland is attacked.',
-        go: () => { const a = setOwner('vr', 'lt'), b = setOwner('vr2', 'lt'); S.hist.union = 1; S.hist.sec -= 15; addMood(-6, 4 * 365); setMkt('pl', 1);
-          log(`Vilnius returns, in a union with Poland: ${landTxt({ n: a.n + b.n, pop: a.pop + b.pop })}. This did not happen.`, 'good'); } }] },
+        go: () => { const o = vilnTo('lt'); S.hist.union = 1; S.hist.sec -= 15; addMood(-6, 4 * 365); setMkt('pl', 1); seatVilnius();
+          log(`Vilnius returns as the capital, in a union with Poland: ${landTxt(o)}. This did not happen.`, 'good'); } }] },
   litas: { t: 'A currency of our own', when: '1922-10-02',
     txt: 'Lithuania still pays in German marks, and the mark loses value every week.',
     opts: [
@@ -209,7 +211,7 @@ const CARDS = {
         go: () => { S.hist.sec -= 30; S.hist.bases = 1; setMkt('su', 1, '', 0.9); } },
       { t: 'Refuse, and declare neutrality', d: 'Did not happen. Works with security 70 or more: Moscow drops its demand and keeps Vilnius. If not: the Red Army crosses the border at once and Lithuania is occupied.', risk: { sec: 70 },
         go: ok => { if (ok) { S.hist.sec += 5; log('Moscow drops its demand. Lithuania stays neutral, without Vilnius. This did not happen.', 'good'); }
-          else { log('The Red Army crosses the border. Lithuania is occupied, and Vilnius goes to the new Soviet republic.', 'warn'); popHit(0.02); sovietize(); setOwner('vr', 'lt'); } } }] },
+          else { log('The Red Army crosses the border. Lithuania is occupied, and Vilnius goes to the new Soviet republic.', 'warn'); popHit(0.02); sovietize(); setOwner('vr', 'lt'); seatVilnius(); } } }] },
   bases2: { t: 'Soviet bases', when: '1939-10-10',
     txt: 'Poland has been divided between Germany and the Soviet Union, and the Red Army stands on Lithuania’s border. Moscow demands bases for 20,000 of its soldiers on Lithuanian soil.',
     when2: () => notSoviet() && S.own.vr === 'lt',
@@ -331,16 +333,32 @@ function closePlan() {
 function openPlan(y) { S.plan = { y, name: planName(y), tgt: planTargets(y), got: {} }; log(`The ${S.plan.name} sets Soviet Lithuania's deliveries to the Union for ${y}.`, 'hist'); }
 
 /* ---------- the timeline ---------- */
-/* id: kept in S.ev once passed, d: date (y: only the year is certain), t: chronicle text, fx: effect, card: decision card id,
-   when: only if true (checked on the day). Events that follow a choice history did not make say "This did not happen". */
+/* id: kept in S.ev once passed, d: date (y: only the year is certain), t: chronicle text, fx: effect (a text it returns, such as
+   what changed hands, is added to t), card: decision card id, when: only if true (checked on the day).
+   Events that follow a choice history did not make say "This did not happen". */
 const HEV = [
   { id: 'king18', d: '1918-07-11', t: 'The Council elects Duke Wilhelm of Urach king of Lithuania, as Mindaugas II, hoping to keep the country out of a union with Prussia or Saxony. He never comes, and in November the Council takes the offer back.' },
   { id: 'gov18', d: '1918-11-11', t: 'Germany signs the armistice. Augustinas Voldemaras forms the first government of Lithuania.' },
+  { id: 'lv18', d: '1918-11-18', t: 'Latvia declares independence. Its land takes in Courland, and with it the Palanga coast.',
+    fx: () => { setOwner('lv', 'lv'); if (S.own.pal === 'de') setOwner('pal', 'lv'); } },
   { id: 'vol18', d: '1918-12-29', card: 'volunteers' },
+  /* Vilnius changes hands: Soviet in January 1919, Polish in April 1919, Soviet again in July 1920, Lithuanian in August 1920 */
+  { id: 'gov19', d: '1919-01-02', t: 'With the Red Army closing in, the government leaves Vilnius for Kaunas. Kaunas is the temporary capital.',
+    fx: () => { S.hist.kaunas = 1; fixCapital(); } },
+  { id: 'red19', d: '1919-01-05', t: 'The Red Army takes Vilnius from Polish self-defence units, and the Bolsheviks set up a Soviet government there.',
+    fx: () => { const o = S.own.vr === 'lt' ? vilnTo('ra') : null; setOwner('by', 'ra'); return o ? `The Vilnius region is lost: ${lostTxt(o)}.` : ''; } },
+  { id: 'pl19', d: '1919-04-19', t: 'Polish cavalry rides into Vilnius. After three days of street fighting the Red Army is gone, and Poland holds the city and its region.',
+    fx: () => { if (S.own.vr === 'ra') vilnTo('pl'); setOwner('by', 'pl'); } },
+  { id: 'sejny19', d: '1919-08-23', t: 'Polish irregulars rise in Sejny, and the Polish army follows. The Suwałki region goes to Poland, along the line the Allies drew in July.',
+    fx: () => setOwner('pl', 'pl') },
   { id: 'bermont19', d: '1919-11-22', t: 'The army defeats the Bermontians, a German and Russian volunteer army, at Radviliškis. They leave Lithuania by mid-December.' },
   { id: 'kr20', d: '1920-02-15', t: 'Under the Treaty of Versailles, Germany gives up the Klaipėda Region. French troops take it over for the Allies.', when: held('kr', 'de'), fx: () => setOwner('kr', 'al') },
   { id: 'seimas20', d: '1920-05-15', t: 'The Constituent Assembly, the first parliament elected by the people of Lithuania, meets.' },
   { id: 'moscow20', d: '1920-07-12', t: 'In the Moscow Peace Treaty, Soviet Russia recognises Lithuania and its claim to Vilnius, and pays it three million roubles in gold.', fx: () => { S.funds += 1000; } },
+  { id: 'red20', d: '1920-07-14', t: 'Driving the Polish army back, the Red Army takes Vilnius. Lithuanian troops arrive a day later to find it in Soviet hands.',
+    fx: () => { if (S.own.vr === 'pl') vilnTo('ra'); setOwner('by', 'ra'); } },
+  { id: 'back20', d: '1920-08-26', t: 'As the Moscow treaty agreed, the Red Army hands Vilnius over to Lithuania. The government stays in Kaunas for now.',
+    fx: () => S.own.vr === 'ra' ? `Back in Lithuania: ${landTxt(vilnTo('lt'))}.` : '' },
   { id: 'suwalki20', d: '1920-10-07', t: 'In the Suwałki Agreement, Poland and Lithuania agree a ceasefire line that leaves Vilnius to Lithuania.', when: () => S.own.vr === 'lt' },
   { id: 'vil20', d: '1920-10-08', card: 'vilnius' },
   { id: 'by20', d: '1920-10-09', fx: () => setOwner('by', 'pl') },
@@ -379,19 +397,24 @@ const HEV = [
     fx: () => { setOwner('by', 'by'); S.hist.war = 0; popHit(0.03); sovietize(); } },
   { id: 'bases39', d: '1939-10-10', card: 'bases', when: notSoviet },
   { id: 'bases39b', d: '1939-10-10', card: 'bases2', when: notSoviet },
+  /* the Suwałki region: handed by the Soviets to Germany, which annexed it, and taken by the Red Army in October 1944 */
+  { id: 'sudauen39', d: '1939-10-12', fx: () => setOwner('pl', 'de') },
   { id: 'vil39', d: '1939-10-28', t: 'The Lithuanian army enters Vilnius, the capital named in the Act of Independence.', when: () => !!S.hist.bases && S.own.vr !== 'lt',
-    fx: () => { const o = setOwner('vr', 'lt'); log(`Back in Lithuania: ${landTxt(o)}.`, 'good'); } },
+    fx: () => { const o = setOwner('vr', 'lt'); seatVilnius(); return `Back in Lithuania: ${landTxt(o)}.`; } },
   { id: 'ult40', d: '1940-06-14', card: 'ultimatum', when: notSoviet },
   /* the Soviet path, as it happened */
   { id: 'annex40', d: '1940-08-03', t: 'Lithuania is annexed by the Soviet Union as the Lithuanian SSR. Private trade ends; goods now go where Moscow plans.', when: onPath('soviet') },
   { id: 'vr40', d: '1940-11-06', t: 'Moscow hands Švenčionys, Druskininkai and the rest of the Vilnius region held by Soviet Belarus to Soviet Lithuania.',
-    when: () => S.hist.path === 'soviet' && S.own.vr2 !== 'lt', fx: () => { setOwner('vr', 'lt'); setOwner('vr2', 'lt'); } },
+    when: () => S.hist.path === 'soviet' && S.own.vr2 !== 'lt', fx: () => { setOwner('vr', 'lt'); setOwner('vr2', 'lt'); seatVilnius(); } },
   { id: 'plan41', d: '1941-01-01', when: onPath('soviet'), fx: () => openPlan(1941) },
   { id: 'dep41', d: '1941-06-14', t: 'Soviet security forces deport about 17,000 people from Lithuania to Siberia.', when: onPath('soviet'), fx: () => popHit(0.008) },
   { id: 'war41', d: '1941-06-22', t: "Germany attacks the Soviet Union and occupies Lithuania within days. Under German rule over 90 percent of Lithuania's Jews are murdered in the Holocaust.", when: onPath('soviet'), fx: () => { S.hist.war = 1; S.plan = null; setMkt('su', 0, 'War'); } },
   { id: 'vilnius44', d: '1944-07-13', t: 'The Red Army retakes Vilnius. Soviet rule returns.', when: onPath('soviet'), fx: () => { S.hist.war = 0.5; popHit(0.05); setMkt('su', 1); } },
+  { id: 'suwalki44', d: '1944-10-23', fx: () => setOwner('pl', 'pl') },
   { id: 'kla45', d: '1945-01-28', t: 'The Red Army takes Klaipėda. The region becomes part of Soviet Lithuania.', when: () => S.hist.path === 'soviet' && S.own.kr !== 'lt', fx: () => setOwner('kr', 'lt') },
   { id: 'end45', d: '1945-05-09', t: 'The war in Europe is over. For years to come, partisans fight Soviet rule from the forests.', when: onPath('soviet'), fx: () => { S.hist.war = 0; } },
+  { id: 'potsdam45', d: '1945-08-02', t: 'At Potsdam the Allies put the south of East Prussia under Poland and the north, with Königsberg, under the Soviet Union.',
+    fx: () => { setOwner('ep', 'pl'); setOwner('ru', 'ru'); } },
   { id: 'kal46', d: '1946-07-04', t: 'The Soviet part of East Prussia is renamed the Kaliningrad region, part of Soviet Russia.', fx: () => setOwner('ru', 'ru') },
   { id: 'collect47', d: '1947-01-01', y: 1, card: 'collect' },
   { id: 'dep48', d: '1948-05-22', t: 'Soviet security forces deport about 40,000 people, most of them from farms, to Siberia.', when: onPath('soviet'), fx: () => popHit(0.015, true) },
@@ -423,8 +446,8 @@ function histTick() {
     if (S.ev[e.id] || today < e.d) continue;
     S.ev[e.id] = 1;
     if (e.when && !e.when()) continue;
-    if (e.fx) e.fx();
-    if (e.t) log(e.t, 'hist', e.y);
+    const more = e.fx ? e.fx() : '';
+    if (e.t) log(typeof more === 'string' && more ? e.t + ' ' + more : e.t, 'hist', e.y);
     if (e.card) queueCard(e.card);
   }
   /* security: an army and allies make the country harder to bully */

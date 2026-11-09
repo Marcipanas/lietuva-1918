@@ -206,7 +206,7 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick()}requestAnimationFrame(frame)}
 /* the opening view: the capital from the south-west, slightly tilted */
 function camHome(){const v0=capital();camLoad({x:v0.x+0.2,z:v0.z+0.3,dist:6,yaw:-0.35,pitch:0.74})}
-function start(data){const saved=data&&data.save?data.save:load();let fresh=false;
+function start(data){const old=dropOldSaves(),saved=data&&data.save?data.save:load();let fresh=false;
   if(saved){try{restore(saved)}catch(e){newGame();fresh=true}}else{newGame();fresh=true}
   analyze();S.routes.forEach(routeEval);if(S.cam&&isFinite(S.cam.dist))camLoad(S.cam);else camHome();initScene();
   VIEW.seen=S.day;VIEW.spd=S.speed||1;if(S.tab==='sel'||S.tab==='build')S.tab='nat';
@@ -224,7 +224,7 @@ function start(data){const saved=data&&data.save?data.save:load();let fresh=fals
   sheetSizes();setSheet(WIDE()?1:0);renderPanel(true);updateTop();showBar();
   $('tut').addEventListener('click',e=>{const b=e.target.closest('[data-tut]');if(!b)return;if(b.dataset.tut==='next')tutNext();else tutEnd()});
   $('card').addEventListener('click',e=>{const b=e.target.closest('[data-card]');if(b)act({act:'card',o:b.dataset.card})});
-  if(!tutStart(false)&&fresh)hint('Vilnius, 16 February 1918. Drag to move, pinch to zoom, twist two fingers to turn. Tap a town to see what it needs.');
+  if(!tutStart(false)&&fresh)hint(old?'A new version starts a new game: games saved by older versions can’t be loaded.':'Vilnius, 16 February 1918. Drag to move, pinch to zoom, twist two fingers to turn. Tap a town to see what it needs.');
   requestAnimationFrame(frame)}
 try{window.claude?.hot?.snapshot?.(()=>({save:serialize()}))}catch(e){}
 (function(){const hot=window.claude?.hot;hot?.ready?hot.ready(start):start(hot?.data??{})})();

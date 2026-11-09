@@ -2,14 +2,14 @@
 /* Lietuva 1918 — terrain. A hidden raster of CELL-km cells holds terrain type and features (forest, soil, bog, clay)
    for the rules and the path planner. The player sees smooth 3D ground drawn from it; nothing snaps to it. */
 const TT = new Uint8Array(GW * GH), TF = new Uint8Array(GW * GH), TF0 = new Uint8Array(GW * GH);
-/* CTY: the country of each cell today, 0 for water. CTY_ID gives the codes; CTY_KEY the key in S.own for who held it then
-   (East Prussia was Germany's until 1945; the Belarusian side was Polish between the wars). */
-const CTY = new Uint8Array(GW * GH), CTY_ID = { lt: 1, lv: 2, by: 3, pl: 4, ru: 5 }, CTY_KEY = [null, 'lt', 'lv', 'by', 'pl', 'ru'];
+/* CTY: the country of each cell today, 0 for water. CTY_ID gives the codes; CTY_KEY the key in S.own for who held it then.
+   Today's Poland is split on the old border of East Prussia: the Suwałki region (pl) and Masuria (ep, German until 1945). */
+const CTY = new Uint8Array(GW * GH), CTY_ID = { lt: 1, lv: 2, by: 3, pl: 4, ru: 5, ep: 6 }, CTY_KEY = [null, 'lt', 'lv', 'by', 'pl', 'ru', 'ep'];
 /* RGN: the part of today's Lithuania a cell lies in (RGN_KEY): 0 land that stayed Lithuanian, 1 the Klaipėda Region,
    2 the Palanga strip, 3 and 4 the Vilnius region (what came back in October 1939, and in November 1940).
    Who holds each part, and each neighbour's land (CTY_KEY), is S.own: history hands them over. */
 const RGN = new Uint8Array(GW * GH), RGN_KEY = ['', 'kr', 'pal', 'vr', 'vr2'];
-/* The holder of a cell: 'lt', a neighbour ('lv', 'pl', 'by', 'ru'), Germany 'de', the Allies 'al', or '' for open water. */
+/* The holder of a cell: 'lt', a neighbour ('lv', 'pl', 'by', 'ru'), Germany 'de', the Allies 'al', the Red Army 'ra', or '' for open water. */
 function ownerOf(k) { const c = CTY[k]; return c === 1 ? (RGN[k] ? S.own[RGN_KEY[RGN[k]]] : 'lt') : c > 1 ? S.own[CTY_KEY[c]] : ''; }
 /* A cell of today's Lithuania that someone else holds now: nothing can be built there. */
 function heldOff(k) { return !!RGN[k] && S.own[RGN_KEY[RGN[k]]] !== 'lt'; }
@@ -97,6 +97,7 @@ function genTerrain() {
   GEO_SEA.forEach(w => fillGeoPoly(w, k => { TT[k] = T_SEA; }));
   GEO_LAG.forEach(w => fillGeoPoly(w, k => { TT[k] = T_LAGOON; }));
   for (const c of ['lv', 'by', 'pl', 'ru']) GEO_C[c].forEach(r => fillPoly(polyXZ(r), k => { TT[k] = T_FOREIGN; CTY[k] = CTY_ID[c]; TF[k] = 0; }));
+  GEO_EP.forEach(w => fillGeoPoly(w, k => { if (CTY[k] === CTY_ID.pl) CTY[k] = CTY_ID.ep; }));
   GEO_LT.forEach(r => fillPoly(polyXZ(r), k => { TT[k] = T_LAND; CTY[k] = 1; TF[k] = F_LT; }));
   for (let left = 1, pass = 0; left && pass < 8; pass++) {
     left = 0;

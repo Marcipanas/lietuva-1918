@@ -3,7 +3,8 @@
    - every js/ file is loaded by index.html, and every loaded file exists
    - every script parses (node --check)
    - sw.js SHELL lists every shipped file, so the game works offline
-   - warns about duplicate top-level names (all scripts share one global scope in the browser) */
+   - warns about duplicate top-level names (all scripts share one global scope in the browser)
+   - the version in package.json, the offline cache (sw.js VERSION) and the save key (SAVE_KEY) agree: a new version starts a new game */
 const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');
 const root=path.join(__dirname,'..');let fail=0;
 const bad=m=>{console.error('✗ '+m);fail++},ok=m=>console.log('✓ '+m);
@@ -34,6 +35,11 @@ const seen={};order.filter(f=>!f.startsWith('vendor/')).forEach(f=>{const src=re
   if(r.status){const m=(r.stderr.match(/SyntaxError: .*/)||[r.stderr])[0];bad(`the scripts clash when loaded together: ${m}`)}}
 if(!fail)ok('no duplicate top-level names across scripts');
 
+/* one version everywhere: package.json, the offline cache and the save key */
+{const v=JSON.parse(read('package.json')).version,swv=(sw.match(/const VERSION='l1918-([^']+)'/)||[])[1],sk=(read('js/data.js').match(/SAVE_KEY='lietuva1918-([^']+)'/)||[])[1];
+  if(swv!==v)bad(`sw.js VERSION is ${swv}, package.json says ${v}: bump both with every version`);
+  else if(sk!==v)bad(`SAVE_KEY in js/data.js is for ${sk}, package.json says ${v}: a new version starts a new game, so bump it too`);
+  else ok(`version ${v} in package.json, sw.js and SAVE_KEY`)}
 /* the start map must be rebuilt after the map data or its generator change */
 {const hash=require('./world-hash'),m=read('js/world1918.js').match(/"h":"([0-9a-f]+)"/);
   if(!m||m[1]!==hash(root))bad(`js/world1918.js is out of date (made from ${hash.WORLD_SRC.join(', ')}): run npm run world`);else ok('the start map is up to date')}

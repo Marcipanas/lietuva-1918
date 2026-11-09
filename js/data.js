@@ -1,6 +1,7 @@
 'use strict';
 /* Lietuva 1918 — game rules. Loaded after common.js. */
-const SAVE_KEY='lietuva1918-v6', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
+/* SAVE_KEY carries the version: a new version starts a new game, and older saves are dropped (dropOldSaves in sim.js). */
+const SAVE_KEY='lietuva1918-0.9.0', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
 /* The world is continuous: x = km east, z = km south of the map corner at 20.75°E, 56.55°N. North is -z.
    Distances between places are true. Towns and buildings are drawn about five times larger than life
    (a house lot is LOT_W km across) so they read well on a country-sized map. */
@@ -77,14 +78,16 @@ const ERAS=[null,
     unl:'Hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Towns start wanting electronics.'}];
 const GOAL_POP=2400;
 /* Parts of today's Lithuania that others held for a while (RGN_KEY in terrain.js, outlines in geo.js), and the holders of land.
-   S.own maps each part, and each neighbour's land (lv, by, pl, ru), to its holder. lt: map label in Lithuanian. */
+   S.own maps each part, and each neighbour's land (lv, by, pl the Suwałki region, ep Masuria, ru), to its holder.
+   lt: map label in Lithuanian. */
 const REGIONS={kr:{n:'The Klaipėda Region',lt:'KLAIPĖDOS KRAŠTAS',at:[21.5,55.42]},pal:{n:'The Palanga coast',lt:'',at:[21.1,55.97]},
   vr:{n:'The Vilnius region',lt:'VILNIAUS KRAŠTAS',at:[25.8,54.96]},vr2:{n:'The Vilnius region',lt:'VILNIAUS KRAŠTAS',at:[26.3,55.19]}};
-const OWNERS={lt:'Lithuania',lv:'Latvia',pl:'Poland',de:'Germany',al:'the Allies',by:'Soviet Belarus',ru:'Soviet Russia'};
-/* the market a border post on that holder's land trades with (none across a Soviet border) */
-const OWN_GATE={lv:'lv',pl:'pl',de:'de',al:'de',by:'',ru:''};
-/* 16 February 1918: the Klaipėda Region is German (East Prussia), the Palanga coast is Courland's, the Vilnius region is ours */
-function startOwners(){return {kr:'de',pal:'lv',vr:'lt',vr2:'lt',lv:'lv',by:'by',pl:'pl',ru:'de'}}
+const OWNERS={lt:'Lithuania',lv:'Latvia',pl:'Poland',de:'Germany',al:'the Allies',ra:'the Red Army',by:'Soviet Belarus',ru:'Soviet Russia'};
+/* the market a border post on that holder's land trades with (none across a Soviet line) */
+const OWN_GATE={lv:'lv',pl:'pl',de:'de',al:'de',ra:'',by:'',ru:''};
+/* 16 February 1918: the Vilnius region is ours. The Klaipėda Region and Masuria are German (East Prussia), and German troops
+   hold the rest around us (Ober Ost): Courland with the Palanga coast, the Suwałki region and Belarus. */
+function startOwners(){return {kr:'de',pal:'de',vr:'lt',vr2:'lt',lv:'de',by:'de',pl:'de',ep:'de',ru:'de'}}
 
 const TOWNS0=[
   {id:'vil',n:'Vilnius',reg:'Vilnija',cap:1,pop:120,ind:['forestry','forestry','brick','peat','fishery'],st:{grain:100,potatoes:60,timber:80,peat:30},

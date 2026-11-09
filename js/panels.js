@@ -78,15 +78,22 @@ function marketTiles(ti){const t=S.towns[ti],port=townPort(ti),cap=t.cap||STORE_
     ${S.hist.path==='soviet'?'':`<div class="tb"><button class="btn sm ghost" data-act="sell" data-ti="${ti}" data-r="${r}">Sell ${v(ti+'sv'+r,'+'+fmt(sellVal(ti,r)))}</button>${canBuyHere(ti,r)
       ?`<button class="btn sm ghost" data-act="buy" data-ti="${ti}" data-r="${r}">Buy ${v(ti+'bv'+r,'−'+fmt(buyVal(ti,r)))}</button>`:`<span class="note">Import via a port or border post</span>`}</div>`}</div>`});return h+'</div>'}
 /* Short names of who holds land, for lists and map labels */
-const OWN_SHORT={de:'Germany',al:'Allies',lv:'Latvia',pl:'Poland',by:'USSR',ru:'USSR',lt:'Lithuania'};
+const OWN_SHORT={de:'Germany',al:'Allies',lv:'Latvia',pl:'Poland',ra:'Red Army',by:'USSR',ru:'USSR',lt:'Lithuania'};
 /* A settlement in land others hold: who holds it and since when. It keeps what it had and comes back with its land. */
-function lockHTML(t){const o=S.own[t.rg],y=dOf(S.day).getUTCFullYear(),wait='<p class="note">Nothing can be built here while others hold it. What you built stays, and works again if the land comes back.</p>';
+function lockHTML(t){const o=S.own[t.rg],d=ymd(S.day),y=+d.slice(0,4),wait='<p class="note">Nothing can be built here while others hold it. What you built stays, and works again if the land comes back.</p>';
   if(t.rg==='kr'){if(o==='al')return `<p class="lede">Under Allied rule since 15 February 1920, after Germany gave the region up at Versailles. Lithuania and the Allies argue over its future.</p>
       <p class="note">Its railway runs only to Tilsit in Germany. If the region joins Lithuania, link its port by a railway from Telšiai, as built in 1932, or by a paved road.</p>${wait}`;
     return y>=1939?`<p class="lede">Part of Germany since March 1939.</p>${wait}`
       :`<p class="lede">Part of Germany: the north of East Prussia, the land Lithuanians call Lithuania Minor. The peace treaty after the war will decide its future.</p>${wait}`}
-  if(t.rg==='pal')return `<p class="lede">Palanga has belonged to Courland since 1819, and so now to Latvia. Lithuania claims it as its only piece of open sea coast.</p>${wait}`;
-  if(o==='pl')return `<p class="lede">Held by Poland since October 1920. Lithuania never accepts the loss and keeps no relations with Poland.</p>${wait}`;
+  if(t.rg==='pal')return o==='de'?`<p class="lede">Palanga has belonged to Courland since 1819, and German troops have held Courland since 1915.</p>${wait}`
+    :`<p class="lede">Palanga has belonged to Courland since 1819, and so now to Latvia. Lithuania claims it as its only piece of open sea coast.</p>${wait}`;
+  /* the Vilnius region, as it changed hands */
+  if(o==='ra')return `<p class="lede">${d<'1920-01-01'?'Held by the Red Army since 5 January 1919. The Bolsheviks run a Soviet government from Vilnius.'
+    :'Held by the Red Army since 14 July 1920. Under the Moscow treaty, Soviet Russia is to hand it over to Lithuania.'}</p>${wait}`;
+  if(o==='pl')return `<p class="lede">${d<'1920-07-14'?'Held by the Polish army since April 1919. Poland and Lithuania both claim it.'
+    :d<'1922-03-24'?'Held since October 1920 by Żeligowski’s troops, as the Republic of Central Lithuania, a state run from Warsaw. Lithuania keeps no relations with Poland.'
+    :d>='1938-03-19'&&S.mkt.pl.open?'Part of Poland since 1922. Lithuania still claims it, though it has kept relations with Poland since March 1938.'
+    :'Part of Poland since 1922. Lithuania never accepts the loss and keeps no relations with Poland.'}</p>${wait}`;
   if(o==='by')return `<p class="lede">Held by the Soviet Union since September 1939, as part of Soviet Belarus.</p>${wait}`;
   return `<p class="lede">${heldTxt(t.rg)}.</p>${wait}`}
 function townPanel(ti){const t=S.towns[ti];
@@ -212,8 +219,8 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li>Workers fill local jobs first, then walk to towns within ${WALK_KM} km by road, or ride routes set to carry commuters.</li>
     <li>Factories and kilns pollute homes within ${POL_R} km. Schools raise output; clinics lift morale and growth.</li>
     <li>Buildings join a town when a road links them to its town hall within ${TERRITORY} km. Villages have few workers, so workplaces join a village only when no town is near.</li>
-    <li>Dirt roads join every town and village. A town is linked to the capital when a railway or a paved road from it reaches its streets: Vilnius, or Kaunas while others hold Vilnius. Railways and paved roads also carry the power grid.</li>
-    <li>The map shows the borders of the day. Land a neighbour holds, like the Klaipėda Region until 1923, can’t be built on, and nothing travels through it. Its towns wait, with all you built there, until it comes back.</li>
+    <li>Dirt roads join every town and village. A town is linked to the capital when a railway or a paved road from it reaches its streets. The capital is Vilnius, or Kaunas from January 1919 until Vilnius is back for good. Railways and paved roads also carry the power grid.</li>
+    <li>The map shows the borders of the day. Land others hold, like Vilnius for most of the years between the wars or the Klaipėda Region until 1923, can’t be built on, and nothing travels through it. Its towns wait, with all you built there, until it comes back.</li>
     <li>On the map: one finger moves it, two fingers zoom, turn and tilt. With a tool, tap to act; hold and drag to draw or paint.</li>
     <li>Keys: R road, T rail, Z zone, X remove, B build, Esc cancel, Enter build, Backspace undo, Space pause, [ and ] turn, Page Up and Down tilt, N north up.</li>
     <li><button class="link sm" data-act="tutorial">Show the tutorial again</button></li></ul></details>`;
