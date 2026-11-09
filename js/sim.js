@@ -3,12 +3,12 @@
 let S;
 const tIdx=id=>S.towns.findIndex(t=>t.id===id);
 function newGame(){
-  S={day:0,funds:3000,inc:0,era:1,speed:1,own:startOwners(),nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
+  S={day:0,funds:3000,inc:0,era:1,speed:0,intro:1,own:startOwners(),nid:1,rid:1,gid:1,lid:1,did:1,prices:{},log:[],won:false,ms:{},mod:{farm:1},ev:{},nextRnd:220,
     towns:[],bld:[],routes:[],nodes:[],edges:[],lots:[],deals:[],plan:null,obj:{},stats:{portSales:0,routesMade:0},sel:null,tab:'nat',cam:null,series:[]};
   S.hist=newHistory();S.mkt=newMarkets();
   RES.forEach(r=>S.prices[r]=RI[r].p);
   if(typeof WORLD1918!=='undefined'&&WORLD1918)loadStartMap(WORLD1918);else{genWorld();settleOwners()}
-  analyze();
+  analyze();homesAtStart();
   HIST_ROUTES.forEach(([a,b,m,vt,n])=>addRoute(tIdx(a),tIdx(b),m,vt,n,true));
   S.log=[
     {d:0,t:'Goods only move on transport routes. Open the Routes tab to see the old railway lines and cart routes, and add your own.',k:''},
@@ -17,7 +17,18 @@ function newGame(){
     {d:0,t:'People are happier with more kinds of food on the table: grain, potatoes, dairy, meat and fish. In winter every home burns peat or timber.',k:''},
     {d:0,t:'Borders move with history. Vilnius will change hands several times from 1919, and the Klaipėda Region and the Palanga coast are not yet Lithuanian. Nothing can be built where others hold the land.',k:''},
     {d:0,t:'The Council of Lithuania signs the Act of Independence in Vilnius. The new state must build an economy almost from nothing.',k:'hist'}];
+  /* one day of figures for the dashboards, without moving the date: the game starts paused on 16 February */
+  const f0=S.funds;tick();S.inc=S.funds-f0;S.day=0;
 }
+/* The start map puts some of a city's houses nearer a village hall. A town with fewer homes than people on the first day gets
+   houses on its own zoned lots, nearest first, so no one starts overcrowded. */
+function homesAtStart(){let n=0;
+  S.towns.forEach((t,ti)=>{if(t.lock)return;let cap=0;S.bld.forEach(b=>{if(b.t==='house'&&b.town===ti)cap+=houseCap(b)});
+    const lots=S.lots.filter(l=>l.town===ti).sort((a,b)=>a.cd-b.cd);
+    while(cap<t.pop0-0.05&&lots.length){const l=lots.shift();removeLot(l);const b=addB('house',l.x,l.z,l.rot,1,true);b.town=ti;b.cd=l.cd;cap+=houseCap(b);n++}});
+  if(n)analyze()}
+/* News the interface shows as a toast (sim.js has no DOM): ministry tasks done, and the like */
+const NOTES=[];
 /* Saved games and the 1918 start map (js/world1918.js) share one compact form: coordinates in 10 m steps, lines as steps from
    the previous point (straight runs simplified away, densified again on load), buildings and lots as short arrays, and only
    the terrain cells that changed. */
@@ -86,8 +97,10 @@ function room(t,r){return Math.max(0,(t.cap||STORE_BASE)-(t.stock[r]||0))}
 /* ---------- transport routes: vehicles carry goods (and commuters) between two towns ---------- */
 function addRoute(a,b,mode,vt,n,free){if(a<0||b<0||a===b)return null;const r={id:S.rid++,a,b,mode,vt,n,ab:'auto',ba:'auto',pax:false};S.routes.push(r);if(!free)S.stats.routesMade++;routeEval(r);return r}
 function routePath(r){return pairPath(r.mode,r.a,r.b)}
-function routeEval(r){const p=routePath(r),V=VT[r.vt],A=S.towns[r.a],B0=S.towns[r.b];r.ok=false;r.why='';r.len=0;r.cap=0;r.trip=0;
-  if(!A||!B0){r.why='A town is missing';return}if(A.lock||B0.lock){const X=A.lock?A:B0;r.why=`${X.n} ${heldBy(X.rg,S.own[X.rg])}`;return}
+function routeEval(r){const p=routePath(r),V=VT[r.vt],A=S.towns[r.a],B0=S.towns[r.b];r.ok=false;r.why='';r.len=0;r.cap=0;r.trip=0;r.held=0;
+  if(!A||!B0){r.why='A town is missing';return}
+  /* a route to land others hold waits, and its vehicles cost nothing until the land comes back */
+  if(A.lock||B0.lock){const X=A.lock?A:B0;r.held=1;r.why=`${X.n} ${heldBy(X.rg,S.own[X.rg])}. The route waits, at no cost`;return}
   if(!p){r.why=r.mode==='rail'?'No railway between their stations':'No road between them';return}
   if(V.elec&&p.lv<2){r.why='Electric trains need electric railway all the way';return}
   const sf=r.mode==='road'&&r.vt!=='cart'?ROADT[p.lv].spd:1,trips=V.spd*sf/(2*p.len+TRIP_OVERHEAD);r.len=p.len;r.trip=1/trips;r.cap=r.n*V.cap*trips;r.ok=true}
@@ -145,7 +158,7 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   t.fdays=need>0?FOOD.reduce((a,r)=>a+(st[r]||0),0)/need:99;
   const hm=t.pop*0.03*sea.heat*(era>=3&&pr>0.9?0.5:1),hsub=Math.min(t.pop,base)*0.03*sea.heat*(era>=3&&pr>0.9?0.5:1),hneed=hm-hsub;
   t.dem.peat=(t.dem.peat||0)+hneed*0.6;t.dem.timber=(t.dem.timber||0)+hneed*0.4;
-  let hr=hneed;['peat','timber'].forEach(r=>{const take=Math.min(hr,st[r]||0);st[r]=(st[r]||0)-take;us[r]=(us[r]||0)+take;hr-=take});t.heat=hm>0?1-hr/hm:1;
+  let hr=hneed;['peat','timber'].forEach(r=>{const take=Math.min(hr,st[r]||0);st[r]=(st[r]||0)-take;us[r]=(us[r]||0)+take;hr-=take});t.heat=hm>0?1-hr/hm*Math.min(1,sea.heat/0.35):1;
   const eat=(r,per)=>{const nd=t.pop*per;t.dem[r]=(t.dem[r]||0)+nd;const got=Math.min(st[r]||0,nd);st[r]=(st[r]||0)-got;us[r]=(us[r]||0)+got;return nd?got/nd:1};
   const gm=era>=2?eat('textiles',0.012):1,em=era>=3?eat('electronics',0.004):1;
   let h=58,note='Content';const unemp=Math.max(0,t.wf-Math.min(t.wf,t.jobs)-t.comOut-Math.min(t.pop,base)*0.5);
@@ -161,15 +174,21 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   if(note==='Content'&&h>=70)note='Thriving';
   t.note=note;t.fed=fed;t.unemp=unemp;t.h+=(clamp(h,5,100)-t.h)*0.08;
   const hf=t.h/62;
-  /* growth needs spare food: a few days' stock, and no more eaten than comes in, unless the town is still below its old size */
-  const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0);
-  if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&fbal>=-0.01)))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
+  /* growth needs spare food: a few days' stock, and more coming in than is eaten (or a food that fills its store), unless the
+     town is still below its old size. A starting stock alone does not make a village grow, only to go hungry when it runs out. */
+  const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0),full=FOOD.some(r=>(st[r]||0)>=t.cap*0.95);
+  if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&(fbal>=need*0.015||full))))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
   S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();
   BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
-  if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Food is running out in ${t.n}. People are leaving.`,'warn')}
-  else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;log(`Homes in ${t.n} are cold. Send peat or timber.`,'warn')}
+  if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.food.push(t.n)}
+  else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.cold.push(t.n)}
   RES.forEach(r=>{if((st[r]||0)<1e-4)st[r]=0;if(st[r]>t.cap)st[r]=t.cap})}
+/* Places that ran short today, told in one line each: "Food is running out in Lėnas, Gruzdžiai and 9 other places." */
+const WARN={food:[],cold:[]};
+function placesTxt(L0){return L0.length<=3?L0.slice(0,-1).join(', ')+(L0.length>1?' and ':'')+L0[L0.length-1]:`${L0.slice(0,2).join(', ')} and ${L0.length-2} other places`}
+function warnLog(){if(WARN.food.length)log(`Food is running out in ${placesTxt(WARN.food)}. People are leaving.`,'warn');
+  if(WARN.cold.length)log(`Homes in ${placesTxt(WARN.cold)} are cold. Send peat or timber.`,'warn');WARN.food=[];WARN.cold=[]}
 /* building materials a town spends on its own homes count as goods used */
 function useMat(t,cost){if(!t._us)return;for(const k in cost)if(k!=='lt')t._us[k]=(t._us[k]||0)+cost[k]}
 /* towns grow into zoned lots along their streets, nearest and cleanest first; in later eras old houses are rebuilt bigger */
@@ -219,23 +238,26 @@ const REV=[
   ()=>{const t=S.towns[tIdx('kau')],l=Math.floor((t.stock.timber||0)*0.3);if(l<1)return null;t.stock.timber-=l;return [`A spring flood on the Nemunas washes away ${l} timber in Kaunas.`,'warn']},
   ()=>{const t=S.towns[pick(activeIdx())],l=Math.floor((t.stock.grain||0)*0.25);if(l<1)return null;t.stock.grain-=l;return [`A wet harvest spoils ${l} grain in ${t.n}.`,'warn']},
   ()=>{if(S.era<2)return null;S.prices.textiles=Math.min(RI.textiles.p*1.6,S.prices.textiles*1.3);return ['Linen is in fashion in Western Europe. Cloth prices rise.','']}];
+/* Ministry tasks, roughly from easy to hard. can: the task makes sense now (the map shows the first open one that does). */
 const OBJ=[
   {id:'route',t:'Set up a new transport route',r:400,ok:()=>S.stats.routesMade>0},
-  {id:'mar',t:'Bring the railway to Marijampolė (it came in 1924)',r:800,ok:()=>NET.rail.has(tIdx('mar'))},
-  {id:'food3',t:'Give a town three kinds of food',r:800,ok:()=>S.towns.some(t=>!t.lock&&t.vari>=3)},
-  {id:'tel',t:'Bring the railway to Telšiai (it came in 1926)',r:800,ok:()=>NET.rail.has(tIdx('tel'))},
   {id:'wh',t:'Build a warehouse',r:300,ok:()=>S.bld.some(b=>b.t==='warehouse')},
-  {id:'bir',t:'Link Biržai to the capital by rail or paved road',r:600,ok:()=>NET.linked.has(tIdx('bir'))},
+  {id:'food4',t:'Give a town four kinds of food',r:800,ok:()=>S.towns.some(t=>!t.lock&&t.vari>=4)},
   {id:'school',t:'Open a school',r:400,ok:()=>S.bld.some(b=>b.t==='school')},
-  {id:'town',t:'Found a new town',r:1000,ok:()=>S.towns.some(t=>!t.orig)},
-  {id:'p800',t:'Reach 800k residents',r:1500,ok:()=>totals().pop>=800},
-  {id:'kla',t:'Link Klaipėda to the railways of Lithuania once the region is Lithuanian (it was done in 1932, through Telšiai)',r:1500,ok:()=>NET.rail.has(tIdx('kla'))},
-  {id:'port',t:'Sell goods through the port',r:800,ok:()=>S.stats.portSales>0},
   {id:'trade',t:'Sell goods abroad through a border post or a port',r:600,ok:()=>S.deals.some(d=>d.dir==='out'&&d.done>0)},
+  {id:'mar',t:'Bring the railway to Marijampolė (it came in 1924)',r:800,ok:()=>NET.rail.has(tIdx('mar'))},
+  {id:'tel',t:'Bring the railway to Telšiai (it came in 1926)',r:800,ok:()=>NET.rail.has(tIdx('tel'))},
+  {id:'bir',t:'Link Biržai to the capital by rail or paved road',r:600,ok:()=>NET.linked.has(tIdx('bir'))},
+  {id:'town',t:'Found a new town',r:1000,ok:()=>S.towns.some(t=>!t.orig)},
+  {id:'port',t:'Sell goods through the port',r:800,ok:()=>S.stats.portSales>0,can:()=>S.own.pal==='lt'||S.own.kr==='lt'},
+  {id:'kla',t:'Link Klaipėda to the railways of Lithuania (it was done in 1932, through Telšiai)',r:1500,ok:()=>NET.rail.has(tIdx('kla')),can:()=>S.own.kr==='lt'},
+  {id:'p800',t:'Reach 800k residents',r:1500,ok:()=>totals().pop>=800},
   {id:'era2',t:'Enter the Industrialization era',r:2000,ok:()=>S.era>=2},
-  {id:'lit',t:'Power every town',r:3000,ok:()=>S.era>=2&&S.towns.every(t=>t.lock||t.vil||t.pr>=0.95)},
-  {id:'era3',t:'Reach Modern Lithuania',r:5000,ok:()=>S.era>=3}];
-function checkObj(){OBJ.forEach(o=>{if(!S.obj[o.id]&&o.ok()){S.obj[o.id]=1;S.funds+=o.r;log(`Ministry task done: ${o.t}. +${fmt(o.r)} Lt`,'good')}})}
+  {id:'lit',t:'Power every town',r:3000,ok:()=>S.era>=2&&S.towns.every(t=>t.lock||t.vil||t.pr>=0.95),can:()=>S.era>=2},
+  {id:'era3',t:'Reach Modern Lithuania',r:5000,ok:()=>S.era>=3,can:()=>S.era>=2}];
+function checkObj(){OBJ.forEach(o=>{if(!S.obj[o.id]&&o.ok()){S.obj[o.id]=1;S.funds+=o.r;log(`Ministry task done: ${o.t}. +${fmt(o.r)} Lt`,'good');NOTES.push(`Task done: ${o.t.replace(/ \(.*\)$/,'')} · +${fmt(o.r)} Lt`)}})}
+/* the task the map shows: the first open one that makes sense now */
+function curTask(){return OBJ.find(o=>!S.obj[o.id]&&(!o.can||o.can()))||null}
 
 function tick(){
   if(NET.dirty)analyze();
@@ -247,20 +269,21 @@ function tick(){
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
   act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];t.pr=dem[c]>0?Math.min(1,sup[c]/dem[c]):1;t.gS=sup[c];t.gD=dem[c]});
   act.forEach(n=>phase2(n,sea));
-  runRoutes();runDeals();
+  runRoutes();runDeals();warnLog();
   act.forEach(n=>{const t=S.towns[n];if(t.pop>=t.house*0.92&&t.fed>=0.99&&t.h>=45){if(++t.dev>=5){t.dev=0;develop(n)}}else if(t.pop<t.house*0.85)t.hint=''});
   /* smoothed per-day figures: net change of each good (routes and trade included), made, used, and population growth */
   act.forEach(n=>{const t=S.towns[n],b0=before[n],mk=t.mk||(t.mk={}),us=t.us||(t.us={});RES.forEach(r=>{const d=(t.stock[r]||0)-(b0[r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2;
     mk[r]=(mk[r]||0)*0.8+(t._mk[r]||0)*0.2;us[r]=(us[r]||0)*0.8+(t._us[r]||0)*0.2});t.gr=(t.gr||0)*0.9+(t.pop-b0.pop)*0.1});
-  S.funds-=NET.up;S.routes.forEach(r=>{S.funds-=r.n*VT[r.vt].up});
+  S.funds-=NET.up;S.routes.forEach(r=>{if(!r.held)S.funds-=r.n*VT[r.vt].up});
   S.inc=S.inc*0.9+(S.funds-f0)*0.1;
+  if(S.funds<0&&S.day-(S.ms.broke||-999)>90){S.ms.broke=S.day;log('The treasury is empty and upkeep runs up a debt. Remove routes or buildings you do not need, or sell goods abroad.','warn');NOTES.push('The treasury is empty')}
   histTick();
   if(S.day>=S.nextRnd){S.nextRnd=S.day+170+Math.floor(Math.random()*170);const r=pick(REV)();if(r)log(r[0],r[1])}
   if(S.day%10===0)checkObj();
   const t=totals();
   /* a weekly sample of residents and treasury for the trend charts; halved in resolution when it grows long */
   if(S.day%7===0){const L0=S.series||(S.series=[]);L0.push([S.day,Math.round(t.pop*10)/10,Math.round(S.funds)]);if(L0.length>520)S.series=L0.filter((x,i)=>i%2===0||i===L0.length-1)}
-  [750,1000,1500,2000,2500].forEach(x=>{if(t.pop>=x&&!S.ms['p'+x]){S.ms['p'+x]=1;log(`${popStr(x)} people now live in Lithuania's towns and villages.`,'good')}});
+  [750,1000,1500,2000,2500].forEach(x=>{if(t.pop>=x&&!S.ms['p'+x]){S.ms['p'+x]=1;log(`${popStr(x)} people now live in Lithuania's towns and villages.`,'good');NOTES.push(`${popStr(x)} people now live in Lithuania`)}});
   if(!S.won&&S.era===3&&t.pop>=goalPop()&&t.linked===t.towns&&t.lit){S.won=true;log(`Every town is linked and lit, and ${popStr(goalPop())} people live in the towns and villages. The plan is fulfilled.`,'good')}
 }
 function goalPop(){return Math.round(GOAL_POP*landShare().pop/10)*10}

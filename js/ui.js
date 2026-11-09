@@ -12,6 +12,7 @@ Object.assign(ICON,{
   play:'<path d="M8 5.5v13l10.5-6.5z"/>', fast:'<path d="M4 6v12l8-6zM12 6v12l8-6z"/>', spot:'<circle cx="12" cy="10" r="3"/><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/>'
 });
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2600)}
+const toastBusy=()=>$('toast').classList.contains('show');
 function hint(m){const h=$('hint');if(!m){h.hidden=true;return}h.textContent=m;h.hidden=false;clearTimeout(ht);ht=setTimeout(()=>{h.hidden=true},8000)}
 const WIDE=()=>window.innerWidth>=960;
 Object.assign(VIEW,{sheet:0,prev:'nat',bcat:null,bti:-1,iss:null,tsort:'need',tall:false,seen:0,spd:1});
@@ -146,15 +147,18 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'iss':VIEW.iss=VIEW.iss===d.k?null:d.k;break;
     case 'tsort':VIEW.tsort=d.k;break;
     case 'tall':VIEW.tall=!VIEW.tall;break;
-    case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*S.prices[rs]*(port?1.4:1);
-      t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*0.985);toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
+    case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(+d.q||25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*S.prices[rs]*(port?1.4:1);
+      t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*Math.pow(0.985,a/25));toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
     case 'buy':{const t=S.towns[ti],rs=d.r,c=buyVal(ti,rs);if(!canBuyHere(ti,rs))return toast('Metal can only be imported through a sea port');if(S.funds<c)return toast(`Need ${fmt(c-S.funds)} more Lt`);
       if(room(t,rs)<25)return toast(`No storage room in ${t.n}. Build a warehouse.`);S.funds-=c;t.stock[rs]=(t.stock[rs]||0)+25;S.prices[rs]=Math.min(RI[rs].p*1.6,S.prices[rs]*1.01);toast(`Bought 25 ${rname(rs)} for ${t.n}`);break}
     case 'up':{if(!b)return;if(b.town<0)return toast('Connect it to a town first');const c=upCost(b),t=S.towns[b.town],m=missing(c,t);if(m)return toast(m);pay(c,t);b.lv++;log(`${BT[b.t].n} near ${t.n} modernized to Lv ${b.lv}.`,'good');break}
     case 'toggle':if(b)b.on=!b.on;break;
     case 'demolish':S.confirmDemo=b?b.id:null;break;case 'canceld':S.confirmDemo=null;break;
     case 'demolish2':if(b){removeB(b);analyze();VIEW.sel=null;toast('Demolished')}S.confirmDemo=null;break;
-    case 'era':{if(!eraReady())return toast('Not every requirement is met yet');S.funds-=ERAS[S.era+1].req.lt;S.era++;log(`Lithuania enters the ${ERAS[S.era].n} era.`,'hist');toast(`${ERAS[S.era].n} era begins`);break}
+    case 'era':{if(!eraReady())return toast('Not every requirement is met yet');S.funds-=ERAS[S.era+1].req.lt;S.era++;log(`Lithuania enters the ${ERAS[S.era].n} era.`,'hist');
+      /* a card marks the new era and what it brings; the clock waits while it is open */
+      S.eraCard=S.era;VIEW.eraSpd=S.speed;S.speed=0;showCard();break}
+    case 'eraok':{S.eraCard=0;S.speed=VIEW.eraSpd||0;showCard();toast(`${ERAS[S.era].n} era begins`);break}
     case 'newroute':return createRoute(+d.a,+d.b,d.m);
     case 'rcreate':return createRoute(+$('nrA').value,+$('nrB').value,$('nrM').value);
     case 'rveh':{if(!r)return;const V0=VT[r.vt];if(+d.d>0){if(S.funds<V0.cost)return toast(`Need ${fmt(V0.cost-S.funds)} more Lt`);S.funds-=V0.cost;r.n++;toast(`${r.n} ${V0.n.toLowerCase()} on ${S.towns[r.a].n} ⇄ ${S.towns[r.b].n}`)}
@@ -169,6 +173,9 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'rdel2':if(r){S.funds+=r.n*VT[r.vt].cost*0.5;S.routes.splice(S.routes.indexOf(r),1);if(VIEW.route===r.id)VIEW.route=null;toast('Route removed')}S.confirmRoute=null;break;
     case 'tutorial':tutStart(true);if(!WIDE())setSheet(0);return;
     case 'card':{if(!pickCard(+d.o))return;showCard();break}
+    /* the intro of a new game: the clock stays paused until the player starts it */
+    case 'intro':{S.intro=0;showCard();if(!tutStart(false))hint(VIEW.oldSave?'A new version starts a new game: games saved by older versions can’t be loaded. Press ▶ at the top to start the clock.'
+      :'The clock is paused. Look around, then press ▶ at the top to start it.');break}
     case 'def':S.hist.def=+d.q;toast(S.hist.def?`The army gets ${S.hist.def} Lt a day`:'No money for the army');break;
     case 'dcreate':{const m=$('ndM').value,dir=$('ndD').value,rs=$('ndR').value,q=+$('ndQ').value,ti2=+$('ndT').value;
       if(!mktPrice(m,rs,dir))return toast(`${MARKETS[m].n} does not ${dir==='out'?'buy':'sell'} ${rname(rs)}`);
@@ -187,8 +194,9 @@ const VIEW_ONLY=new Set(['bcat','bback','iss','tsort','tall','rdel','rkeep','dem
 /* ---------- decision cards: history waits for the player ---------- */
 function cardDate(w){if(w.length===4)return w;const d=new Date(w+'T00:00:00Z');return d.getUTCDate()+' '+['January','February','March','April','May','June','July','August','September','October','November','December'][d.getUTCMonth()]+' '+d.getUTCFullYear()}
 let cardShown='';
-function showCard(){const el=$('card'),id=S.hist.cards[0];if(id===cardShown&&!el.hidden===!!id)return;cardShown=id||'';
+function showCard(){const el=$('card'),id=S.intro?'intro':S.eraCard?'era'+S.eraCard:S.hist.cards[0];if(id===cardShown&&!el.hidden===!!id)return;cardShown=id||'';
   if(!id){el.hidden=true;document.body.classList.remove('carded');return}
+  if(id==='intro'||S.eraCard){el.innerHTML=id==='intro'?introHTML():eraHTML(S.eraCard);el.hidden=false;document.body.classList.add('carded');return}
   const c=CARDS[id],sec=Math.round(S.hist.sec);
   el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${cardTxt(c.txt)}</p><div class="opts">${c.opts.map((o,i)=>{const r=o.risk,ok=r&&sec>=r.sec;
     return `<button class="opt${o.h?' hist':''}" data-card="${i}"><b>${o.t}</b><span>${cardTxt(o.d)}</span>${r?`<em class="${ok?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}</button>`}).join('')}</div></div>`;
@@ -203,10 +211,15 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   if(S.hist.cards.length)acc=0;
   while(acc>=1&&n<16){tick();acc-=1;n++;if(S.day%30===0)autosave();if(S.hist.cards.length){acc=0;save();break}}if(NET.dirty)analyze();showCard();
   VOFF.ty=coverBottom()/2;updateAgents(dt);draw(dt);const cp=$('compass');if(cp)cp.firstElementChild.style.transform=`rotate(${-cam.yaw}rad)`;
-  pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick()}requestAnimationFrame(frame)}
+  pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick();updateTask();if(NOTES.length&&!toastBusy()&&!S.hist.cards.length&&!S.intro&&!S.eraCard)toast(NOTES.shift())}requestAnimationFrame(frame)}
+/* the ministry task on the map, above the bottom bar: tap it to see all tasks */
+let taskTxt=null;
+function updateTask(){const el=$('task');if(!el)return;const o=curTask(),show=!!o&&!S.intro&&!S.eraCard&&!TUT.on&&TOOL.k==='inspect'&&(WIDE()||!VIEW.sheet)&&!S.hist.cards.length;
+  if(el.hidden===show)el.hidden=!show;if(!o)return;const tx=o.t.replace(/ \(.*\)$/,'')+'|'+o.r;if(tx===taskTxt)return;taskTxt=tx;
+  el.innerHTML=`${ic('star')}<span>${o.t.replace(/ \(.*\)$/,'')}</span><b>+${fmt(o.r)} Lt</b>`;el.setAttribute('aria-label','Ministry task: '+o.t+'. Reward '+fmt(o.r)+' Lt. Show all tasks.')}
 /* the opening view: the capital from the south-west, slightly tilted */
 function camHome(){const v0=capital();camLoad({x:v0.x+0.2,z:v0.z+0.3,dist:6,yaw:-0.35,pitch:0.74})}
-function start(data){const old=dropOldSaves(),saved=data&&data.save?data.save:load();let fresh=false;
+function start(data){const old=dropOldSaves(),saved=data&&data.save?data.save:load();let fresh=false;VIEW.oldSave=old;
   if(saved){try{restore(saved)}catch(e){newGame();fresh=true}}else{newGame();fresh=true}
   analyze();S.routes.forEach(routeEval);if(S.cam&&isFinite(S.cam.dist))camLoad(S.cam);else camHome();initScene();
   VIEW.seen=S.day;VIEW.spd=S.speed||1;if(S.tab==='sel'||S.tab==='build')S.tab='nat';
@@ -223,8 +236,10 @@ function start(data){const old=dropOldSaves(),saved=data&&data.save?data.save:lo
   document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
   sheetSizes();setSheet(WIDE()?1:0);renderPanel(true);updateTop();showBar();
   $('tut').addEventListener('click',e=>{const b=e.target.closest('[data-tut]');if(!b)return;if(b.dataset.tut==='next')tutNext();else tutEnd()});
-  $('card').addEventListener('click',e=>{const b=e.target.closest('[data-card]');if(b)act({act:'card',o:b.dataset.card})});
-  if(!tutStart(false)&&fresh)hint(old?'A new version starts a new game: games saved by older versions can’t be loaded.':'Vilnius, 16 February 1918. Drag to move, pinch to zoom, twist two fingers to turn. Tap a town to see what it needs.');
+  $('card').addEventListener('click',e=>{const b=e.target.closest('[data-card]');if(b)act({act:'card',o:b.dataset.card});if(e.target.closest('[data-intro]'))act({act:'intro'});if(e.target.closest('[data-eraok]'))act({act:'eraok'})});
+  $('task').addEventListener('click',()=>{navTo('nat');setTimeout(()=>act({act:'goto',k:'tasks'}),60)});
+  /* a new game opens on its intro; a saved one goes straight on */
+  if(!S.intro&&!tutStart(false)&&fresh)hint('Vilnius, 16 February 1918. Drag to move, pinch to zoom, twist two fingers to turn. Tap a town to see what it needs.');
   requestAnimationFrame(frame)}
 try{window.claude?.hot?.snapshot?.(()=>({save:serialize()}))}catch(e){}
 (function(){const hot=window.claude?.hot;hot?.ready?hot.ready(start):start(hot?.data??{})})();

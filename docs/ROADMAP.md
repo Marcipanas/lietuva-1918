@@ -15,6 +15,10 @@ Done in v0.5: markets abroad (Britain, Germany, Latvia, Poland, the Union), bord
 
 ## 2. The interface: next steps
 
+Done in v0.10: an intro and a paused start for a new game, the current ministry task on the map, notes on screen for tasks, milestones and history that changes the map, a card for each new era, political colours from far out (readable in winter), and fixes found by an audit of the loop (see decision 36).
+- **Link a town in one step:** linking towns by railway is most of the work of the first era, and no fix builds it. A "Link to the network" fix could plan the shortest railway (or, in later eras, paved road) from the town to the nearest linked line and open it in the Railway tool for the player to confirm.
+- **Storage that fills with goods nobody needs yet** (flax before the linen mills of era 2) stops buildings early in the game; a note on the building could say so before the player builds it.
+
 Done in v0.7: a phone-first layout (status bar, five views at the bottom, a sheet that snaps closed, half or full, a view offset that keeps the target above it), a two-step build menu, buildings placed on a good spot near the town and dragged into place, lit ground where a building fits, roads and railways from tapped points with undo and draggable points, planning that uses and upgrades existing lines, zoning that adds up, an action bar that says what it costs and who pays, and dashboards for the country and each town with problems and one-tap fixes. Next:
 - **Undo the last build** for a few seconds after it, with the money and materials back.
 - **Map layers** to switch on from the Lithuania view: food and fuel balance per town, the power grid, links to Vilnius, pollution.
