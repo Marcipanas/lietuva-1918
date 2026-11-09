@@ -76,6 +76,15 @@ const ERAS=[null,
   {n:'Modern Lithuania',c:'#c1272d',req:{pop:1450,linked:70,lt:25000,bricks:500,textiles:200},
     unl:'Hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Towns start wanting electronics.'}];
 const GOAL_POP=2400;
+/* Parts of today's Lithuania that others held for a while (RGN_KEY in terrain.js, outlines in geo.js), and the holders of land.
+   S.own maps each part, and each neighbour's land (lv, by, pl, ru), to its holder. lt: map label in Lithuanian. */
+const REGIONS={kr:{n:'The Klaipėda Region',lt:'KLAIPĖDOS KRAŠTAS',at:[21.5,55.42]},pal:{n:'The Palanga coast',lt:'',at:[21.1,55.97]},
+  vr:{n:'The Vilnius region',lt:'VILNIAUS KRAŠTAS',at:[25.8,54.96]},vr2:{n:'The Vilnius region',lt:'VILNIAUS KRAŠTAS',at:[26.3,55.19]}};
+const OWNERS={lt:'Lithuania',lv:'Latvia',pl:'Poland',de:'Germany',al:'the Allies',by:'Soviet Belarus',ru:'Soviet Russia'};
+/* the market a border post on that holder's land trades with (none across a Soviet border) */
+const OWN_GATE={lv:'lv',pl:'pl',de:'de',al:'de',by:'',ru:''};
+/* 16 February 1918: the Klaipėda Region is German (East Prussia), the Palanga coast is Courland's, the Vilnius region is ours */
+function startOwners(){return {kr:'de',pal:'lv',vr:'lt',vr2:'lt',lv:'lv',by:'by',pl:'pl',ru:'de'}}
 
 const TOWNS0=[
   {id:'vil',n:'Vilnius',reg:'Vilnija',cap:1,pop:120,ind:['forestry','forestry','brick','peat','fishery'],st:{grain:100,potatoes:60,timber:80,peat:30},

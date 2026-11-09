@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Writes js/geo.js from tools/geo/geo.json and tools/geo/places.json. Needs nothing beyond Python 3.
+"""Writes js/geo.js from tools/geo/geo.json, places.json and regions.json. Needs nothing beyond Python 3.
 Run: python3 -I tools/geo/write_geo.py   (from the repository root; npm run geo does this)"""
 import json, os
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 g = json.load(open(os.path.join(ROOT, 'tools/geo/geo.json')))
 P = json.load(open(os.path.join(ROOT, 'tools/geo/places.json')))
+R = json.load(open(os.path.join(ROOT, 'tools/geo/regions.json')))
 J = lambda v: json.dumps(v, ensure_ascii=False, separators=(',', ':'))
 def flat(ring):
     """[[lon, lat], ...] as one list of 1/10000-degree steps from the previous point (geoRing decodes it)"""
@@ -33,6 +34,12 @@ L = ["'use strict';",
      "const GEO_BORD = " + J([{'a': b['a'], 'b': b['b'], 'p': flat(b['p'])} for b in g['borders']]) + ".map(b => ({ a: b.a, b: b.b, p: geoRing(b.p) }));",
      "/* the Klaipėda Region (Memel Territory, 1920–1939) */",
      "const GEO_KR = " + rings(g['kr']) + ";",
+     "/* parts of today's Lithuania that changed hands later (tools/geo/build_regions.py): the Palanga strip (Latvian until 1921),",
+     "   and the Vilnius region under Poland from 1920, in two parts: what came back in October 1939 and what in November 1940 */",
+     "const GEO_KRW = " + polys(R['kr']) + ";  /* the Klaipėda Region widened past today's border, for the raster */",
+     "const GEO_PAL = " + polys(R['pal']) + ";",
+     "const GEO_V39 = " + polys(R['v39']) + ";",
+     "const GEO_V40 = " + polys(R['v40']) + ";",
      "/* rivers from source to mouth: n name, w drawn width in km, thin: drawn only (too narrow for the terrain raster) */",
      "const GEO_RIV = " + J([{'n': r['n'], 'w': r['w'], 't': r['thin'], 'p': flat(r['p'])} for r in g['rivers']]) + ".map(r => ({ n: r.n, w: r.w, thin: r.t, p: geoRing(r.p) }));",
      "/* the bigger lakes as outlines (the smaller ones are LAKES in land.js) */",

@@ -51,7 +51,7 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   if(S.era>=2&&t.note==='Want linen cloth')add('want:textiles',1,'textiles','Wants linen cloth','Morale suffers without it.',[F(suggestRoute,ti,['textiles']),F(buildFix,'linen',ti)]);
   if(S.era>=3&&t.note==='Want electronics')add('want:electronics',1,'chip','Wants electronics','Morale suffers without them.',[F(suggestRoute,ti,['electronics']),F(buildFix,'elec',ti)]);
   if(t.h<45)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below 45% a town stops growing.`,[]);
-  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to Vilnius','Bring a railway or a paved road to its streets.',
+  if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,'Bring a railway or a paved road to its streets.',
     [{t:'Build a road',a:{act:'tool',tool:'road',ti}},{t:'Lay track',a:{act:'tool',tool:'rail',ti}}]);
   if(!lite&&!t.vil&&!bOfTown(ti).some(b=>b.t==='station')&&nearestEdge(t.x,t.z,'rail',(t.R||1)*1.2+1))
     add('station',0,'rail','No railway station','A railway passes, but trains cannot stop here. Build a station beside the track.',[buildFix('station',ti,'Station')]);

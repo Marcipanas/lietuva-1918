@@ -8,11 +8,11 @@
 const NODES = new Map(), EDGES = new Map(), BMAP = new Map(), LOTS = new Map();
 const EH = new SpatialHash(2), BH = new SpatialHash(2), LH = new SpatialHash(2);
 /* Version counters: the renderer rebuilds what changed. */
-const WV = { net: 0, bld: 0, lots: 0, kr: 0 };
+const WV = { net: 0, bld: 0, lots: 0, own: 0 };
 let SPACE_DIRTY = true, BLK_DIRTY = true;
 
 const espec = e => (e.k === 'road' ? ROADT : RAILT)[e.lv];
-function edgeRT(e) { e.c = polyCum(e.p); e.L = e.c[e.c.length - 1]; }
+function edgeRT(e) { e.c = polyCum(e.p); e.L = e.c[e.c.length - 1]; e.rg = undefined; }
 function bOBB(b) { const f = b.fp || BT[b.t].fp; return { x: b.x, z: b.z, rot: b.rot, w: f[0], d: f[1] }; }
 function lotOBB(l) { return { x: l.x, z: l.z, rot: l.rot, w: LOT_W, d: LOT_D }; }
 function segBox(a, b) { return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; }
@@ -111,7 +111,7 @@ function removeEdge(e) {
 function mergeNode(n) {
   if (n.e.length !== 2) return;
   const e1 = EDGES.get(n.e[0]), e2 = EDGES.get(n.e[1]);
-  if (!e1 || !e2 || e1 === e2 || e1.k !== e2.k || e1.lv !== e2.lv || e1.a === e1.b || e2.a === e2.b) return;
+  if (!e1 || !e2 || e1 === e2 || e1.k !== e2.k || e1.lv !== e2.lv || e1.a === e1.b || e2.a === e2.b || edgeRgn(e1) !== edgeRgn(e2)) return;
   const A = NODES.get(e1.a === n.id ? e1.b : e1.a), B = NODES.get(e2.a === n.id ? e2.b : e2.a);
   if (A === B) return;
   const p1 = e1.b === n.id ? e1.p : e1.p.slice().reverse(), p2 = e2.a === n.id ? e2.p : e2.p.slice().reverse();
@@ -128,6 +128,38 @@ function splitEdge(e, s) {
   nb.e.splice(nb.e.indexOf(e.id), 1);
   e.b = n.id; e.p = pa; e.p[e.p.length - 1] = [n.x, n.z]; edgeRT(e); n.e.push(e.id); indexEdge(e);
   addEdge(e.k, e.lv, n, nb, pb);
+  return n;
+}
+/* The part of Lithuania (RGN code) a line runs in, by most of its length; 0 outside the regions or outside Lithuania. */
+function edgeRgn(e) {
+  if (e.rg !== undefined) return e.rg;
+  const n = [0, 0, 0, 0, 0];
+  for (let s = 0.05; s < e.L; s += 0.2) { const q = polyAt(e.p, e.c, s), k = cellAt(q[0], q[1]); n[k >= 0 && (TF[k] & F_LT) ? RGN[k] : 0]++; }
+  let best = 0; for (let r = 1; r < n.length; r++) if (n[r] > n[best]) best = r;
+  return (e.rg = best);
+}
+/* Split every line where it crosses from one part of Lithuania into another, so each line lies in one part and stops
+   carrying traffic when that part is lost. Crossings shorter than 0.35 km (a road along a border line) are ignored. */
+function splitAtRegions() {
+  let n = 0;
+  for (const e of [...EDGES.values()]) {
+    const runs = [];
+    for (let s = 0.05; s < e.L; s += 0.1) {
+      const q = polyAt(e.p, e.c, s), k = cellAt(q[0], q[1]);
+      if (k < 0 || !(TF[k] & F_LT)) continue;
+      const r = RGN[k], last = runs[runs.length - 1];
+      if (last && last.r === r) last.s1 = s; else runs.push({ r, s0: s, s1: s });
+    }
+    for (let i = runs.length - 2; i >= 1; i--) {
+      if (runs[i].s1 - runs[i].s0 >= 0.35) continue;
+      if (runs[i - 1].r === runs[i + 1].r) { runs[i - 1].s1 = runs[i + 1].s1; runs.splice(i, 2); } else { runs[i - 1].s1 = runs[i].s1; runs.splice(i, 1); }
+    }
+    if (runs.length > 1 && runs[0].s1 - runs[0].s0 < 0.35) runs.shift();
+    if (runs.length > 1 && runs[runs.length - 1].s1 - runs[runs.length - 1].s0 < 0.35) runs.pop();
+    const cuts = [];
+    for (let i = 1; i < runs.length; i++) if (runs[i].r !== runs[i - 1].r) cuts.push((runs[i - 1].s1 + runs[i].s0) / 2);
+    for (let i = cuts.length - 1; i >= 0; i--) { splitEdge(e, cuts[i]); n++; }
+  }
   return n;
 }
 /* Closest edge of kind k within r of a point: {e, s, d, x, z}. */
@@ -293,7 +325,7 @@ function accessOf(o, k, reach) {
   let best = null;
   EH.query(bb[0], bb[1], bb[2], bb[3], it => {
     const e = it[0], i = it[1];
-    if (e.k !== k) return;
+    if (e.k !== k || e.off) return;
     const a = e.p[i - 1], b = e.p[i], hw = espec(e).w / 2, cd = segClosest(o.x, o.z, a[0], a[1], b[0], b[1])[3] - hd - hw;
     if (cd > reach || (best && cd > best.d)) return;  /* too far even from the box's corners: skip the exact test */
     const d = obbSegDist(o, a[0], a[1], b[0], b[1]) - hw;
@@ -315,7 +347,7 @@ function validPlace(t, x, z, rot, gen) {
     n++;
     const tt = TT[k], f = TF[k];
     if (!(f & F_LT)) { err = err || 'Outside Lithuania'; return; }
-    if (!gen && (f & F_KR) && S.kr) { err = err || (S.hist.lost ? 'The Klaipėda Region belongs to Germany' : 'The Klaipėda Region joins Lithuania in 1923'); return; }
+    if (!gen && heldOff(k)) { err = err || heldTxt(RGN_KEY[RGN[k]]); return; }
     if (tt === T_RIVER) riv++;
     else if (tt !== T_LAND && tt !== T_SAND) { err = err || 'Cannot build on water'; return; }
     if (f & F_FERTILE) fert++; if (f & F_FLAX) flx++; if (f & F_BOG) bog++; if (f & F_CLAY) clay++;
@@ -344,7 +376,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
     case 'lake': if (!ring(0.8, tt => tt === T_LAKE)) return bad('Must be next to a lake'); break;
     case 'water': if (!ring(0.6, tt => isWaterT(tt))) return bad('Must be on a shore'); break;
-    case 'border': { let c = 0; forCellsIn(o, 3, k => { if (CTY[k] > 1) c++; }); if (!c) return bad('Must be within 3 km of the border'); break; }
+    case 'border': { let c = 0; forCellsIn(o, 3, k => { if (CTY[k] > 1 || heldOff(k)) c++; }); if (!c) return bad('Must be within 3 km of the border'); break; }
   }
   if (t === 'hall') for (const tw of S.towns) if (Math.hypot(tw.x - x, tw.z - z) < HALL_GAP) return bad(`Too close to ${tw.n}`);
   return { ok: true, bonus: (B0.bonus === 'fertile' && fert >= n * 0.4) || (B0.bonus === 'flaxland' && flx >= n * 0.4) };
@@ -367,7 +399,7 @@ function lotSpots(e) {
 function lotOk(c, gen) {
   const o = { x: c.x, z: c.z, rot: c.rot, w: LOT_W, d: LOT_D };
   let no = false;
-  forCellsIn(o, 0, k => { const tt = TT[k], f = TF[k]; if (!(f & F_LT) || (tt !== T_LAND && tt !== T_SAND) || (!gen && (f & F_KR) && S.kr)) no = true; });
+  forCellsIn(o, 0, k => { const tt = TT[k], f = TF[k]; if (!(f & F_LT) || (tt !== T_LAND && tt !== T_SAND) || (!gen && heldOff(k))) no = true; });
   if (no || waterHit(o, 0.01)) return false;
   space();
   const bb = obbBounds(o, 0.4);
@@ -467,7 +499,7 @@ function dijkstra(srcs, k, tg) {
     const n = NODES.get(id), own = o.get(id);
     for (const eid of n.e) {
       const e = EDGES.get(eid);
-      if (e.k !== k || e.a === e.b) continue;
+      if (e.k !== k || e.a === e.b || e.off) continue;
       relax(e.a === id ? e.b : e.a, dd + e.L, own, { from: id, e: eid });
     }
   }
@@ -536,6 +568,7 @@ function ownerAt(e, s, pref) {
 }
 function analyze() {
   space();
+  EDGES.forEach(e => { const r = edgeRgn(e); e.off = !!r && S.own[RGN_KEY[r]] !== 'lt'; });
   const tw = S.towns, act = tw.map(t => !t.lock), halls = tw.map(() => null);
   S.bld.forEach(b => { if (b.t === 'hall' && b.ti !== undefined) halls[b.ti] = b; });
   NET.hall = tw.map((t, n) => halls[n] && act[n] ? accessOf(bOBB(halls[n]), 'road', ACCESS + 0.15) : null);
@@ -548,7 +581,7 @@ function analyze() {
   S.bld.forEach(b => {
     b.na = ''; b.k = 1;
     if (b.t === 'hall') { b.town = act[b.ti] ? b.ti : -1; return; }
-    const lock = S.kr && inKR(b.x, b.z), q = lock ? null : own(bOBB(b), b.t !== 'house');
+    const lock = heldOffAt(b.x, b.z), q = lock ? null : own(bOBB(b), b.t !== 'house');
     if (!q || q.o < 0) { b.town = -1; b.cd = 0; b.na = lock ? 'locked' : q ? 'far' : 'noroad'; return; }
     b.town = q.o; b.cd = q.d;
     if (b.t === 'customs') b.gate = borderOf(b.x, b.z);
@@ -560,7 +593,7 @@ function analyze() {
       if (c >= n * 0.4) b.k = b.t === 'flax' ? 1.4 : 1.35;
     }
   });
-  S.lots.forEach(l => { l.town = -1; l.cd = 0; const q = S.kr && inKR(l.x, l.z) ? null : own(lotOBB(l), false); if (q && q.o >= 0) { l.town = q.o; l.cd = q.d; } });
+  S.lots.forEach(l => { l.town = -1; l.cd = 0; const q = heldOffAt(l.x, l.z) ? null : own(lotOBB(l), false); if (q && q.o >= 0) { l.town = q.o; l.cd = q.d; } });
   /* stations: where trains stop for each town */
   NET.stSrc = [];
   S.bld.forEach(b => { if (b.t !== 'station' || b.town < 0) return; const a = accessOf(bOBB(b), 'rail', 0.35); if (a) NET.stSrc.push({ e: a.e, s: a.s, o: b.town }); });
@@ -570,7 +603,7 @@ function analyze() {
   const comps = good => {
     const up = new Map(), find = x => { let r = x; while (up.get(r) !== r) r = up.get(r); while (up.get(x) !== r) { const n = up.get(x); up.set(x, r); x = n; } return r; };
     NODES.forEach(n => up.set(n.id, n.id));
-    EDGES.forEach(e => { if (good && !(e.k === 'rail' || e.lv >= 2)) return; const ra = find(e.a), rb = find(e.b); if (ra !== rb) up.set(ra, rb); });
+    EDGES.forEach(e => { if (e.off || (good && !(e.k === 'rail' || e.lv >= 2))) return; const ra = find(e.a), rb = find(e.b); if (ra !== rb) up.set(ra, rb); });
     const tu = tw.map((t, n) => n), tf = x => { while (tu[x] !== x) { tu[x] = tu[tu[x]]; x = tu[x]; } return x; };
     const first = new Map(), join = (n, id) => { const r = find(id); if (first.has(r)) { const a = tf(first.get(r)), b = tf(n); if (a !== b) tu[a] = b; } else first.set(r, n); };
     NET.hall.forEach((a, n) => { if (!a) return; if (!good) join(n, a.e.a); else reachGood(a, (tw[n].R || 1) * 1.6 + 1.5).forEach(id => join(n, id)); });
@@ -584,7 +617,7 @@ function analyze() {
   {
     const up = new Map(), find = x => { while (up.get(x) !== x) { up.set(x, up.get(up.get(x))); x = up.get(x); } return x; };
     NODES.forEach(n => up.set(n.id, n.id));
-    EDGES.forEach(e => { if (e.k === 'rail') { const a = find(e.a), b = find(e.b); if (a !== b) up.set(a, b); } });
+    EDGES.forEach(e => { if (e.k === 'rail' && !e.off) { const a = find(e.a), b = find(e.b); if (a !== b) up.set(a, b); } });
     const capR = new Set(NET.stSrc.filter(q => q.o === cap).map(q => find(q.e.a)));
     NET.rail = new Set(NET.stSrc.filter(q => act[q.o] && capR.has(find(q.e.a))).map(q => q.o));
   }
@@ -599,7 +632,7 @@ function analyze() {
   };
   const meet = (k, R, src) => {
     EDGES.forEach(e => {
-      if (e.k !== k || e.a === e.b) return;
+      if (e.k !== k || e.a === e.b || e.off) return;
       const oa = R.o.get(e.a), ob = R.o.get(e.b);
       if (oa !== undefined && ob !== undefined && oa !== ob) note(k, oa, ob, R.d.get(e.a) + e.L + R.d.get(e.b));
     });
@@ -620,7 +653,7 @@ function analyze() {
   NET.adj = tw.map(() => []);
   NET.edges.forEach((e, n) => { NET.adj[e.a].push(n); NET.adj[e.b].push(n); });
   NET.km = { road: [0, 0, 0, 0], rail: [0, 0, 0] }; NET.up = 0;
-  EDGES.forEach(e => { NET.km[e.k][e.lv] += e.L; NET.up += e.L * espec(e).up; });
+  EDGES.forEach(e => { if (!e.off) { NET.km[e.k][e.lv] += e.L; NET.up += e.L * espec(e).up; } });
   NET.pol = S.bld.filter(b => BT[b.t].pol).map(b => ({ x: b.x, z: b.z, p: BT[b.t].pol }));
   NET.ver++; NET.dirty = false;
 }
@@ -633,7 +666,7 @@ function reachGood(a, lim) {
     d.set(id, f);
     const n = NODES.get(id);
     let good = false;
-    for (const eid of n.e) { const e = EDGES.get(eid); if (e.k === 'rail' || e.lv >= 2) good = true; else todo.push([e.a === id ? e.b : e.a, f + e.L]); }
+    for (const eid of n.e) { const e = EDGES.get(eid); if (e.off) continue; if (e.k === 'rail' || e.lv >= 2) good = true; else todo.push([e.a === id ? e.b : e.a, f + e.L]); }
     if (good) out.push(id);
   }
   return out;
@@ -1251,7 +1284,7 @@ function genWorld(log) {
 /* A town founded by the player: hall, two short streets, one house and a few zoned lots. */
 function foundTown(x, z, rot, name) {
   const n = S.towns.length;
-  S.towns.push(newTown('t' + S.nid, name, x, z, { d: 'A new town founded by the planning ministry.', reg: regionAt(x, z), R: 1.2, pop: 2, pop0: 2, stock: { grain: 40, timber: 24 } }));
+  S.towns.push(newTown('t' + S.nid, name, x, z, { d: 'A new town founded by the planning ministry.', reg: regionAt(x, z), rg: rgnAt(x, z), R: 1.2, pop: 2, pop0: 2, stock: { grain: 40, timber: 24 } }));
   const hall = addB('hall', x, z, rot, 1);
   hall.ti = n;
   const fx = Math.sin(rot), fz = Math.cos(rot), rx = Math.cos(rot), rz = -Math.sin(rot), px = x + fx * 0.5, pz = z + fz * 0.5;

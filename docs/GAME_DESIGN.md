@@ -4,7 +4,7 @@ The current rules and numbers. The source of truth is `js/data.js` and `js/sim.j
 
 ## Fantasy and goal
 
-You lead the newly independent Lithuania from 16 February 1918. Eighty-nine towns and 362 villages, each at its real place, feed themselves. Slow dirt roads join them all, but only the railways and the old paved highways link 38 towns to Vilnius. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History interrupts with decisions: the Depression, a German boycott, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to Vilnius by railway or paved road and powered, and 2.4 million residents.
+You lead the newly independent Lithuania from 16 February 1918, inside the borders of the day: the Klaipėda Region is German and the Palanga coast is Courland's, so the new state has no sea coast. Eighty-nine towns and 362 villages, each at its real place, feed themselves. Slow dirt roads join them all, but only the railways and the old paved highways link 38 towns to Vilnius. You lay roads and railways, zone land for homes, place farms and industry, run transport routes so towns supply each other, and trade abroad. History moves the borders and interrupts with decisions: volunteers against the Red Army, Żeligowski's march on Vilnius, the litas, the Klaipėda revolt, the Depression, the ultimatums of 1938 to 1940, and, if Lithuania falls under Soviet rule, the state plan. **Goal:** reach the Modern era with every town linked to the capital by railway or paved road and powered, and 2.4 million residents (fewer if Lithuania is smaller, see Eras).
 
 Scale: the map is the real country, about 400 × 310 km, with no grid, and distances between places are true. Towns are drawn about five times larger than life so they read well: a house lot is 0.42 km across. Population is counted in thousands (`2k` is one lot of wooden houses; a village farmstead holds 0.5k). One simulation step is one day. Speeds are 2, 5 and 12 days per second.
 
@@ -13,7 +13,7 @@ Scale: the map is the real country, about 400 × 310 km, with no grid, and dista
 | Era | Requirements to enter | Unlocks |
 |---|---|---|
 | Independence (start) | none | farms, forestry, peat, flax, brickworks, dairy, pigs, fisheries, warehouses, stations, port, schools, clinics, dirt roads, railways, horse carts, steam trains |
-| Industrialization | 850k residents, 50 towns linked to Vilnius, 150 bricks in stock, 6,000 Lt | peat power stations, linen mills, furniture factories, paved roads, trucks, brick apartments, Lv 2 upgrades; towns want linen cloth and electric light |
+| Industrialization | 850k residents, 50 towns linked to the capital, 150 bricks in stock, 6,000 Lt | peat power stations, linen mills, furniture factories, paved roads, trucks, brick apartments, Lv 2 upgrades; towns want linen cloth and electric light |
 | Modern Lithuania | 1,450k residents, 70 towns linked, 500 bricks, 200 linen cloth, 25,000 Lt | hydro dams, nuclear plant, electronics plants, highways, electric railways, lorries, electric trains, panel blocks, Lv 3 upgrades; towns want electronics |
 
 ## Goods (base price in litas)
@@ -54,12 +54,12 @@ Placement: a building may not overlap another building or a road or track; near 
 
 ## Settlements, homes and growth
 
-- **1918 map:** every town that existed in 1918 and 362 villages, at their real places (Euronym names; towns founded later, such as Elektrėnai and Visaginas, are left out). The 11 main towns (`TOWNS0`) and 44 more (`TOWNS1`) have written descriptions and their 1918 sizes; six of those were still villages then. Other towns hold 1k to 3k people, villages 0.4k to 1.2k (more on fertile soil). The Klaipėda Region's 22 settlements join in 1923.
+- **1918 map:** every town that existed in 1918 and 362 villages, at their real places (Euronym names; towns founded later, such as Elektrėnai and Visaginas, are left out). The 11 main towns (`TOWNS0`) and 44 more (`TOWNS1`) have written descriptions and their 1918 sizes; six of those were still villages then. Other towns hold 1k to 3k people, villages 0.4k to 1.2k (more on fertile soil). Settlements in land others hold wait, locked, until it is Lithuanian (see Borders).
 - **Big cities:** Vilnius, Kaunas, Klaipėda, Šiauliai and Panevėžys are laid out from their real main streets (Gedimino prospektas, Pilies and Didžioji streets; Laisvės alėja and the bridges to Aleksotas and Vilijampolė; Manto street), as paved roads, filled in with a grid of streets 1 km apart. Their stations stand where the real ones do.
 - **Landmarks** at their real places, drawn about twice life size, cost nothing and cannot be removed: Gediminas Tower, the Cathedral with its bell tower, St Anne's and the Town Hall in Vilnius; the Town Hall, the castle and St Michael the Archangel in Kaunas; the theatre in Klaipėda; the cathedral and the Hill of Crosses at Šiauliai; Trakai Island Castle (in ruins); the Tiškevičius palace in Palanga; the church of Anykščiai.
 - **Railways of 1918:** St Petersburg–Warsaw (Turmantas, Ignalina, Švenčionėliai, Vilnius, Varėna), Lentvaris–Kaunas–Kybartai, Libau–Romny (Mažeikiai, Šiauliai, Radviliškis, Kėdainiai, Jonava, Kaišiadorys), Radviliškis–Panevėžys–Rokiškis, Mažeikiai and Šiauliai to Jelgava, Tilsit–Klaipėda, Vilnius to Lida and to Minsk, the narrow gauge Švenčionys–Utena–Anykščiai–Panevėžys, and Varėna–Alytus–Šeštokai. About 1,300 km, with 44 stations.
 - **Paved highways of 1918:** St Petersburg–Warsaw (Zarasai, Utena, Ukmergė, Jonava, Kaunas, Marijampolė, Kalvarija) with its branch to Kybartai, St Petersburg–Riga–Königsberg (Joniškis, Šiauliai, Tauragė, Pagėgiai), Alytus–Varėna and Merkinė–Kapčiamiestis. About 570 km.
-- **Dirt roads** join every settlement to its neighbours (about 7,400 km), and run on to the border at the main crossings. A town is **linked** when a railway or paved road from Vilnius reaches its streets (within 1.6 × its radius + 1.5 km of the hall by road); railways and paved roads also carry the power grid. A village has one street (sometimes a side lane), a wooden chapel and two to four farmsteads.
+- **Dirt roads** join every settlement to its neighbours (about 7,400 km), and run on to the border at the main crossings. A town is **linked** when a railway or paved road from the capital (Vilnius, or Kaunas while others hold Vilnius) reaches its streets (within 1.6 × its radius + 1.5 km of the hall by road); railways and paved roads also carry the power grid. A village has one street (sometimes a side lane), a wooden chapel and two to four farmsteads.
 - **Feeding itself:** every settlement's own fields add grain and potatoes for its 1918 population (`pop0`) to its stock each day (0.05 each per thousand), and its own woodlots heat that many homes. Its base workforce works its own land, so it is never jobless. A settlement therefore keeps its size for years without the player. Growth beyond `pop0` needs food from farms or routes, homes on zoned land, and jobs.
 - **Growth:** +max(0.01k, 0.4%) a day × morale/62 × (1 + 0.3 × clinic coverage), up to the housing limit, while food is at least 99% supplied and either the town is below `pop0`, or it has at least 8 days of food in stock and its food stock is not falling. A town short of food loses 2% of the people it cannot feed each day; overcrowding removes 3% of the excess.
 - **Zoning** paints lots (0.42 km, 5 Lt each) along both sides of a street. A town builds on its own lots, every 5 days (more than one at a time in towns over 50k), while homes are at least 92% full, food is at least 99% supplied and morale is at least 45. It picks the closest, cleanest lot. Houses are paid from the town's stock: wooden houses (2k people) 10 Lt and 2 timber; brick apartments (6k, era 2) 30 Lt and 5 bricks; panel blocks (15k, era 3) 75 Lt and 12 bricks. In later eras, old houses and farmsteads are rebuilt in the new style.
@@ -98,12 +98,12 @@ Each polluting building spreads `pol × (1 − distance / 2 km)` over 2 km. A to
 
 ## Foreign trade (js/history.js)
 
-Goods cross the border only at a **gateway**: a border post (`customs`, within 3 km of the border, by a road) or a sea port, in the town that owns it. The post's country is the nearest foreign land within 3.5 km (`CTY`): Latvia; the Kaliningrad region, which was East Prussia (Germany); Poland; or Belarus, whose land by Lithuania was Polish between the wars, so it trades with Poland. Routes bring goods to the gateway town; **deals** then sell from (or buy into) that town's stock every day.
+Goods cross the border only at a **gateway**: a border post (`customs`, within 3 km of the border of the day, by a road) or a sea port, in the town that owns it. The post trades with whoever holds the nearest land across within 3.5 km (`borderOf`, `OWN_GATE`): Latvia; Germany, for East Prussia and the Klaipėda Region under German or Allied rule; Poland, for its own land, the Belarusian side between the wars and a Polish Vilnius region. Land under Soviet rule has no market across the border. Routes bring goods to the gateway town; **deals** then sell from (or buy into) that town's stock every day.
 
 | Market | Gateway | Buys (× base price) | Sells (× base price) |
 |---|---|---|---|
 | Britain | sea port | dairy 1.4, meat 1.45, flax 1.25, timber 1.1, textiles 1.1, grain 0.9 | metal 1.15, textiles 1.05, electronics 1.3 |
-| Germany | East Prussian border post or sea port | meat 1.25, timber 1.2, dairy 1.1, flax 1.1, grain 1, potatoes 0.9, fish 0.9 | metal 1.1, textiles 1.15, furniture 1.2, electronics 1.4 |
+| Germany | German border post or sea port | meat 1.25, timber 1.2, dairy 1.1, flax 1.1, grain 1, potatoes 0.9, fish 0.9 | metal 1.1, textiles 1.15, furniture 1.2, electronics 1.4 |
 | Latvia | Latvian border post | grain 1.2, potatoes 1.15, bricks 1.15, peat 1.1, meat 1, timber 0.9 | fish 1, textiles 1.25, metal 1.3 |
 | Poland | Polish border post | timber 1.15, flax 1.05, dairy 1, furniture 1.1 | metal 1.2, textiles 1, bricks 1.1 |
 | The Union | railway station | most goods at 0.6–0.75 | metal 0.8, textiles 0.9, electronics 0.9 |
@@ -112,37 +112,69 @@ Goods cross the border only at a **gateway**: a border post (`customs`, within 3
 - A deal sells only what is above 10 days of the town's own use. Imports stop when storage is full or money runs out.
 - The Depression lowers farm prices abroad and at home by year: 1930 ×0.7, 1931 ×0.55, 1932 ×0.42, 1933 ×0.4, 1934 ×0.45, 1935 ×0.55, 1936 ×0.75, 1937 ×0.9 (other goods half as much).
 
+## Borders (js/history.js, S.own)
+
+The map starts with the borders of 16 February 1918 and history moves them. Four parts of today's Lithuania changed hands (`REGIONS`; outlines in `tools/geo`): the **Klaipėda Region**, the **Palanga coast**, and the **Vilnius region** in two parts (what came back in October 1939, and what Soviet Belarus kept until November 1940). The neighbours' land changes hands too: the Belarusian side is Polish from October 1920 and Soviet from September 1939; East Prussia becomes the Kaliningrad region in 1946.
+
+- Land others hold is washed in its holder's colour, with its name and holder on the map. Lithuania's border of the day is the bold dashed line.
+- Nothing can be built there, no line can be planned through it, and roads and railways there carry nothing for Lithuania. Its settlements lock with everything built there and its deals end; routes to them stop. When the land comes back, they work again at least at their 1918 size.
+- While others hold Vilnius, **Kaunas is the temporary capital**: "linked" counts towns joined to Kaunas.
+- The eras and the goal ask less of a smaller Lithuania: residents and linked towns needed scale with the share of the 1918 residents (and of the towns) living in the land held now, against the land held at the start, between 0.6 and 1.3. Losing the Vilnius region drops Industrialization from 850k to 640k residents and 50 to 44 linked towns.
+
+| Part | 16 Feb 1918 | Then (as it happened) |
+|---|---|---|
+| Klaipėda Region | Germany | the Allies from 15 Feb 1920; Lithuania from 16 Feb 1923; Germany from 22 Mar 1939; Soviet Lithuania from 28 Jan 1945 |
+| Palanga coast | Courland (Latvia) | Lithuania from 30 Mar 1921 |
+| Vilnius region | Lithuania | Poland from 8 Oct 1920 (Central Lithuania until 24 Mar 1922); Soviet from 17 Sep 1939; back to Lithuania 28 Oct 1939 (Vilnius, Trakai, Eišiškės, Švenčionėliai, Ignalina) and 6 Nov 1940 (Švenčionys, Šalčininkai, Druskininkai) |
+
+In reality the Red Army took Vilnius in January 1919 and Poland held it from April 1919 to July 1920. The game keeps the city in Lithuanian hands until the crisis of October 1920, so a new player does not lose the starting capital in the first minutes.
+
 ## History (js/history.js)
 
-Dated events go to the Chronicle. **Decision cards** stop the clock until the player picks an option; each option says whether it is what happened. Options that defy a great power work only with enough **security** (0 to 100, starts at 15): an army budget adds up to 10 a year, Baltic treaties add 8 or 18, holding the Klaipėda trial adds 6, and each year exports to Britain add up to 4 (one per 2,000 Lt).
+Dated events go to the Chronicle. **Decision cards** stop the clock until the player picks an option; each option says whether it is what happened, and the Chronicle lists every decision taken, marked as in history or not. Options that defy a great power work only with enough **security** (0 to 100, starts at 15): volunteers in 1918 add 15, an army budget adds up to 10 a year, Baltic treaties add 8 or 18, holding the Klaipėda trial adds 6, and each year exports to Britain add up to 4 (one per 2,000 Lt). Choices carry forward: without volunteers Vilnius can hardly be held; the union with Poland skips the Polish ultimatum and brings war in 1939; Moscow offers Vilnius in 1939 only if others hold it.
 
 | Date | Event | Choices and effects |
 |---|---|---|
-| 1920-07-12 | Moscow Peace Treaty | none |
-| 1920-10-09 | Żeligowski seizes Vilnius (in the game Vilnius stays yours) | Polish market closed until 1938 |
+| 1918-07-11 | The Council elects Wilhelm of Urach king (taken back in November) | none |
+| 1918-11-11 | Armistice; first government | none |
+| 1918-12-29 | **Card:** defend the new state | call for volunteers (1,500 Lt, security +15) or leave defence to others (did not happen; −5) |
+| 1919-11-22 | Bermontians beaten at Radviliškis | none |
+| 1920-02-15 | The Allies take over the Klaipėda Region | its holder changes |
+| 1920-05-15 | Constituent Assembly meets | none |
+| 1920-07-12 | Moscow Peace Treaty | 1,000 Lt (three million gold roubles) |
+| 1920-10-07 | Suwałki Agreement | none |
+| 1920-10-08 | **Card:** Żeligowski marches on Vilnius | hold the line at Širvintos (Vilnius region to Poland, Kaunas the temporary capital, +5, morale −5 for 3 years) or defend Vilnius (did not happen; 2,500 Lt; needs 35, else lost anyway, −10, morale −8) |
+| 1920-10-12 | Republic of Central Lithuania | Polish market closed until 1938 |
+| 1920-11-21 | Širvintos and Giedraičiai | none |
+| 1921-03-30 | Palanga joins | the coast: a sea port can be built |
+| 1921-09-03 | **Card:** the Hymans plan (only if Poland holds Vilnius) | reject, or a union with Poland (did not happen): Vilnius back, Polish market open, −15, morale −6 for 4 years, war in 1939 |
 | 1922-02-15 | Land Reform Law | grain and potato farms +15% |
-| 1922-10-02 | The litas | none |
-| 1923-01-10 | Klaipėda Revolt | none |
-| 1923-02-16 | Klaipėda Region transferred | Klaipėda, Šilutė and the region's villages join |
+| 1922-03-24 | Poland annexes the Vilnius region | none |
+| 1922-10-02 | **Card:** a currency of our own | the litas (1,500 Lt, Britain and Latvia ×1.05) or the German mark (did not happen; half the treasury lost on 1923-11-20) |
+| 1923-01-09 | **Card:** the Klaipėda question | back the revolt (800 Lt; the region joins on 16 February) or leave it to the Allies (did not happen; +6, Britain ×1.05; Germany takes it in March 1939) |
+| 1923-03-15 | The Vilnius line recognised as Poland's border | none |
+| 1924-05-08 | Klaipėda Convention | none |
 | 1926-12-17 | Coup: Smetona in power | none |
 | 1927 | Pienocentras (year only) | dairy ×1.5 at home, Britain ×1.05 |
 | 1929-10-29 | Wall Street crash | none |
-| 1930 | **Card:** the Depression | buy up farm produce (15 Lt a day for 5 years) or balance the budget (morale −8 for 5 years) |
+| 1930 | **Card:** the Depression | buy up farm produce (did not happen on this scale; 15 Lt a day for 5 years) or balance the budget (as happened; morale −8 for 5 years) |
 | 1934-09-12 | **Card:** Baltic Entente | sign (security +8, Latvia ×1.1), propose an alliance (did not happen; +18, 10 Lt a day), stay apart |
-| 1934-12-24 | **Card:** trial of Neumann and Sass | hold it (security +6, German boycott, Britain ×1.1) or drop it (did not happen; security −10, morale −5) |
+| 1934-12-14 | **Card:** trial of Neumann and Sass (if Klaipėda is Lithuanian) | hold it (security +6, German boycott, Britain ×1.1) or drop it (did not happen; security −10, morale −5) |
 | 1935-08-20 | Suvalkija farmers' strike, unless farm support is running | morale −10 in Suvalkija for 120 days |
 | 1936-08-05 | Trade treaty with Germany | ends the boycott |
-| 1938-03-17 | **Card:** Polish ultimatum | accept (Polish market opens, +3) or refuse (needs 40) |
-| 1939-03-20 | **Card:** German ultimatum on Klaipėda | hand over the region (−5) or refuse (needs 60, else lost by force) |
-| 1939-09-01 | War in Europe | Britain and Poland closed |
-| 1939-10-10 | **Card:** Soviet bases | accept (−30, Soviet trade) or refuse (needs 70, else occupation at once) |
+| 1938-03-17 | **Card:** Polish ultimatum (not in the union) | accept (Polish market opens, +3) or refuse (needs 40) |
+| 1939-03-20 | **Card:** German ultimatum on Klaipėda (if Lithuanian) | hand over the region (−5) or refuse (needs 60, else lost by force) |
+| 1939-09-01 | War in Europe | Britain and Poland closed; in the union, war |
+| 1939-09-17 | The Red Army invades Poland | the Belarusian side and a Polish Vilnius region become Soviet; in the union, Soviet occupation |
+| 1939-10-10 | **Card:** Soviet bases | accept (−30, Soviet trade, Vilnius back on 28 October if others held it) or refuse (needs 70, else occupation at once) |
 | 1940-06-14 | **Card:** Soviet ultimatum | accept (occupation, the Soviet path) or resist (needs 80 and no bases; else occupation with heavy losses) |
+| 1946-07-04 | Kaliningrad region | East Prussia's label changes |
 
-**The Soviet path** (as it happened): 1940-08-03 annexation (Western markets close, only the Union remains); 1941-06-14 deportations; 1941-06-22 German occupation and the Holocaust (war: output ×0.6, taxes halved, no plan); 1944-07-13 Soviet return; 1945-01-28 Klaipėda back; 1945-05-09 war ends; 1947 card: collectivization (at once: village fields −15% until 1955, then +15%; or slowly: Party trust −15, food plan ×1.2); 1948-05-22 and 1949-03-25 deportations; 1953-03-05 Stalin dies; Union projects as cards in 1955 (hydro dam near Kaunas by 1960), 1960 (power station near Kaišiadorys by 1962), 1974 (nuclear plant near Zarasai by 1983); 1988-06-03 Sąjūdis; 1989-08-23 Baltic Way; 1990-03-11 independence restored; 1990-04-18 to 07-02 Soviet blockade; 1991-09-06 recognition; 1993-08-31 last troops leave; 2004-05-01 European Union.
+**The Soviet path** (as it happened): 1940-08-03 annexation (Western markets close, only the Union remains); 1940-11-06 the rest of the Vilnius region; 1941-06-14 deportations; 1941-06-22 German occupation and the Holocaust (war: output ×0.6, taxes halved, no plan); 1944-07-13 Soviet return; 1945-01-28 Klaipėda back; 1945-05-09 war ends; 1947 card: collectivization (at once: village fields −15% until 1955, then +15%; or slowly: Party trust −15, food plan ×1.2); 1948-05-22 and 1949-03-25 deportations; 1953-03-05 Stalin dies; Union projects as cards in 1955 (hydro dam near Kaunas by 1960), 1960 (power station near Kaišiadorys by 1962), 1974 (nuclear plant near Zarasai by 1983); 1988-06-03 Sąjūdis; 1989-08-23 Baltic Way; 1990-03-11 independence restored; 1990-04-18 to 07-02 Soviet blockade; 1991-09-06 recognition; 1993-08-31 last troops leave; 2004-05-01 European Union.
 
 **The state plan:** from 1946, each year has delivery targets to the Union (grain, dairy, meat, timber, bricks; linen and furniture in era 2; electronics in era 3), scaled to the republic's population and rising 4% a year. Deliveries are deals with the Union through railway stations. At year end: 100% or more brings Union investment (1,500 + 400 per year since 1946, ×1.5 above 115%, ×1.3 with Party trust 75+) and trust +8 or +12; 80–100% costs trust 6; under 80% costs trust 15 and a year of output ×0.9. Trust under 20 replaces the republic's leaders (morale −5). Union projects pay a grant up front and a reward when the building stands in time; late costs trust 20.
 
-**The neutral path** (did not happen): if the ultimatum is resisted with enough security, Lithuania stays independent; shipping to Britain stops from 1941-06-22 until 1945-05-08, then all markets reopen and a lost Klaipėda Region returns.
+**The neutral path** (did not happen): if the ultimatum is resisted with enough security, Lithuania stays independent; shipping to Britain stops from 1941-06-22 until 1945-05-08, then all markets reopen and a lost Klaipėda Region returns. Without the Soviet path, the part of the Vilnius region Soviet Belarus kept stays Soviet.
 
 Random events every 170–340 days: bumper harvests, London butter prices, British bacon demand, timber prices abroad, a Nemunas flood in Kaunas, a wet harvest, linen fashion (era 2+).
 
@@ -159,18 +191,20 @@ Made for one hand on a phone first. One finger always moves the map; two fingers
 - **Placing a building:** it appears on the best spot near the town it was chosen for (or near the middle of the view): facing a road, on ground that suits it, where a town takes it in. Ground that suits it is lit with hatching. The player drags it, taps elsewhere to move it there, turns it, or asks for another spot.
 - **Roads and railways:** tap where the line starts, then each place it passes; drag a point to move it; Undo takes the last one back. Hold still a moment and drag to draw freehand. The plan shows new stretches in amber, old ones it upgrades in green, and anything in the way in red.
 - **Zoning** adds up street by street with taps, or by painting after a short hold. **Remove** takes one thing per tap, or everything a painted stroke touches.
-- **A town's card**: residents and their trend, morale, its link to Vilnius, six health tiles (food, heat, homes, jobs, power or storage, air), its problems worst first with one-tap fixes, the goods it makes, uses and stocks each day, its buildings, its neighbours with a button to start a route, and its stock to buy and sell.
-- **Problems and fixes.** Urgent: hungry, cold homes, blackouts. Holding it back: food running low, overcrowded, no land to build on, no materials for homes, people out of work, buildings missing an input, short of workers or stopped by full stores, smoky air, wanted goods missing, low morale. Notes: not linked to Vilnius, a railway without a station. Fixes start a route from the neighbour with the most to spare (or add a vehicle to the route there is), place the building that makes what is missing, zone land, build a warehouse, sell the surplus, or carry commuters.
-- **The Lithuania view**: residents and treasury with their trend since 1918, towns linked to Vilnius, progress to the next era, problems by kind with the places that have them, the goods the country makes and uses each day, towns sorted by need, size or name, then the goal, the era, ministry tasks and security.
+- **A town's card**: residents and their trend, morale, its link to the capital, six health tiles (food, heat, homes, jobs, power or storage, air), its problems worst first with one-tap fixes, the goods it makes, uses and stocks each day, its buildings, its neighbours with a button to start a route, and its stock to buy and sell.
+- **Problems and fixes.** Urgent: hungry, cold homes, blackouts. Holding it back: food running low, overcrowded, no land to build on, no materials for homes, people out of work, buildings missing an input, short of workers or stopped by full stores, smoky air, wanted goods missing, low morale. Notes: not linked to the capital, a railway without a station. Fixes start a route from the neighbour with the most to spare (or add a vehicle to the route there is), place the building that makes what is missing, zone land, build a warehouse, sell the surplus, or carry commuters.
+- **The Lithuania view**: residents and treasury with their trend since 1918, towns linked to the capital, progress to the next era, problems by kind with the places that have them, the goods the country makes and uses each day, towns sorted by need, size or name, then the goal, the era, ministry tasks and security.
 - **On the map**, a town's label carries a dot: red for an urgent problem, amber when something holds it back, green when it thrives. Villages show only red.
 
 ## Ministry tasks
 
-Start a new route (400 Lt), bring the railway to Marijampolė (800; it came in 1924), give a town three foods (800), bring the railway to Telšiai (800; it came in 1926), build a warehouse (300), link Biržai by rail or paved road (600), open a school (400), found a town (1,000), reach 800k residents (1,500), link Klaipėda to the railways of Lithuania after 1923 (1,500; done in 1932 through Telšiai), sell through the port (800), sell abroad through a border post or port (600), enter Industrialization (2,000), power every town (3,000; villages do not need power), reach Modern Lithuania (5,000).
+Start a new route (400 Lt), bring the railway to Marijampolė (800; it came in 1924), give a town three foods (800), bring the railway to Telšiai (800; it came in 1926), build a warehouse (300), link Biržai to the capital by rail or paved road (600), open a school (400), found a town (1,000), reach 800k residents (1,500), link Klaipėda to the railways of Lithuania once the region is Lithuanian (1,500; done in 1932 through Telšiai), sell through the port (800), sell abroad through a border post or port (600), enter Industrialization (2,000), power every town (3,000; villages do not need power), reach Modern Lithuania (5,000).
 
 ## Balance notes
 
 - Tested with the smoke test and scripted runs (`tools/smoke-test.js` jumps through the key cards). With no player input, the 1918 population of about 680k (730k with the Klaipėda Region) holds steady, and the towns with starting farms grow to about 820k by 1920; income starts near +20 Lt a day and settles near +28.
 - Without the player, the state plan is never met, so Party trust stays low; plan targets are about a third of a farm per good at the start.
 - Reaching security 80 by 1940 takes a deliberate effort: about 15 years of a 25 Lt army budget plus treaties, or steady exports to Britain.
+- Holding Vilnius in October 1920 needs security 35: the 1918 volunteers (+15) and an army budget of 25 Lt a day from the start (about +13) reach it; without the volunteers it takes 50 Lt a day. Most players following history lose the Vilnius region, about a quarter of the 1918 residents (156k of 679k), which the era scaling makes up for.
+- With the Klaipėda Region (52k in 1918) and Palanga (2k), historical Lithuania holds 561k of the 1918 residents from 1923 to 1939, about 83% of the start.
 - Not yet tested by hand: the late game (era 3), large networks of 20 or more routes, nuclear-scale power, and how hard the plan feels.

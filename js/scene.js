@@ -170,14 +170,18 @@ GTEX.colorSpace = THREE.SRGBColorSpace;
 GTEX.anisotropy = Math.min(8, R3.capabilities.getMaxAnisotropy ? R3.capabilities.getMaxAnisotropy() : 1);
 const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), bog: hx('#8a8358'), clay: hx('#ab9f6d'), sand: hx('#e3d4a4'),
   sea: hx('#3b7997'), lagoon: hx('#4b8eab'), lake: hx('#7fa98a'), foreign: hx('#b3b5a4'), autumn: hx('#b8a457') };
-/* the neighbours, each its own muted colour (by CTY code): Latvia, Belarus, Poland, East Prussia */
-const CTY_COL = ['#b3b5a4', '#93b468', '#cfa996', '#a2a8d0', '#d6c189', '#9cbfb6'], CTY_RGB = CTY_COL.map(hx);
+/* Who holds the land, each in its own muted colour: Latvia, Belarus, Poland, Germany (and East Prussia), the Allies, Soviet Russia.
+   Neighbours' land takes its holder's colour; land of today's Lithuania held by someone else is washed in it. */
+const OWN_COL = { lt: '#93b468', lv: '#cfa996', by: '#a2a8d0', pl: '#d6c189', de: '#9cbfb6', ru: '#9cbfb6', al: '#c7a2c4' }, OWN_RGB = {};
 function hx(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+for (const k in OWN_COL) OWN_RGB[k] = hx(OWN_COL[k]);
+const mixRGB = (a, b, q) => [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q, a[2] + (b[2] - a[2]) * q];
 function cellRGB(k, aut) {
   const t = TT[k], f = TF[k];
-  let c = t === T_SEA ? PAL.sea : t === T_LAGOON ? PAL.lagoon : t === T_SAND ? PAL.sand : t === T_LAKE ? PAL.lake : !(f & F_LT) ? CTY_RGB[CTY[k]]
+  let c = t === T_SEA ? PAL.sea : t === T_LAGOON ? PAL.lagoon : t === T_SAND ? PAL.sand : t === T_LAKE ? PAL.lake : !(f & F_LT) ? OWN_RGB[ownerOf(k)] || PAL.foreign
     : f & F_BOG ? PAL.bog : f & F_FOREST ? PAL.forest : f & F_FERTILE ? PAL.fert : f & F_CLAY ? PAL.clay : PAL.land;
-  if (aut && t !== T_SEA && t !== T_LAGOON) { const q = f & F_FOREST ? 0.22 : 0.4; c = [c[0] + (PAL.autumn[0] - c[0]) * q, c[1] + (PAL.autumn[1] - c[1]) * q, c[2] + (PAL.autumn[2] - c[2]) * q]; }
+  if (aut && t !== T_SEA && t !== T_LAGOON) c = mixRGB(c, PAL.autumn, f & F_FOREST ? 0.22 : 0.4);
+  if ((f & F_LT) && heldOff(k) && t !== T_SEA && t !== T_LAGOON) c = mixRGB(c, OWN_RGB[ownerOf(k)], t === T_LAKE ? 0.25 : 0.62);
   return c;
 }
 const GSRC = document.createElement('canvas');
@@ -193,11 +197,6 @@ function paintGround() {
   const g = GCANVAS.getContext('2d');
   g.imageSmoothingEnabled = true;
   g.drawImage(GSRC, 0, 0, GTEX_W, GTEX_H);
-  if (S.kr) {
-    g.fillStyle = 'rgba(112,82,150,0.2)'; g.beginPath();
-    GEO_KR.forEach(r => { polyXZ(r).forEach((p, i) => { const x = p[0] / MAPU * GTEX_W, y = p[1] / MAPV * GTEX_H; i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); });
-    g.fill();
-  }
   GTEX.needsUpdate = true; groundDirty = false; groundCells = []; lastGround = NOW;
 }
 /* small repaint after forest clearing: only the changed cells */
@@ -213,15 +212,15 @@ function patchGround() {
 /* Farmland mask: where the ground shader draws a patchwork of fields (open land, thinning out inside towns). */
 const MASK = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
 MASK.magFilter = THREE.LinearFilter; MASK.minFilter = THREE.LinearFilter; MASK.generateMipmaps = false;
-let maskTowns = -1;
+let maskTowns = -1, maskOwn = -1;
 function paintMask() {
   const d = MASK.image.data;
-  for (let k = 0; k < GW * GH; k++) { const t = TT[k], f = TF[k]; d[k * 4] = t === T_LAND && !(f & (F_FOREST | F_BOG)) ? (f & F_LT ? 255 : 140) : 0; d[k * 4 + 3] = 255; }
+  for (let k = 0; k < GW * GH; k++) { const t = TT[k], f = TF[k]; d[k * 4] = t === T_LAND && !(f & (F_FOREST | F_BOG)) ? (f & F_LT && !heldOff(k) ? 255 : 140) : 0; d[k * 4 + 3] = 255; }
   for (const t of S.towns) {
     const r = t.vil ? 0.7 : 0.6 + (t.R || 1) * 0.9;
     forDisk(t.x, t.z, r, (k, dd) => { d[k * 4] = Math.round(d[k * 4] * clamp((dd - r * 0.55) / (r * 0.45), 0, 1)); });
   }
-  MASK.needsUpdate = true; maskTowns = S.towns.length;
+  MASK.needsUpdate = true; maskTowns = S.towns.length; maskOwn = WV.own;
 }
 const FARM_PAL = { value: [0, 1, 2, 3, 4, 5].map(() => new THREE.Color()) };
 const FARM_COLS = { spring: ['#8d7754', '#93b268', '#82a85f', '#9c8a5e', '#8aad64', '#97865c'], summer: ['#a6be62', '#bcbb66', '#c7b660', '#98b862', '#aca962', '#8fb15f'],
@@ -257,6 +256,7 @@ function groundMat() {
   mat.customProgramCacheKey = () => 'ground';
   return mat;
 }
+const OUTER = {};
 const GROUND = (() => {
   const geo = new THREE.PlaneGeometry(MAPU, MAPV, 1, 1);
   geo.rotateX(-Math.PI / 2); geo.translate(MAPU / 2, 0, MAPV / 2);
@@ -266,13 +266,15 @@ const GROUND = (() => {
   const outer = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2).translate(MAPU / 2, -0.05, MAPV / 2),
     snowy(new THREE.MeshLambertMaterial({ color: '#b3b5a4' }), 1, true));
   outer.renderOrder = -1; SCENE.add(outer);
-  /* the neighbours' land beyond the edge of the map, in their colours */
+  /* the neighbours' land beyond the edge of the map, in their holders' colours (outerColours) */
   for (const c of ['lv', 'by', 'pl', 'ru']) {
-    const col = new THREE.Color(CTY_COL[CTY_ID[c]]), mat = snowy(new THREE.MeshLambertMaterial({ color: col }), 1, true);
+    const mat = snowy(new THREE.MeshLambertMaterial({ color: OWN_COL[c] }), 1, true);
+    OUTER[c] = mat;
     GEO_C[c].forEach(r => { const g = shapeGeo(polyXZ(r)); g.translate(0, -0.03, 0); const mm = new THREE.Mesh(g, mat); mm.renderOrder = -1; SCENE.add(mm); });
   }
   return m;
 })();
+function outerColours() { for (const c in OUTER) OUTER[c].color.set(OWN_COL[S.own[c]] || OWN_COL[c]); }
 
 /* ---------- water ---------- */
 function shapeGeo(pxz, holes) {
@@ -329,28 +331,86 @@ const WATER = (() => {
   add(flatGeo(out), M.lake);
   return M;
 })();
-/* Borders: Lithuania's bold and dashed, the neighbours' between themselves thin. Widths follow the zoom. */
-let BORDER = [], borderW = 0;
+/* Borders: Lithuania's bold and dashed, the neighbours' thin, both as they stood on the day. A line is drawn where the land on
+   its two sides has different holders: today's borders (GEO_BORD) and the lines of the parts of Lithuania that changed hands
+   (GEO_KRW, GEO_PAL, GEO_V39, GEO_V40). Each line is cut into short pieces that know which land lies on either side, so the
+   drawing follows S.own. Widths follow the zoom. */
+let BORDER = [], borderW = 0, borderOwn = -1, BPIECES = null;
+/* A piece's side: {r} a part of Lithuania (RGN code) or {c} a neighbour's land (S.own key) */
+const sideOwner = q => q.c ? S.own[q.c] : q.r ? S.own[RGN_KEY[q.r]] : 'lt';
+function borderPieces() {
+  const out = [], grid = new Map();
+  const landCell = (x, z) => { const k = cellAt(x, z); return k >= 0 && TT[k] !== T_SEA && TT[k] !== T_LAGOON ? k : -1; };
+  /* the part of Lithuania nearest a point, within 6 km */
+  const ltNear = (x, z) => { for (let r = 0.5; r <= 6; r += 0.5) { let best = -1, bd = 1e9; forDisk(x, z, r, (k, d) => { if ((TF[k] & F_LT) && d < bd) { bd = d; best = k; } }); if (best >= 0) return { r: RGN[best] }; } return { r: 0 }; };
+  const gk = (x, z) => (Math.floor(x / 0.5) + 2000) * 8192 + Math.floor(z / 0.5) + 2000;
+  let line = 0;
+  /* a piece repeats one already kept when a piece of another line lies within 0.3 km */
+  const dup = (x, z) => {
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const c = grid.get(gk(x + i * 0.5, z + j * 0.5));
+      if (c) for (const q of c) if (q.l !== line && Math.hypot(q.x - x, q.z - z) < 0.3) return true;
+    }
+    return false;
+  };
+  /* lines are walked in even 0.5 km pieces; pieces of one line share their ends, so they can be drawn as one ribbon */
+  const walk = (P0, fn) => {
+    line++;
+    const P = resample(P0, 0.5);
+    let s = 0;
+    for (let i = 1; i < P.length; i++) {
+      const p0 = P[i - 1], p1 = P[i], L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+      if (L < 1e-6) continue;
+      const mx = (p0[0] + p1[0]) / 2, mz = (p0[1] + p1[1]) / 2;
+      if (!dup(mx, mz)) {
+        const sides = fn(mx, mz, -(p1[1] - p0[1]) / L, (p1[0] - p0[0]) / L);
+        if (sides) {
+          const k = gk(mx, mz); let c = grid.get(k); if (!c) grid.set(k, c = []);
+          c.push({ x: mx, z: mz, l: line }); out.push({ p0, p1, s, a: sides[0], b: sides[1] });
+        }
+      }
+      s += L;
+    }
+  };
+  for (const b of GEO_BORD) walk(polyXZ(b.p), (x, z) => [b.a === 'lt' ? ltNear(x, z) : { c: b.a }, b.b === 'lt' ? ltNear(x, z) : { c: b.b }]);
+  const inner = (x, z, nx, nz) => {
+    const ka = landCell(x + nx * 0.6, z + nz * 0.6), kb = landCell(x - nx * 0.6, z - nz * 0.6);
+    return ka >= 0 && kb >= 0 && (TF[ka] & F_LT) && (TF[kb] & F_LT) ? [{ r: RGN[ka] }, { r: RGN[kb] }] : null;
+  };
+  [GEO_KRW, GEO_PAL, GEO_V39, GEO_V40].forEach(g => g.forEach(w => [w.o, ...w.h].forEach(r => walk(polyXZ(r), inner))));
+  return out;
+}
 function buildBorder() {
   const w = Math.max(0.18, cam.dist * 0.0035);
-  if (BORDER.length && Math.abs(Math.log(w / borderW)) < 0.35) return;
-  borderW = w;
+  if (BORDER.length && borderOwn === WV.own && Math.abs(Math.log(w / borderW)) < 0.35) return;
+  borderW = w; borderOwn = WV.own;
   BORDER.forEach(m => { SCENE.remove(m); m.geometry.dispose(); });
   BORDER = [];
+  if (!BPIECES) BPIECES = borderPieces();
   const lt = { pos: [], uv: [], idx: [] }, other = { pos: [], uv: [], idx: [] };
-  for (const b of GEO_BORD) {
-    const own = b.a === 'lt' || b.b === 'lt', P = polyXZ(b.p), ww = own ? w : w * 0.6, dash = Math.max(1.2, ww * 5), gap = dash * (own ? 0.6 : 0.9), out = own ? lt : other;
-    let s0 = 0;
-    for (let i = 1; i < P.length; i++) {
-      const a = P[i - 1], c = P[i], L = Math.hypot(c[0] - a[0], c[1] - a[1]);
-      for (let s = -s0; s < L; s += dash + gap) {
-        const st = Math.max(0, s), e = Math.min(L, s + dash);
-        if (e > st) ribbon([[a[0] + (c[0] - a[0]) * st / L, a[1] + (c[1] - a[1]) * st / L], [a[0] + (c[0] - a[0]) * e / L, a[1] + (c[1] - a[1]) * e / L]], ww, 0, 1, out);
-      }
-      s0 = (s0 + L) % (dash + gap);
+  /* pieces that follow on from each other make one run, so a dash bends with the line */
+  let run = null;
+  const flush = () => {
+    if (!run) return;
+    const own = run.own, ww = own ? w : w * 0.6, dash = Math.max(1.2, ww * 5), gap = dash * (own ? 0.6 : 0.9), per = dash + gap, out = own ? lt : other;
+    const c = polyCum(run.P), L = c[c.length - 1];
+    /* dashes keep their rhythm along the whole line: they start every per km from the line's beginning */
+    for (let s = Math.floor(run.s / per) * per - run.s; s < L; s += per) {
+      const a = Math.max(0, s), e = Math.min(L, s + dash);
+      if (e - a > 0.05) ribbon(polySlice(run.P, c, a, e), ww, 0, 1, out);
     }
+    run = null;
+  };
+  for (const q of BPIECES) {
+    const oa = sideOwner(q.a), ob = sideOwner(q.b);
+    if (oa === ob || !oa || !ob) { flush(); continue; }
+    const own = oa === 'lt' || ob === 'lt';
+    if (run && run.own === own && run.P[run.P.length - 1] === q.p0) { run.P.push(q.p1); continue; }
+    flush(); run = { own, s: q.s, P: [q.p0, q.p1] };
   }
+  flush();
   for (const [out, col, op] of [[lt, '#4a3422', 0.85], [other, '#5d5a52', 0.55]]) {
+    if (!out.idx.length) continue;
     const m = new THREE.Mesh(flatGeo(out), decal(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }), 2));
     m.renderOrder = 2; SCENE.add(m); BORDER.push(m);
   }
@@ -772,13 +832,13 @@ const NEED_MESH = (() => {
 })();
 let needDrawn = '';
 function updateNeed() {
-  const k = VIEW.need || '', key = k + ':' + lastGround + ':' + S.kr;
+  const k = VIEW.need || '', key = k + ':' + lastGround + ':' + WV.own;
   NEED_MESH.visible = !!k;
   if (!k || key === needDrawn) return;
   needDrawn = key;
   const d = NEED_TEX.image.data, bit = NEED_BIT[k];
   for (let k2 = 0; k2 < GW * GH; k2++) {
-    const f = TF[k2], t = TT[k2], on = (f & bit) && (f & F_LT) && (t === T_LAND || t === T_SAND) && !(S.kr && (f & F_KR));
+    const f = TF[k2], t = TT[k2], on = (f & bit) && (f & F_LT) && (t === T_LAND || t === T_SAND) && !heldOff(k2);
     const o = ((GH - 1 - ((k2 / GW) | 0)) * GW + (k2 % GW)) * 4;
     d[o] = 255; d[o + 1] = 222; d[o + 2] = 89; d[o + 3] = on ? 255 : 0;
   }
@@ -794,7 +854,25 @@ function syncLabels() {
     el.className = 'tl'; el.dataset.ti = String(LBLS.length); el.innerHTML = '<i class="dot"></i><b></b><span></span>';
     LBL.appendChild(el); LBLS.push({ el, b: el.querySelector('b'), s: el.querySelector('span'), d: el.querySelector('.dot'), key: '' });
   }
-  if (!NLBL.length) MAP_LBL.forEach(([s, lo, la, k]) => { const el = document.createElement('div'); el.className = 'nl' + (k === 's' ? ' sea' : k === 't' ? ' tn' : ''); el.textContent = s; LBL.appendChild(el); NLBL.push({ el, p: ll2xz(lo, la), k }); });
+  if (!NLBL.length) {
+    MAP_LBL.forEach(([s, lo, la, k]) => { const el = document.createElement('div'); el.className = 'nl' + (k === 's' ? ' sea' : k === 't' ? ' tn' : ''); el.textContent = s; LBL.appendChild(el); NLBL.push({ el, p: ll2xz(lo, la), k, s, txt: s }); });
+    /* the parts of Lithuania others hold get a name and their holder while they are away */
+    for (const rg of ['kr', 'vr', 'vr2']) { const el = document.createElement('div'); el.className = 'nl rg'; LBL.appendChild(el); NLBL.push({ el, p: ll2xz(...REGIONS[rg].at), k: 'r', rg, txt: '' }); }
+  }
+}
+/* Map names as they stood on the day, in Lithuanian like the rest of the map */
+const OWN_LT = { de: 'Vokietija', al: 'Antantės valdžia', pl: 'Lenkija', lv: 'Latvija', by: 'Sovietų Sąjunga', ru: 'Sovietų Sąjunga' };
+function nlText(n) {
+  if (n.k === 'r') {
+    const o = S.own[n.rg], d = ymd(S.day);
+    if (o === 'lt' || (n.rg === 'vr2' && o === S.own.vr)) return '';
+    if (n.rg === 'kr') return (o === 'de' && d < '1920-02-15' ? 'MAŽOJI LIETUVA' : REGIONS.kr.lt) + '\n' + OWN_LT[o];
+    if (o === 'pl' && d >= '1920-10-12' && d < '1922-03-24') return 'VIDURIO LIETUVA\nLenkijos valdoma';
+    return REGIONS[n.rg].lt + '\n' + OWN_LT[o];
+  }
+  if (n.s === 'BALTARUSIJA') return S.own.by === 'pl' ? 'LENKIJA' : n.s;
+  if (n.s === 'RYTŲ PRŪSIJA') return S.own.ru === 'ru' ? 'KALININGRADO SRITIS' : n.s;
+  return n.s;
 }
 function place(el, x, y, show) {
   if (!show) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
@@ -813,13 +891,17 @@ function updateLabels() {
     place(L.el, x, y, on);
     if (!on) return;
     const al = townAlert(t, heatOn);
-    const lockTxt = S.hist.lost ? 'Germany' : '1923', key = t.n + '|' + (t.lock ? lockTxt : popStr(t.pop)) + '|' + sel + al + t.lock;
+    const lockTxt = OWN_SHORT[S.own[t.rg]] || '', key = t.n + '|' + (t.lock ? lockTxt : popStr(t.pop)) + '|' + sel + al + t.lock + t.capital;
     if (key === L.key) return;
     L.key = key; L.b.textContent = t.n.toUpperCase(); L.s.textContent = t.lock ? lockTxt : popStr(t.pop);
     L.el.className = 'tl' + (sel ? ' sel' : '') + (t.lock ? ' lock' : '') + (t.capital ? ' cap' : '') + (t.vil ? ' vil' : t.pop0 < 20 && !t.capital ? ' sm' : '');
     L.d.className = 'dot' + (al >= 2 ? ' bad' : al === 1 ? ' warn' : al < 0 ? ' good' : '');
   });
-  NLBL.forEach(n => { const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]); place(n.el, x, y, ok && (n.k === 't' ? cam.dist > 14 && cam.dist < 300 : n.k === 's' ? cam.dist > 100 : cam.dist > 60)); });
+  NLBL.forEach(n => {
+    if (n.k === 'r' || n.k === 'c') { const tx = nlText(n); if (tx !== n.txt) { n.txt = tx; const [a, b] = tx.split('\n'); n.el.innerHTML = b ? `${a}<small>${b}</small>` : a; } }
+    const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]);
+    place(n.el, x, y, ok && !!n.txt && (n.k === 't' ? cam.dist > 14 && cam.dist < 300 : n.k === 's' ? cam.dist > 100 : n.k === 'r' ? cam.dist > 28 : cam.dist > 60));
+  });
   /* problem markers over buildings */
   let i = 0;
   if (cam.dist < 18) for (const b of S.bld) {
@@ -869,12 +951,12 @@ function pickBuilding(sx, sy) {
 let seasonKey = '';
 function seasonUpdate() {
   SNOW_U.value += (SEASON.snow - SNOW_U.value) * 0.08;
-  const ice = SEASON.snow > 0.75 ? 1 : 0, key = (SEASON.aut > 0.5 ? 1 : 0) + ':' + ice + ':' + WV.kr;
+  const ice = SEASON.snow > 0.75 ? 1 : 0, key = (SEASON.aut > 0.5 ? 1 : 0) + ':' + ice + ':' + WV.own;
   const fk = farmSeason();
   if (fk !== FARM_PAL.k) { FARM_PAL.k = fk; FARM_COLS[fk].forEach((c, i) => FARM_PAL.value[i].set(c)); }
-  if (maskTowns !== S.towns.length) paintMask();
+  if (maskTowns !== S.towns.length || maskOwn !== WV.own) paintMask();
   if (key !== seasonKey) {
-    seasonKey = key; paintGround();
+    seasonKey = key; paintGround(); outerColours();
     WATER.lake.color.set(ice ? '#d3e5ec' : '#4f97b4'); WATER.lagoon.color.set(ice ? '#a9c9d6' : '#4b8eab');
   } else if (groundCells.length && NOW - lastGround > 1500) patchGround();
 }

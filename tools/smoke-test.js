@@ -2,7 +2,8 @@
 /* Headless smoke test. Loads every script in a stub browser (one vm context, one script at a time, exactly like
    separate <script> tags). three.js runs for real and builds every mesh; only the WebGL renderer is replaced.
    It boots the game, drives the tools and the route editor the way the UI does, plays about two in-game years,
-   renders every panel and zoom level, then saves and reloads. Exit code 1 on any exception or failed assertion.
+   walks history through its borders and decisions (as they happened, and the other ways), renders every panel and
+   zoom level, then saves and reloads. Exit code 1 on any exception or failed assertion.
    Extend it whenever you add a system. */
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const root = path.join(__dirname, '..');
@@ -62,7 +63,17 @@ for (const f of order) {
 assert(true, `loaded ${order.length} scripts in index.html order`);
 
 /* ---- play session (runs inside the game's global scope) ---- */
-const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t)}};
+const session = `(function(){const out={};let t=0;
+  /* the player answers each decision card as history went */
+  const hopt=id=>Math.max(0,CARDS[id].opts.findIndex(o=>o.h)),answer=()=>{while(S.hist.cards.length)act({act:'card',o:String(hopt(S.hist.cards[0]))})};
+  const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t);answer()}};
+  /* history without the economy, a day at a time, answering cards as history went unless pick says otherwise */
+  const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
+  const keep=()=>JSON.stringify(serialize(),SAVE_NUM),back=s=>{restore(JSON.parse(s));analyze()},T=n=>S.towns.find(x=>x.n===n);
+  /* the borders of 16 February 1918: the Klaipėda Region German, the Palanga coast Courland's, the Vilnius region ours */
+  out.own0=['kr','pal','vr','vr2','by'].map(k=>S.own[k]).join(',');out.lock0=[T('Klaipėda').lock,T('Palanga').lock,T('Vilnius').lock,T('Švenčionys').lock].join('');out.cap0=capital().n;
+  {const P=T('Palanga');out.palMsg=validPlace('farm',P.x+0.3,P.z+0.5,0).why;out.rg0=[T('Perloja').rg,T('Varėna').rg,T('Vievis').rg,T('Turmantas').rg,T('Druskininkai').rg].join(',')}
+  out.lbl0=nlText({k:'r',rg:'kr'});{let lt=0;for(const q of borderPieces()){const a=sideOwner(q.a),b=sideOwner(q.b);if(a!==b&&(a==='lt'||b==='lt'))lt++}out.bord0=lt}
   out.tut0=TUT.on&&TUT.step===0;out.towns=S.towns.length;out.vils=S.towns.filter(x=>x.vil).length;out.named=TOWNS0.length+TOWNS1.length;out.pop0=totals().pop;
   out.halls=S.towns.every((x,n)=>S.bld.some(b=>b.t==='hall'&&b.ti===n));out.homes=S.towns.every((x,n)=>x.lock||S.bld.some(b=>b.t==='house'&&b.town===n));out.routes0=S.routes.length;out.histOk=S.routes.every(r=>{routeEval(r);return r.ok});
   out.edges=S.edges.length;out.houses=S.bld.filter(b=>b.t==='house').length;out.lots=S.lots.length;
@@ -70,7 +81,7 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   const cap0=S.towns.findIndex(x=>x.capital);out.places=S.towns.length===PLACES.length&&typeof WORLD1918!=='undefined';out.lm=S.bld.filter(b=>b.lm).length;
   out.roadAll=S.towns.filter((x,n)=>!x.lock&&NET.comp[n]!==NET.comp[cap0]).map(x=>x.n);out.linked0=totals().linked;out.railKm=Math.round(NET.km.rail[1]);out.paved=Math.round(NET.km.road[2]);
   const kh=S.bld.find(b=>b.lm==='krot'),kp=ll2xz(23.8857,54.8968);out.kauHall=!!kh&&Math.hypot(kh.x-kp[0],kh.z-kp[1])<0.05;
-  const bp=(lo,la)=>{const p=ll2xz(lo,la);return borderOf(p[0],p[1])};out.gates=[bp(22.78,54.65),bp(24.4,56.38),bp(26.0,54.95),bp(23.5,54.05)].join(',');
+  const bp=(lo,la)=>{const p=ll2xz(lo,la);return borderOf(p[0],p[1])};out.gates=[bp(22.78,54.65),bp(24.4,56.38),bp(26.0,54.95),bp(23.5,54.05),bp(21.25,55.85)].join(',');
   run(20,16);S.speed=3;run(120,100);out.day1=S.day;out.walkers=WALK.length;out.vehicles=VEH.length;out.renders=R3.calls;
   const kau=S.towns.find(x=>x.id==='kau'),aly=S.towns.find(x=>x.id==='aly'),ki=S.towns.indexOf(kau),ai=S.towns.indexOf(aly);
   /* a road from Kaunas to Alytus, drawn as a finger trace */
@@ -119,11 +130,29 @@ const session = `(function(){const out={};let t=0;const run=(n,dt)=>{for(let q=0
   setTool('inspect');analyze();out.post=!!post&&post.town===kyi&&post.gate==='de';out.postWhy=post?post.gate+' town '+post.town:'not placed';
   addDeal('de','grain','out',5,kyi);S.speed=0;const f0=S.funds;for(let q=0;q<3;q++)tick();const dl=S.deals[0];out.deal=dl.done>0&&dl.val>0;out.dealWhy=dl.why||dl.done.toFixed(1)+' a day for '+dl.val.toFixed(0)+' Lt';
   S.tab='trade';renderPanel(true);renderPanel(false);
+  /* history: Żeligowski marches on Vilnius in October 1920. Defending it works only with enough security; holding the line at
+     Širvintos, as happened, loses the Vilnius region to Poland and makes Kaunas the temporary capital */
+  out.vol=S.hist.picks.volunteers===0;jump('1920-10-08');S.speed=2;tick();out.card0=S.hist.cards[0];const s20=keep();
+  S.hist.sec=40;act({act:'card',o:'1'});out.defend=S.own.vr==='lt'&&!T('Vilnius').lock&&capital().n==='Vilnius';back(s20);
+  S.hist.sec=10;act({act:'card',o:'1'});out.defendFail=S.own.vr==='pl'&&T('Vilnius').lock===1;back(s20);
+  const vb=S.bld.find(b=>b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.town===tIdx('vil'));act({act:'card',o:'0'});analyze();tick();
+  out.lost=[S.own.vr,S.own.vr2,S.own.by,capital().n,T('Vilnius').lock,T('Kaunas').capital].join(',');out.lostB=vb?vb.town===-1&&/Poland/.test(vb.why):true;
+  out.vilRoute=(S.routes.find(r=>S.towns[r.a].id==='vil'||S.towns[r.b].id==='vil')||{}).why||'';out.offEdges=[...EDGES.values()].filter(e=>e.off).length;
+  out.gates1=[bp(24.95,54.75),bp(26.0,54.95)].join(',');out.req=eraReq()[0].t;
+  /* the Hymans plan: a union with Poland brings Vilnius back, and takes Lithuania into Poland's war in 1939 */
+  jump('1921-09-03');tick();out.card4=S.hist.cards[0];const s21=keep();act({act:'card',o:'1'});out.union=S.own.vr==='lt'&&S.hist.union===1&&S.mkt.pl.open;
+  jump('1939-09-18');out.unionWar=S.hist.path==='soviet';back(s21);act({act:'card',o:'0'});
+  /* the litas, and what keeping the German mark would have cost */
+  jump('1922-10-02');S.funds=20000;tick();const s22=keep();act({act:'card',o:'1'});jump('1923-11-21');const fm=S.funds;back(s22);out.litasCard=S.hist.cards[0];act({act:'card',o:'0'});
+  jump('1923-11-21');out.markLoss=[Math.round(fm),Math.round(S.funds)];
+  out.pal=[S.own.pal,T('Palanga').lock].join(',');out.kr=[S.own.kr,T('Klaipėda').lock].join(',');
   /* history: the Klaipėda trial card in December 1934 pauses the game; letting it go ahead closes the German market */
-  const jump=ds=>{HEV.forEach((e,i)=>{if(e.d<ds)S.ev[i]=1});S.day=Math.round((Date.parse(ds)-START)/864e5)-1};
-  jump('1934-12-24');S.speed=2;tick();out.card1=S.hist.cards[0];out.paused=S.speed===0;act({act:'card',o:'0'});out.trial=!S.mkt.de.open&&S.speed===2&&S.hist.picks.trial===0;
+  jump('1934-12-14');S.speed=2;tick();out.card1=S.hist.cards[0];out.paused=S.speed===0;act({act:'card',o:'0'});out.trial=!S.mkt.de.open&&S.speed===2&&S.hist.picks.trial===0;
+  /* Vilnius comes back in October 1939 with the Soviet bases, the rest of its region in November 1940 */
+  jump('1939-10-29');out.back39=[S.own.kr,S.own.vr,S.own.vr2,capital().n,T('Švenčionys').lock].join(',');
   /* the Soviet ultimatum, accepted as in 1940: a planned economy with deliveries to the Union */
   jump('1940-06-14');tick();out.card2=S.hist.cards[0];act({act:'card',o:'0'});out.soviet=S.hist.path==='soviet'&&!S.mkt.gb.open&&S.mkt.su.open&&!S.deals.length;
+  jump('1940-11-07');out.back40=[S.own.vr2,T('Švenčionys').lock].join(',');out.dec=decisions().map(d=>d.as).join('');
   jump('1946-01-01');tick();out.plan=!!S.plan&&S.plan.y===1946&&Object.keys(S.plan.tgt).length>=5;
   const sti=S.towns.findIndex((x,n)=>!x.lock&&townGates(n).has('rail'));if(sti>=0){S.towns[sti].stock.grain=140;addDeal('su','grain','out',4,sti)}
   for(let q=0;q<3;q++)tick();out.planGot=S.plan?(S.plan.got.grain||0):0;S.tab='trade';renderPanel(true);renderPanel(false);
@@ -152,7 +181,10 @@ assert(o.renders > 0 && o.vehicles > 0, `3D frames render and route vehicles (${
 assert(o.places && o.lm === Object.keys(LANDMARKS_N).length && o.kauHall, `the start map loads with every place of 1918 and ${o.lm} landmarks at their real places`);
 assert(!o.roadAll.length, `dirt roads join every open settlement to Vilnius${o.roadAll.length ? ' (cut off: ' + o.roadAll.join(', ') + ')' : ''}`);
 assert(o.linked0 >= 30 && o.railKm > 1000 && o.paved > 400, `${o.linked0} towns linked to Vilnius by ${o.railKm} km of railway and ${o.paved} km of paved highway`);
-assert(o.gates === 'de,lv,pl,pl', `border posts trade with the country across: East Prussia, Latvia, Belarus (Polish), Poland (${o.gates})`);
+assert(o.gates === 'de,lv,,pl,de', `border posts trade with whoever holds the land across in 1918: East Prussia, Latvia, nobody on the Belarusian side, Poland, the German Klaipėda Region (${o.gates})`);
+assert(o.own0 === 'de,lv,lt,lt,by' && o.lock0 === '1100' && o.cap0 === 'Vilnius', `the borders of 1918: the Klaipėda Region German, the Palanga coast Latvian, the Vilnius region Lithuanian, Vilnius the capital (${o.own0}; locks ${o.lock0})`);
+assert(o.palMsg === 'The Palanga coast belongs to Latvia' && o.rg0 === ',vr,,vr,vr2', `nothing can be built on land others hold, and the 1920 line puts each town on its side (${o.palMsg}; Perloja, Varėna, Vievis, Turmantas, Druskininkai: ${o.rg0})`);
+assert(o.lbl0 === 'MAŽOJI LIETUVA\nVokietija' && o.bord0 > 300, `the map names the Klaipėda Region as part of Germany and draws Lithuania's border of the day (${o.bord0} pieces)`);
 assert(o.roadPend && o.roadAdded > 0.5, `road tool builds a road from Kaunas toward Alytus${o.roadWhy ? ': ' + o.roadWhy : ` (${(o.roadAdded || 0).toFixed(1)} km new)`}`);
 assert(o.tap1 && o.undo && o.tapRoad && o.tapAdded > 0.5, `a road drawn by taps: start, a bend undone, an end (${o.tapWhy || (o.tapAdded || 0).toFixed(1) + ' km new'})`);
 assert(o.newRouteOk, 'new road route Kaunas–Alytus is created and valid');
@@ -173,6 +205,15 @@ assert(o.steady, `towns and villages keep their 1918 size without help${o.low ? 
 assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`);
 assert(o.post, `a border post in Kybartai trades with Germany (${o.postWhy})`);
 assert(o.deal, `a deal sells grain to Germany (${o.dealWhy})`);
+assert(o.vol && o.card0 === 'vilnius', `the 1918 volunteers card is answered in play, and Żeligowski's march on Vilnius comes on 8 October 1920 (${o.card0})`);
+assert(o.defend && o.defendFail, 'defending Vilnius holds the city with security 40, and fails with security 10');
+assert(o.lost === 'pl,pl,pl,Kaunas,1,1' && o.lostB && /Poland/.test(o.vilRoute), `holding the line at Širvintos, as happened, loses the Vilnius region to Poland and makes Kaunas the temporary capital (${o.lost}; ${o.vilRoute})`);
+assert(o.offEdges > 300 && o.gates1 === 'pl,pl' && /^6\d0k/.test(o.req), `nothing travels through the lost region (${o.offEdges} lines), border posts face Poland, and the next era asks less: ${o.req}`);
+assert(o.card4 === 'hymans' && o.union && o.unionWar, 'the Hymans plan: a union with Poland brings Vilnius back, and Soviet occupation in September 1939');
+assert(o.litasCard === 'litas' && o.markLoss[0] < o.markLoss[1], `keeping the German mark costs half the treasury in 1923 (${o.markLoss.join(' Lt against ')} Lt with the litas)`);
+assert(o.pal === 'lt,0' && o.kr === 'lt,0', 'Palanga joins in March 1921, and the Klaipėda Region after the revolt of January 1923');
+assert(o.back39 === 'de,lt,by,Vilnius,1' && o.back40 === 'lt,0', `Vilnius returns in October 1939 and is the capital again; Švenčionys follows in November 1940 (${o.back39}; ${o.back40})`);
+assert(/^1+$/.test(o.dec), `the chronicle counts every decision as history went (${o.dec})`);
 assert(o.card1 === 'trial' && o.paused && o.trial, `the Klaipėda trial card pauses the game, and holding the trial closes the German market (${o.card1})`);
 assert(o.card2 === 'ultimatum' && o.soviet, `accepting the Soviet ultimatum starts Soviet rule and closes Western markets (${o.card2})`);
 assert(o.plan && o.planGot > 0, `the state plan sets targets and deliveries count (${o.planGot.toFixed(1)} grain)`);

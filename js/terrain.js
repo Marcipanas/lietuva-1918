@@ -2,9 +2,19 @@
 /* Lietuva 1918 — terrain. A hidden raster of CELL-km cells holds terrain type and features (forest, soil, bog, clay)
    for the rules and the path planner. The player sees smooth 3D ground drawn from it; nothing snaps to it. */
 const TT = new Uint8Array(GW * GH), TF = new Uint8Array(GW * GH), TF0 = new Uint8Array(GW * GH);
-/* CTY: the country of each cell, 0 for water. CTY_ID gives the codes; CTY_GATE the market a border post there trades with
-   (East Prussia was Germany; the Belarusian side was Polish between the wars). */
-const CTY = new Uint8Array(GW * GH), CTY_ID = { lt: 1, lv: 2, by: 3, pl: 4, ru: 5 }, CTY_GATE = [null, null, 'lv', 'pl', 'pl', 'de'];
+/* CTY: the country of each cell today, 0 for water. CTY_ID gives the codes; CTY_KEY the key in S.own for who held it then
+   (East Prussia was Germany's until 1945; the Belarusian side was Polish between the wars). */
+const CTY = new Uint8Array(GW * GH), CTY_ID = { lt: 1, lv: 2, by: 3, pl: 4, ru: 5 }, CTY_KEY = [null, 'lt', 'lv', 'by', 'pl', 'ru'];
+/* RGN: the part of today's Lithuania a cell lies in (RGN_KEY): 0 land that stayed Lithuanian, 1 the Klaipėda Region,
+   2 the Palanga strip, 3 and 4 the Vilnius region (what came back in October 1939, and in November 1940).
+   Who holds each part, and each neighbour's land (CTY_KEY), is S.own: history hands them over. */
+const RGN = new Uint8Array(GW * GH), RGN_KEY = ['', 'kr', 'pal', 'vr', 'vr2'];
+/* The holder of a cell: 'lt', a neighbour ('lv', 'pl', 'by', 'ru'), Germany 'de', the Allies 'al', or '' for open water. */
+function ownerOf(k) { const c = CTY[k]; return c === 1 ? (RGN[k] ? S.own[RGN_KEY[RGN[k]]] : 'lt') : c > 1 ? S.own[CTY_KEY[c]] : ''; }
+/* A cell of today's Lithuania that someone else holds now: nothing can be built there. */
+function heldOff(k) { return !!RGN[k] && S.own[RGN_KEY[RGN[k]]] !== 'lt'; }
+function heldOffAt(x, z) { const k = cellAt(x, z); return k >= 0 && heldOff(k); }
+function rgnAt(x, z) { const k = cellAt(x, z); return k < 0 ? '' : RGN_KEY[RGN[k]]; }
 /* BLK marks what is built on each cell for the path planner: 1 building, 2 road, 4 railway, 8 zoned lot. */
 const BLK = new Uint8Array(GW * GH);
 let terrainHook = null; // set by the renderer: called with a list of changed cells (forest cleared or deposits added)
@@ -100,6 +110,7 @@ function genTerrain() {
   }
   for (let k = 0; k < GW * GH; k++) if (TT[k] === UNK) TT[k] = T_FOREIGN;
   GEO_KR.forEach(r => fillPoly(polyXZ(r), k => { if (TF[k] & F_LT) TF[k] |= F_KR; }));
+  [[GEO_KRW, 1], [GEO_PAL, 2], [GEO_V39, 3], [GEO_V40, 4]].forEach(([g, c]) => g.forEach(w => fillGeoPoly(w, k => { if ((TF[k] & F_LT) && !RGN[k]) RGN[k] = c; })));
   /* sandy shore along the open sea, and the dunes of the Curonian Spit */
   for (let k = 0; k < GW * GH; k++) {
     if (TT[k] !== T_LAND) continue;
@@ -219,11 +230,11 @@ function setFlags(cells, set, clear) {
 
 /* ---------- path planning on the hidden raster ---------- */
 const PL = { g: new Float32Array(GW * GH), par: new Int32Array(GW * GH), st: new Uint32Array(GW * GH), stamp: 1, reuse: 0.35 };
-/* Cost of entering a cell; Infinity where a road or track cannot go. gen = world generation (ignores the 1923 lock). */
+/* Cost of entering a cell; Infinity where a road or track cannot go. gen = world generation (builds in land held by others too). */
 function planCost(k, mode, gen) {
   const t = TT[k], f = TF[k];
   if (!(f & F_LT) || t === T_SEA || t === T_LAGOON || t === T_LAKE || t === T_FOREIGN) return Infinity;
-  if (!gen && (f & F_KR) && S.kr) return Infinity;
+  if (!gen && heldOff(k)) return Infinity;
   const b = BLK[k];
   if (b & (mode === 'road' ? 2 : 4)) return t === T_RIVER ? 0.5 : PL.reuse; // reuse a line of the same kind (it has its bridges)
   if (b & 1) return Infinity;
