@@ -168,7 +168,7 @@ GCANVAS.width = GTEX_W; GCANVAS.height = GTEX_H;
 const GTEX = new THREE.CanvasTexture(GCANVAS);
 GTEX.colorSpace = THREE.SRGBColorSpace;
 GTEX.anisotropy = Math.min(8, R3.capabilities.getMaxAnisotropy ? R3.capabilities.getMaxAnisotropy() : 1);
-const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), bog: hx('#8a8358'), clay: hx('#ab9f6d'), sand: hx('#e3d4a4'),
+const PAL = { land: hx('#93b468'), fert: hx('#aebc6b'), forest: hx('#5f8a4b'), bog: hx('#8a8358'), clay: hx('#ab9f6d'), lime: hx('#b3b592'), sand: hx('#e3d4a4'),
   sea: hx('#3b7997'), lagoon: hx('#4b8eab'), lake: hx('#7fa98a'), foreign: hx('#b3b5a4'), autumn: hx('#b8a457') };
 /* Who holds the land, each in its own muted colour: Latvia, Belarus, Poland, Germany (and East Prussia), the Allies, Soviet Russia.
    Neighbours' land takes its holder's colour; land of today's Lithuania held by someone else is washed in it. */
@@ -180,7 +180,7 @@ const mixRGB = (a, b, q) => [a[0] + (b[0] - a[0]) * q, a[1] + (b[1] - a[1]) * q,
 function cellRGB(k, aut) {
   const t = TT[k], f = TF[k];
   let c = t === T_SEA ? PAL.sea : t === T_LAGOON ? PAL.lagoon : t === T_SAND ? PAL.sand : t === T_LAKE ? PAL.lake : !(f & F_LT) ? OWN_RGB[ownerOf(k)] || PAL.foreign
-    : f & F_BOG ? PAL.bog : f & F_FOREST ? PAL.forest : f & F_FERTILE ? PAL.fert : f & F_CLAY ? PAL.clay : PAL.land;
+    : f & F_BOG ? PAL.bog : f & F_FOREST ? PAL.forest : f & F_FERTILE ? PAL.fert : f & F_CLAY ? PAL.clay : f & F_LIME ? PAL.lime : PAL.land;
   if (aut && t !== T_SEA && t !== T_LAGOON) c = mixRGB(c, PAL.autumn, f & F_FOREST ? 0.22 : 0.4);
   if ((f & F_LT) && heldOff(k) && t !== T_SEA && t !== T_LAGOON) c = mixRGB(c, OWN_RGB[ownerOf(k)], t === T_LAKE ? 0.25 : 0.62);
   return c;
@@ -550,7 +550,7 @@ class Pool {
     _p.set(x, y, z); _q.setFromAxisAngle(_Y, rot); _s.set(sx, sy, sz);
     e.mesh.setMatrixAt(i, _m4.compose(_p, _q, _s));
     /* every instance gets a colour, so the colour buffer never holds black for earlier instances */
-    if (color !== undefined) _c.set(color); else _c.setRGB(1, 1, 1);
+    if (Array.isArray(color)) _c.setRGB(color[0], color[1], color[2]); else if (color !== undefined) _c.set(color); else _c.setRGB(1, 1, 1);
     e.mesh.setColorAt(i, _c);
     this.n.set(key, i + 1);
   }
@@ -573,7 +573,8 @@ const LOT_TEX = canvasTex(64, 64, (g, w, h) => {
 });
 const LOT_MAT = decal(new THREE.MeshBasicMaterial({ map: LOT_TEX, transparent: true }), 2.7);
 const CROP = { grain: [['#d4bb5f', '#aec66d'], '#8c6a45'], grain2: [['#cbb75c', '#b9c770'], '#8c6a45'], potato: [['#6f9a4a', '#7aa452'], '#7a5a3a'],
-  flax: [['#9db7e6', '#a9c0ea'], '#c9b27a'], peat: [['#5e4a3a', '#5e4a3a'], '#5e4a3a'], pasture: [['#8fbf5f', '#96c463'], '#b5ad5e'], garden: [['#86a356', '#8f7f55'], '#7a6a48'] };
+  flax: [['#9db7e6', '#a9c0ea'], '#c9b27a'], peat: [['#5e4a3a', '#5e4a3a'], '#5e4a3a'], pasture: [['#8fbf5f', '#96c463'], '#b5ad5e'], garden: [['#86a356', '#8f7f55'], '#7a6a48'],
+  beet: [['#4f8f52', '#5b9a55'], '#7d6a4a'] };
 function cropCol(crop, id) { const c = CROP[crop]; return SEASON.aut > 0.5 ? c[1] : c[0][hash2(id, 3, 9) < 0.5 ? 0 : 1]; }
 let bldKey = '', FLAG_LIST = [];
 /* Only buildings around the view are drawn; far out, each house lot is one simple block. */
@@ -589,7 +590,7 @@ function buildBuildings() {
   bldKey = key;
   BLD.begin(); FIELDP.begin(); FLAGS.begin(); FLAG_LIST = [];
   for (const b of S.bld) {
-    if (b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3]) continue;
+    if (b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3] || isSite(b)) continue;
     if (b.t === 'house') {
       if (noHomes) continue;
       if (far && b.lv === 1) {
@@ -612,6 +613,56 @@ function buildBuildings() {
   }
   BLD.end(); FIELDP.end(); FLAGS.end();
   rebuildEmitters();
+}
+/* ---------- building sites ----------
+   A plan is marked out on the ground; the building then rises as the builders work, cut off at the height they have reached,
+   inside a scaffold, with a pile of materials beside it once some have come. A building being modernized gets a scaffold. */
+const SITEP = new Pool(5.1, false), PLANP = new Pool(2.75, false);
+const PLAN_TEX = canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h); g.fillStyle = 'rgba(214,180,120,0.42)'; g.fillRect(4, 4, w - 8, h - 8);
+  g.strokeStyle = 'rgba(120,84,40,0.16)'; g.lineWidth = 3; for (let q = -h; q < w; q += 22) { g.beginPath(); g.moveTo(q, h); g.lineTo(q + h, 0); g.stroke(); }
+  g.strokeStyle = 'rgba(242,169,59,0.98)'; g.lineWidth = 7; g.setLineDash([20, 14]); g.strokeRect(6, 6, w - 12, h - 12);
+});
+const PLAN_MAT = decal(new THREE.MeshBasicMaterial({ map: PLAN_TEX, transparent: true }), 2.75);
+/* the finished model drawn up to a height: each instance's colour carries that height in its red channel */
+const SITE_MAT = (() => {
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  mat.onBeforeCompile = sh => {
+    sh.vertexShader = 'varying float vCutY;\nvarying float vLocY;\n' + sh.vertexShader.replace('#include <color_vertex>',
+      '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\n  vColor = vec3( 1.0 );\n#endif\n#ifdef USE_COLOR\n  vColor *= color;\n#endif\n  vLocY = position.y;\n#ifdef USE_INSTANCING_COLOR\n  vCutY = instanceColor.r;\n#else\n  vCutY = 1.0e6;\n#endif');
+    sh.fragmentShader = 'varying float vCutY;\nvarying float vLocY;\n' + sh.fragmentShader.replace('#include <color_fragment>',
+      '#include <color_fragment>\n  if ( vLocY > vCutY ) discard;\n  diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.66, 0.5, 0.32 ), 0.42 );');
+  };
+  mat.customProgramCacheKey = () => 'site-cut';
+  return mat;
+})();
+let siteKey = '', SITE_LIST = [], siteVer = -1;
+function buildSites() {
+  if (siteVer !== WV.bld) { siteVer = WV.bld; SITE_LIST = S.bld.filter(b => b.c); }
+  if (!SITE_LIST.length && siteKey === '') return;
+  const box = bldView();
+  let key = WV.bld + ':' + box.map(v => v.toFixed(1)).join(',');
+  for (const b of SITE_LIST) key += ':' + Math.round((b.c ? b.c.p : 1) * 40);
+  if (key === siteKey) return;
+  siteKey = SITE_LIST.length ? key : '';
+  SITEP.begin(); PLANP.begin();
+  for (const b of SITE_LIST) {
+    if (!b.c || b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3]) continue;
+    const mk = modelKey(b), M = model(mk), fp = b.fp || BT[b.t].fp, o = { x: b.x, z: b.z, rot: b.rot }, p = b.c.p, got = Object.keys(b.c.g).some(k => k !== 'lt' && b.c.g[k] > 0.5);
+    /* the scaffold stands round buildings without fields; farms and the like are mostly open land */
+    const sw = Math.min(fp[0], 1.2) * (M.fields ? 0.36 : 0.86), sd = Math.min(fp[1], 1.2) * (M.fields ? 0.36 : 0.86);
+    const [sx, sz] = M.fields ? toWorld(o, -fp[0] * 0.3, fp[1] * 0.3) : [b.x, b.z];
+    if (b.c.up) { SITEP.add('scaf', siteGeo('scaf'), MAT.bld, sx, 0, sz, b.rot, sw, Math.max(0.08, Math.min(M.h, 0.3) + 0.03), sd); continue; }
+    PLANP.add('plan', FIELD_GEO, PLAN_MAT, b.x, 0, b.z, b.rot, fp[0], 1, fp[1]);
+    if (p > 0.01) {
+      SITEP.add('s:' + mk, M.geo, SITE_MAT, b.x, 0, b.z, b.rot, 1, 1, 1, [Math.max(0.012, M.h * p), 0, 0]);
+      SITEP.add('scaf', siteGeo('scaf'), MAT.bld, sx, 0, sz, b.rot, sw, Math.max(0.06, Math.min(M.h, 0.3) * Math.min(1, p + 0.2) + 0.02), sd);
+    }
+    const [px, pz] = toWorld(o, fp[0] / 2 - 0.1, fp[1] / 2 - 0.06), [gx, gz] = toWorld(o, -fp[0] / 2 + 0.07, fp[1] / 2 - 0.03);
+    if (got && p < 0.97) SITEP.add('pile', siteGeo('pile'), MAT.bld, px, 0, pz, b.rot, 1, 1, 1);
+    SITEP.add('sign', siteGeo('sign'), MAT.bld, gx, 0, gz, b.rot, 1, 1, 1);
+  }
+  SITEP.end(); PLANP.end();
 }
 let lotKey = '';
 function buildLots() {
@@ -719,6 +770,7 @@ function rebuildEmitters() {
   EMIT = [];
   for (const b of S.bld) {
     if (b.t === 'house') { if (b.lv === 1 && hash2(b.id, 5, 5) < 0.6) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, -0.07, 0.085); EMIT.push({ b, x, y: 0.1, z, kind: 'home', acc: hash2(b.id, 1, 1) }); } continue; }
+    if (isSite(b)) continue;
     const M = model(modelKey(b));
     if (M.smoke) for (const [sx, sy, sz, kind] of M.smoke) { const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, sx, sz); EMIT.push({ b, x, y: sy, z, kind, acc: hash2(b.id, 2, 2) }); }
   }
@@ -778,7 +830,7 @@ function updateCritters() {
     const t = NOW / 1000;
     for (const b of S.bld) {
       if (Math.hypot(b.x - cam.x, b.z - cam.z) > cam.dist * 2) continue;
-      const M = b.t === 'house' ? null : model(modelKey(b)), o = { x: b.x, z: b.z, rot: b.rot };
+      const M = b.t === 'house' || isSite(b) ? null : model(modelKey(b)), o = { x: b.x, z: b.z, rot: b.rot };
       if (!M) continue;
       if (M.cows && SEASON.snow < 0.5) for (const [cx, cz, w, d] of M.cows) for (let q = 0; q < 5; q++) {
         const ph = t * 0.05 + q * 1.7 + b.id, lx = cx + Math.sin(ph) * w * 0.4, lz = cz + Math.cos(ph * 0.8) * d * 0.4, [x, z] = toWorld(o, lx, lz);
@@ -865,7 +917,7 @@ function buildOverlays() {
 function overlayPulse() { const a = 0.55 + 0.4 * Math.sin(NOW / 260); OVM.ring.opacity = a; NEED_MAT.opacity = 0.42 + 0.14 * Math.sin(NOW / 420); }
 
 /* ---------- where the chosen building fits: clay, bog or forest, or the land where it does best (fertile soil, flax belt) ---------- */
-const NEED_BIT = { clay: F_CLAY, bog: F_BOG, forest: F_FOREST, fertile: F_FERTILE, flaxland: F_FLAX };
+const NEED_BIT = { clay: F_CLAY, bog: F_BOG, forest: F_FOREST, fertile: F_FERTILE, flaxland: F_FLAX, lime: F_LIME };
 const NEED_TEX = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
 NEED_TEX.magFilter = THREE.LinearFilter; NEED_TEX.minFilter = THREE.LinearFilter; NEED_TEX.generateMipmaps = false;
 const NEED_MAT = decal(new THREE.MeshBasicMaterial({ map: NEED_TEX, transparent: true, opacity: 0.5 }), 1);
@@ -960,18 +1012,30 @@ function updateLabels() {
   });
   /* problem markers over buildings */
   let i = 0;
+  if (cam.dist < 26) for (const b of SITE_LIST) {
+    if (i >= 30 || !b.c || !BMAP.has(b.id)) continue;
+    const M = model(modelKey(b)), [x, y, ok] = toScreen(b.x, (b.c.up ? M.h : Math.max(0.05, M.h * b.c.p)) + 0.1, b.z);
+    if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
+    let el = STATUS[i];
+    if (!el) { el = document.createElement('i'); el.className = 'st'; LBL.appendChild(el); STATUS.push(el); }
+    const wait = b.c.hold || b.town < 0 || (b.wait && b.wait.length && b.cw !== 'Building'), txt = b.c.hold ? 'II' : b.town < 0 ? '!' : wait ? '…' : Math.round(b.c.p * 100) + '%', cls = 'st cs' + (b.town < 0 ? ' bad' : wait ? ' wait' : '');
+    if (el.className !== cls) el.className = cls;
+    if (el.textContent !== txt) el.textContent = txt;
+    place(el, x, y, true); i++;
+  }
   if (cam.dist < 18) for (const b of S.bld) {
-    if (i >= 40) break;
+    if (i >= 60) break;
     const T0 = BT[b.t];
-    if (b.t === 'house' || b.t === 'hall' || !(T0.w || b.t === 'station' || b.t === 'port' || b.t === 'warehouse')) continue;
+    if (b.t === 'house' || b.t === 'hall' || isSite(b) || !(T0.w || b.t === 'station' || b.t === 'port' || b.t === 'warehouse')) continue;
     const prob = b.town < 0 || (T0.w && b.eff < 0.35 && b.on) || b.why === 'Storage full';
     if (!prob) continue;
     const [x, y, ok] = toScreen(b.x, model(modelKey(b)).h + 0.08, b.z);
     if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
     let el = STATUS[i];
     if (!el) { el = document.createElement('i'); el.className = 'st'; LBL.appendChild(el); STATUS.push(el); }
-    const cls = 'st' + (b.na === 'locked' ? ' lock' : b.why === 'Storage full' ? ' full' : '');
-    if (el.className !== cls) { el.className = cls; el.textContent = b.na === 'locked' ? '·' : '!'; }
+    const cls = 'st' + (b.na === 'locked' ? ' lock' : b.why === 'Storage full' ? ' full' : ''), txt = b.na === 'locked' ? '·' : '!';
+    if (el.className !== cls) el.className = cls;
+    if (el.textContent !== txt) el.textContent = txt;
     place(el, x, y, true); i++;
   }
   for (; i < STATUS.length; i++) place(STATUS[i], 0, 0, false);
@@ -986,7 +1050,7 @@ function townProd() {
   const key = S.day + ':' + WV.bld;
   if (key === prodKey && PROD_T) return PROD_T;
   prodKey = key; PROD_T = S.towns.map(() => ({}));
-  S.bld.forEach(b => { const T0 = BT[b.t]; if (b.town < 0 || !T0.out) return; for (const r in T0.out) PROD_T[b.town][r] = (PROD_T[b.town][r] || 0) + T0.out[r] * LV[b.lv] * (b.k || 1) * b.eff; });
+  S.bld.forEach(b => { const T0 = BT[b.t]; if (b.town < 0 || !T0.out || isSite(b)) return; for (const r in T0.out) PROD_T[b.town][r] = (PROD_T[b.town][r] || 0) + T0.out[r] * LV[b.lv] * (b.k || 1) * b.eff; });
   return PROD_T;
 }
 function prodMarks() {
@@ -996,7 +1060,7 @@ function prodMarks() {
     for (const b of S.bld) {
       if (j >= 140) break;
       const T0 = BT[b.t];
-      if (b.t === 'house' || !(T0.out || T0.pow) || (want && !(T0.out && T0.out[want]))) continue;
+      if (b.t === 'house' || isSite(b) || !(T0.out || T0.pow) || (want && !(T0.out && T0.out[want]))) continue;
       const r = T0.out ? Object.keys(T0.out)[0] : null, [x, y, ok] = toScreen(b.x, model(modelKey(b)).h + 0.05, b.z);
       if (!ok || x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
       const el = pmark(j++), idle = b.town < 0 || b.eff < 0.35, key = (r || 'pow') + idle;
@@ -1028,7 +1092,7 @@ function pickBuilding(sx, sy) {
   const R0 = Math.max(3, cam.dist * 0.2);
   space();
   BH.query(g[0] - R0, g[1] - R0, g[0] + R0, g[1] + R0, b => {
-    const o = bOBB(b), h = b.t === 'house' ? (b.lv === 3 ? 0.55 : b.lv === 2 ? 0.26 : 0.18) * MS : model(modelKey(b)).h;
+    const o = bOBB(b), h = b.t === 'house' ? (b.lv === 3 ? 0.55 : b.lv === 2 ? 0.26 : 0.18) * MS : isSite(b) ? Math.max(0.06, model(modelKey(b)).h * b.c.p) : model(modelKey(b)).h;
     const ox = r.o.x - b.x, oz = r.o.z - b.z, c = Math.cos(b.rot), s = Math.sin(b.rot);
     const lo = [ox * c - oz * s, r.o.y, ox * s + oz * c], ld = [r.d.x * c - r.d.z * s, r.d.y, r.d.x * s + r.d.z * c];
     const mn = [-o.w / 2, 0, -o.d / 2], mx = [o.w / 2, h, o.d / 2];
@@ -1068,7 +1132,7 @@ function draw(dt) {
   SEASON = seasonOf(S.day); seasonUpdate();
   VOFF.y = Math.abs(VOFF.ty - VOFF.y) < 0.5 ? VOFF.ty : VOFF.y + (VOFF.ty - VOFF.y) * Math.min(1, dt * 9);
   camAnimate(dt); applyCam();
-  buildBorder(); buildLines(); buildBuildings(); buildLots(); updateTrees(); buildOverlays(); overlayPulse(); updateNeed();
+  buildBorder(); buildLines(); buildBuildings(); buildSites(); buildLots(); updateTrees(); buildOverlays(); overlayPulse(); updateNeed();
   if (typeof drawAgents === 'function') drawAgents(dt);
   updateEffects(dt); updateLabels();
   R3.render(SCENE, CAM3);

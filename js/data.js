@@ -1,7 +1,7 @@
 'use strict';
 /* Lietuva 1918 — game rules. Loaded after common.js. */
 /* SAVE_KEY carries the version: a new version starts a new game, and older saves are dropped (dropOldSaves in sim.js). */
-const SAVE_KEY='lietuva1918-0.11.1', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
+const SAVE_KEY='lietuva1918-0.12.0', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
 /* The world is continuous: x = km east, z = km south of the map corner at 20.75°E, 56.55°N. North is -z.
    The country is drawn MAPK times its real size, so towns have room between them: a drawn km is 1/MAPK of a real km.
    Towns and buildings keep their drawn size (a house lot is LOT_W km across), about five times larger than life.
@@ -13,7 +13,7 @@ function kmTxt(x){return num(x/MAPK)}
 /* Hidden terrain raster used for rules and path planning only; the player never sees it. */
 const CELL=0.5, GW=Math.round(MAPU/CELL), GH=Math.round(MAPV/CELL);
 const T_FOREIGN=0,T_LAND=1,T_SEA=2,T_LAGOON=3,T_LAKE=4,T_RIVER=5,T_SAND=6;
-const F_FOREST=1,F_FERTILE=2,F_BOG=4,F_CLAY=8,F_FLAX=16,F_KR=32,F_LT=64;
+const F_FOREST=1,F_FERTILE=2,F_BOG=4,F_CLAY=8,F_FLAX=16,F_KR=32,F_LT=64,F_LIME=128;
 /* Distances in drawn km. TERRITORY: road distance from a town hall within which buildings join that town.
    VIL_OFF: workplaces join a village only when it is this much nearer than any town (villages have few workers).
    ACCESS: how far a building may stand from the road that serves it. HALL_GAP: least distance between settlements.
@@ -21,51 +21,68 @@ const F_FOREST=1,F_FERTILE=2,F_BOG=4,F_CLAY=8,F_FLAX=16,F_KR=32,F_LT=64;
 const TERRITORY=15*MAPK, WALK_KM=30*MAPK, ACCESS=0.3, POL_R=2, HALL_GAP=4*MAPK, TRIP_OVERHEAD=22*MAPK, VIL_OFF=6*MAPK, BORDER_KM=3*MAPK;
 const LOT_W=0.42, LOT_D=0.42, LOT_GAP=0.46;
 
-const RES=['grain','potatoes','dairy','meat','fish','timber','peat','flax','bricks','textiles','furniture','metal','electronics'];
+const RES=['grain','potatoes','dairy','meat','fish','timber','peat','flax','beet','planks','bricks','beer','sugar','textiles','furniture','metal','cement','fertiliser','electronics'];
 const FOOD=['grain','potatoes','dairy','meat','fish'], FUEL=['peat','timber'];
+/* building materials: construction sites and new homes use them, and routes on Auto keep a small buffer of each in the towns they serve */
+const MATS=['timber','planks','bricks','metal','cement'];
 const RI={
   grain:{n:'Grain',era:1,p:2,ic:'grain',food:1}, potatoes:{n:'Potatoes',era:1,p:1.6,ic:'potato',food:1}, dairy:{n:'Dairy',era:1,p:6,ic:'butter',food:1},
   meat:{n:'Meat',era:1,p:8,ic:'meat',food:1}, fish:{n:'Fish',era:1,p:5,ic:'fish',food:1},
-  timber:{n:'Timber',era:1,p:3,ic:'timber'}, peat:{n:'Peat',era:1,p:2.5,ic:'peat'}, flax:{n:'Flax',era:1,p:4,ic:'flax'}, bricks:{n:'Bricks',era:1,p:6,ic:'bricks'},
-  textiles:{n:'Linen cloth',era:2,p:20,ic:'textiles'}, furniture:{n:'Furniture',era:2,p:26,ic:'furniture'},
-  metal:{n:'Metal',era:3,p:30,ic:'metal',port:1}, electronics:{n:'Electronics',era:3,p:80,ic:'chip'}
+  timber:{n:'Timber',era:1,p:3,ic:'timber'}, peat:{n:'Peat',era:1,p:2.5,ic:'peat'}, flax:{n:'Flax',era:1,p:4,ic:'flax'}, beet:{n:'Sugar beet',era:2,p:1.8,ic:'beet'},
+  planks:{n:'Planks',era:1,p:5.5,ic:'planks'}, bricks:{n:'Bricks',era:1,p:6,ic:'bricks'}, beer:{n:'Beer',era:1,p:6,ic:'beer'},
+  sugar:{n:'Sugar',era:2,p:12,ic:'sugar'}, textiles:{n:'Linen cloth',era:2,p:20,ic:'textiles'}, furniture:{n:'Furniture',era:2,p:26,ic:'furniture'},
+  metal:{n:'Metal',era:2,p:30,ic:'metal',port:1}, cement:{n:'Cement',era:3,p:9,ic:'cement'}, fertiliser:{n:'Fertiliser',era:3,p:14,ic:'fert'},
+  electronics:{n:'Electronics',era:3,p:80,ic:'chip'}
 };
-/* Building types. fp = footprint [width, depth] in km; the front (depth side) faces the road. w = workers in thousands; figures per day; pol = pollution. */
+/* Goods towns want beyond food and fuel, per thousand residents a day. up: morale where the want is met; down: morale lost where
+   it is not, which grows over WANT_YEARS from the day the era begins, so a new era is not a cliff. Villages make their own. */
+const WANTS=[{r:'beer',era:1,per:0.008,up:4,down:0},{r:'textiles',era:2,per:0.012,up:7,down:7},{r:'sugar',era:2,per:0.006,up:4,down:3},{r:'electronics',era:3,per:0.004,up:8,down:8}], WANT_YEARS=4;
+/* Building types. fp = footprint [width, depth] in km; the front (depth side) faces the road. w = workers in thousands; figures per day; pol = pollution.
+   cost: what its construction site takes (money from the treasury, materials from its town's stock); bd: days the builders need once
+   the materials are there. fert: its fields take fertiliser when the town has some. */
 const BT={
-  hall:{n:'Town hall',cat:'civic',era:1,fp:[0.5,0.5],noUp:1,ic:'hall',cost:{lt:800,timber:40},d:'Founds a new town. Buildings on roads within 15 km of it join it.'},
+  hall:{n:'Town hall',cat:'civic',era:1,fp:[0.5,0.5],noUp:1,ic:'hall',cost:{lt:800,planks:40},d:'Founds a new town. Buildings on roads within 15 km of it join it. Paid at once.'},
   house:{n:'Houses',era:1,fp:[LOT_W,LOT_D],noUp:1,ic:'house'},
   landmark:{n:'Landmark',era:1,fp:[0.2,0.2],noUp:1,ic:'star'},
-  farm:{n:'Grain farm',cat:'food',era:1,fp:[1.1,1],w:10,out:{grain:8},need:'open',bonus:'fertile',cost:{lt:250,timber:20},d:'35% more on fertile soil.'},
-  potato:{n:'Potato fields',cat:'food',era:1,fp:[1,1],w:8,out:{potatoes:9},need:'open',bonus:'fertile',cost:{lt:200,timber:15},d:'The staple of every kitchen. 35% more on fertile soil.'},
-  dairy:{n:'Dairy farm',cat:'food',era:1,fp:[1,0.9],w:10,in:{grain:2},out:{dairy:4},need:'open',cost:{lt:450,timber:30},d:'Milk, cheese and butter. Butter was the great interwar export.'},
-  pigs:{n:'Pig farm',cat:'food',era:1,fp:[0.5,0.45],w:8,in:{potatoes:3},out:{meat:3},pol:1,cost:{lt:400,timber:30},d:'Bacon for the towns and for export. Smells: keep it away from homes.'},
-  fishery:{n:'Fishery',cat:'food',era:1,fp:[0.45,0.4],w:8,out:{fish:5},need:'water',cost:{lt:350,timber:25},d:'Build on a shore: sea, lagoon, lake or river.'},
-  forestry:{n:'Forestry camp',cat:'raw',era:1,fp:[0.45,0.45],w:10,out:{timber:8},need:'forest',cost:{lt:200},d:'Place in a forest. More trees around it, more timber.'},
-  peat:{n:'Peat works',cat:'raw',era:1,fp:[1,1],w:12,out:{peat:8},need:'bog',pol:1,cost:{lt:300,timber:20},d:'Must sit on a peat bog. Peat heats homes and fires brick kilns.'},
-  flax:{n:'Flax fields',cat:'raw',era:1,fp:[1,1],w:8,out:{flax:6},need:'open',bonus:'flaxland',cost:{lt:250,timber:15},d:'40% more in the Aukštaitija flax belt.'},
-  brick:{n:'Brickworks',cat:'industry',era:1,fp:[0.55,0.5],w:14,in:{peat:3},out:{bricks:5},need:'clay',pol:2,cost:{lt:600,timber:40},d:'Must sit on clay ground.'},
-  warehouse:{n:'Warehouse',cat:'transport',era:1,fp:[0.8,0.6],store:1,cost:{lt:500,timber:50},d:'Raises the town’s storage by 400 of every good. Upgrades hold more.'},
-  station:{n:'Railway station',cat:'transport',era:1,fp:[0.65,0.3],need:'rail',noUp:1,ic:'rail',cost:{lt:300,timber:20},d:'Joins a town to the railway. Place it next to a track, with a road to town.'},
-  customs:{n:'Border post',cat:'transport',era:1,fp:[0.4,0.3],need:'border',noUp:1,ic:'gate',cost:{lt:400,timber:20},d:'Lets its town trade with the country across the nearest border. Build it within 3 km of the border, by a road.'},
-  port:{n:'Sea port',cat:'transport',era:1,fp:[1,0.8],need:'coast',noUp:1,ic:'anchor',cost:{lt:3000,timber:100},d:'Trades by sea with Britain and Germany. Sells to local merchants for 40% more.'},
-  school:{n:'School',cat:'civic',era:1,fp:[0.5,0.4],w:3,svc:'school',ic:'school',cost:{lt:600,timber:40},d:'One school per 50k residents raises output in the whole town by up to 10%.'},
-  clinic:{n:'Clinic',cat:'civic',era:1,fp:[0.45,0.4],w:3,svc:'clinic',ic:'clinic',cost:{lt:700,timber:40},d:'One clinic per 70k residents lifts morale and growth.'},
-  power:{n:'Peat power station',cat:'power',era:2,fp:[0.9,0.9],w:14,in:{peat:4},pow:30,pol:4,ic:'bolt',cost:{lt:1800,bricks:60},d:'Burns peat. Linked towns share one grid.'},
-  linen:{n:'Linen mill',cat:'industry',era:2,fp:[1,0.8],w:24,in:{flax:4},powNeed:5,out:{textiles:4},pol:2,cost:{lt:2200,bricks:80},d:'Flax to cloth, like Linas in Panevėžys.'},
-  furniture:{n:'Furniture factory',cat:'industry',era:2,fp:[0.9,0.75],w:20,in:{timber:5},powNeed:4,out:{furniture:3},pol:1,cost:{lt:2000,bricks:60}},
-  hydro:{n:'Hydro dam',cat:'power',era:3,fp:[0.5,0.8],w:10,pow:140,noUp:1,need:'river',ic:'wave',cost:{lt:9000,bricks:300},d:'Built across a river. No fuel, no smoke.'},
-  nuclear:{n:'Nuclear power plant',cat:'power',era:3,fp:[1.4,1.4],w:40,pow:450,noUp:1,need:'lake',ic:'atom',cost:{lt:30000,bricks:600,metal:150},d:'Needs a lake for cooling, like Ignalina (1983).'},
-  elec:{n:'Electronics plant',cat:'industry',era:3,fp:[0.9,0.8],w:30,in:{metal:2},powNeed:10,out:{electronics:3},pol:1,cost:{lt:7000,bricks:150}}
+  farm:{n:'Grain farm',cat:'food',era:1,fp:[1.1,1],w:10,out:{grain:8},need:'open',bonus:'fertile',fert:1,cost:{lt:250,planks:15},bd:14,d:'35% more on fertile soil.'},
+  potato:{n:'Potato fields',cat:'food',era:1,fp:[1,1],w:8,out:{potatoes:9},need:'open',bonus:'fertile',fert:1,cost:{lt:200,planks:10},bd:12,d:'The staple of every kitchen. 35% more on fertile soil.'},
+  dairy:{n:'Dairy farm',cat:'food',era:1,fp:[1,0.9],w:10,in:{grain:2},out:{dairy:4},need:'open',cost:{lt:450,planks:25},bd:20,d:'Milk, cheese and butter. Butter was the great interwar export.'},
+  pigs:{n:'Pig farm',cat:'food',era:1,fp:[0.5,0.45],w:8,in:{potatoes:3},out:{meat:3},pol:1,cost:{lt:400,planks:20},bd:18,d:'Bacon for the towns and for export. Smells: keep it away from homes.'},
+  fishery:{n:'Fishery',cat:'food',era:1,fp:[0.45,0.4],w:8,out:{fish:5},need:'water',cost:{lt:350,planks:20},bd:16,d:'Build on a shore: sea, lagoon, lake or river.'},
+  forestry:{n:'Forestry camp',cat:'raw',era:1,fp:[0.45,0.45],w:10,out:{timber:8},need:'forest',cost:{lt:200},bd:10,d:'Place in a forest. More trees around it, more timber. Timber heats homes, lies under railway tracks and feeds the sawmills.'},
+  peat:{n:'Peat works',cat:'raw',era:1,fp:[1,1],w:12,out:{peat:8},need:'bog',pol:1,cost:{lt:300,planks:10},bd:14,d:'Must sit on a peat bog. Peat heats homes and fires brick kilns.'},
+  flax:{n:'Flax fields',cat:'raw',era:1,fp:[1,1],w:8,out:{flax:6},need:'open',bonus:'flaxland',fert:1,cost:{lt:250,planks:10},bd:12,d:'40% more in the Aukštaitija flax belt.'},
+  beet:{n:'Sugar beet fields',cat:'raw',era:2,fp:[1,1],w:8,out:{beet:9},need:'open',bonus:'fertile',fert:1,cost:{lt:300,planks:15},bd:12,d:'Beet for the sugar factories. 35% more on fertile soil.'},
+  sawmill:{n:'Sawmill',cat:'industry',era:1,fp:[0.6,0.5],w:8,in:{timber:6},out:{planks:5},cost:{lt:350,timber:25},bd:20,d:'Saws timber into planks, which most buildings are made of. Sawn timber also sells well abroad.'},
+  brick:{n:'Brickworks',cat:'industry',era:1,fp:[0.55,0.5],w:14,in:{peat:3},out:{bricks:5},need:'clay',pol:2,cost:{lt:600,planks:30},bd:30,d:'Must sit on clay ground.'},
+  brewery:{n:'Brewery',cat:'industry',era:1,fp:[0.55,0.5],w:6,in:{grain:3},out:{beer:4},cost:{lt:500,planks:25,bricks:15},bd:35,d:'Brews beer from grain. Towns with beer are happier, and Latvia buys it.'},
+  warehouse:{n:'Warehouse',cat:'transport',era:1,fp:[0.8,0.6],store:1,cost:{lt:500,planks:40},bd:25,d:'Raises the town’s storage by 400 of every good. Upgrades hold more.'},
+  station:{n:'Railway station',cat:'transport',era:1,fp:[0.65,0.3],need:'rail',noUp:1,ic:'rail',cost:{lt:300,planks:20},bd:20,d:'Joins a town to the railway. Place it next to a track, with a road to town.'},
+  customs:{n:'Border post',cat:'transport',era:1,fp:[0.4,0.3],need:'border',noUp:1,ic:'gate',cost:{lt:400,planks:20},bd:15,d:'Lets its town trade with the country across the nearest border. Build it within 3 km of the border, by a road.'},
+  port:{n:'Sea port',cat:'transport',era:1,fp:[1,0.8],need:'coast',noUp:1,ic:'anchor',cost:{lt:3000,planks:80,bricks:40},bd:150,d:'Trades by sea with Britain and Germany. Sells to local merchants for more.'},
+  school:{n:'School',cat:'civic',era:1,fp:[0.5,0.4],w:3,svc:'school',ic:'school',cost:{lt:600,planks:30},bd:40,d:'One school per 50k residents raises output in the whole town by up to 10%.'},
+  clinic:{n:'Clinic',cat:'civic',era:1,fp:[0.45,0.4],w:3,svc:'clinic',ic:'clinic',cost:{lt:700,planks:30},bd:40,d:'One clinic per 70k residents lifts morale and growth.'},
+  power:{n:'Peat power station',cat:'power',era:2,fp:[0.9,0.9],w:14,in:{peat:4},pow:30,pol:4,ic:'bolt',cost:{lt:1800,bricks:60,metal:10},bd:120,d:'Burns peat. Linked towns share one grid.'},
+  linen:{n:'Linen mill',cat:'industry',era:2,fp:[1,0.8],w:24,in:{flax:4},powNeed:5,out:{textiles:4},pol:2,cost:{lt:2200,bricks:80,metal:20},bd:150,d:'Flax to cloth, like Linas in Panevėžys.'},
+  furniture:{n:'Furniture factory',cat:'industry',era:2,fp:[0.9,0.75],w:20,in:{planks:5},powNeed:4,out:{furniture:3},pol:1,cost:{lt:2000,bricks:60,metal:10},bd:120,d:'Planks to furniture, for the towns and for export.'},
+  sugar:{n:'Sugar factory',cat:'industry',era:2,fp:[1,0.8],w:20,in:{beet:6},powNeed:4,out:{sugar:4},pol:2,cost:{lt:2400,bricks:80,metal:15},bd:150,d:'Beet to sugar, like the Marijampolė factory of 1931. Towns come to expect sugar.'},
+  cement:{n:'Cement works',cat:'industry',era:3,fp:[1,0.9],w:25,in:{peat:4},powNeed:8,out:{cement:6},need:'lime',pol:4,cost:{lt:6000,bricks:200,metal:40},bd:240,d:'Must sit on limestone, as at Akmenė, where the works first made cement in 1952. Cement builds panel blocks, highways and dams.'},
+  fert:{n:'Fertiliser plant',cat:'industry',era:3,fp:[1,0.9],w:25,in:{peat:2},powNeed:12,out:{fertiliser:6},pol:3,cost:{lt:8000,cement:150,metal:60},bd:300,d:'Like the chemical works of Kėdainiai (1963) and Jonava (1965). Fields in a town with fertiliser grow 30% more.'},
+  hydro:{n:'Hydro dam',cat:'power',era:3,fp:[0.5,0.8],w:10,pow:140,noUp:1,need:'river',ic:'wave',cost:{lt:9000,cement:300,metal:40},bd:540,d:'Built across a river. No fuel, no smoke.'},
+  nuclear:{n:'Nuclear power plant',cat:'power',era:3,fp:[1.4,1.4],w:40,pow:450,noUp:1,need:'lake',ic:'atom',cost:{lt:30000,cement:600,metal:150},bd:1400,d:'Needs a lake for cooling, like Ignalina (1983).'},
+  elec:{n:'Electronics plant',cat:'industry',era:3,fp:[0.9,0.8],w:30,in:{metal:2},powNeed:10,out:{electronics:3},pol:1,cost:{lt:7000,cement:100,metal:40},bd:240}
 };
+/* what a field takes and gains when its town has fertiliser */
+const FERT_USE=0.5, FERT_GAIN=1.3;
 const CATS=[['food','Food'],['raw','Raw materials'],['industry','Industry'],['power','Power'],['transport','Transport & storage'],['civic','Town services']];
 /* Homes on one lot: residents (thousands) by level, and the cost to build them */
 const FARMSTEAD_CAP=0.5;
-const HOUSE={cap:[0,2,6,15],n:[null,'Wooden houses','Brick apartments','Panel blocks'],cost:[null,{lt:10,timber:2},{lt:30,bricks:5},{lt:75,bricks:12}]};
+const HOUSE={cap:[0,2,6,15],n:[null,'Wooden houses','Brick apartments','Panel blocks'],cost:[null,{lt:10,planks:2},{lt:30,bricks:5},{lt:75,cement:12}]};
 const LV=[0,1,1.7,2.6], INM=[0,1,1.5,2.1];
 /* Roads and railways: cost per km (BRIDGE times more over water), w = drawn width in km, up = upkeep per km a day (villages keep up dirt roads) */
 const ROADT=[null,{n:'Dirt road',era:1,lt:5,mat:{timber:0.3},spd:0.7,w:0.055,up:0},{n:'Paved road',era:1,lt:14,mat:{bricks:0.6},spd:1,w:0.065,up:0.006},
-  {n:'Highway',era:3,lt:30,mat:{bricks:1.2},spd:1.25,w:0.095,up:0.009}];
-const RAILT=[null,{n:'Railway',era:1,lt:20,mat:{timber:1},w:0.055,up:0.009},{n:'Electric railway',era:3,lt:45,mat:{bricks:1.2},w:0.055,up:0.018}];
+  {n:'Highway',era:3,lt:30,mat:{cement:1.2},spd:1.25,w:0.095,up:0.009}];
+const RAILT=[null,{n:'Railway',era:1,lt:20,mat:{timber:1},w:0.055,up:0.009},{n:'Electric railway',era:3,lt:45,mat:{metal:0.8},w:0.055,up:0.018}];
 /* the costs above are per real km: per drawn km they are MAPK times less (lineCost shows them per real km again) */
 for(const T of [ROADT,RAILT])for(const s of T)if(s){s.lt/=MAPK;s.up/=MAPK;for(const m in s.mat)s.mat[m]/=MAPK}
 /* Vehicles: cap = loads per trip, spd = km per day, cost to buy, up = upkeep per day. Trips a day = spd / (2 × route km + TRIP_OVERHEAD). */
@@ -82,9 +99,9 @@ const ZONE_COST=5, BRIDGE=4, STORE_BASE=150, WH_CAP=[0,400,800,1300];
 const ERAS=[null,
   {n:'Independence',c:'#fdb913'},
   {n:'Industrialization',c:'#0f7b4f',req:{pop:850,linked:50,lt:6000,bricks:150},
-    unl:'Peat power stations, linen mills, furniture factories, trucks, brick apartments and Lv 2 upgrades. Towns start wanting linen cloth and electric light.'},
+    unl:'Peat power stations, linen mills, furniture and sugar factories, sugar beet, trucks, brick apartments and Lv 2 upgrades. Factories need metal from abroad. Over the next four years towns come to expect linen cloth, sugar and electric light.'},
   {n:'Modern Lithuania',c:'#c1272d',req:{pop:1450,linked:70,lt:25000,bricks:500,textiles:200},
-    unl:'Hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Towns start wanting electronics.'}];
+    unl:'Cement works, fertiliser plants, hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Over the next four years towns come to expect electronics.'}];
 const GOAL_POP=2400;
 /* Parts of today's Lithuania that others held for a while (RGN_KEY in terrain.js, outlines in geo.js), and the holders of land.
    S.own maps each part, and each neighbour's land (lv, by, pl the Suwałki region, ep Masuria, ru), to its holder.
@@ -99,27 +116,27 @@ const OWN_GATE={lv:'lv',pl:'pl',de:'de',al:'de',ra:'',by:'',ru:''};
 function startOwners(){return {kr:'de',pal:'de',vr:'lt',vr2:'lt',lv:'de',by:'de',pl:'de',ep:'de',ru:'de'}}
 
 const TOWNS0=[
-  {id:'vil',n:'Vilnius',reg:'Vilnija',cap:1,pop:120,ind:['forestry','forestry','brick','peat','fishery'],st:{grain:100,potatoes:60,timber:80,peat:30},
+  {id:'vil',n:'Vilnius',reg:'Vilnija',cap:1,pop:120,ind:['forestry','forestry','sawmill','brick','peat','fishery'],st:{grain:100,potatoes:60,timber:80,peat:30,planks:60},
     d:'The capital on the Neris, named in the Act of Independence. Its soils are sandy, so its bread arrives by rail from Kaunas.'},
-  {id:'kau',n:'Kaunas',reg:'Aukštaitija',pop:90,ind:['farm','farm','potato','brick'],st:{grain:80,potatoes:40,timber:50,peat:15},
+  {id:'kau',n:'Kaunas',reg:'Aukštaitija',pop:90,ind:['farm','farm','potato','brick','sawmill'],st:{grain:80,potatoes:40,timber:50,peat:15,planks:50},
     d:'Where the Neris meets the Nemunas. Good farmland, a railway junction, and one day the best site for a river dam.'},
-  {id:'kla',n:'Klaipėda',reg:'Mažoji Lietuva',pop:35,lock:1,ind:['port','farm','fishery','forestry'],st:{grain:100,fish:40,timber:40},
+  {id:'kla',n:'Klaipėda',reg:'Mažoji Lietuva',pop:35,lock:1,ind:['port','farm','fishery','forestry','sawmill'],st:{grain:100,fish:40,timber:40,planks:80},
     d:'The only sea port, where the Curonian Lagoon meets the Baltic. Exports sell for more here, and metal can only be imported here.'},
-  {id:'sia',n:'Šiauliai',reg:'Aukštaitija',pop:28,ind:['farm'],st:{grain:40,potatoes:20,timber:20,peat:10},
-    d:'Northern crossroads town with fertile fields, clay pits and the Rėkyva peat bog next door.'},
-  {id:'pan',n:'Panevėžys',reg:'Aukštaitija',pop:24,ind:['potato'],st:{grain:30,potatoes:30,timber:20},
+  {id:'sia',n:'Šiauliai',reg:'Aukštaitija',pop:28,ind:['farm','brewery'],st:{grain:40,potatoes:20,timber:20,peat:10,planks:30,beer:20},
+    d:'Northern crossroads town with fertile fields, clay pits and the Rėkyva peat bog next door. Its Gubernija brewery dates from 1665.'},
+  {id:'pan',n:'Panevėžys',reg:'Aukštaitija',pop:24,ind:['potato'],st:{grain:30,potatoes:30,timber:20,planks:25},
     d:'Heart of Aukštaitija, ringed by flax fields and dairy farms.'},
-  {id:'ukm',n:'Ukmergė',reg:'Aukštaitija',pop:12,ind:['flax'],st:{grain:30,potatoes:20,timber:20},
+  {id:'ukm',n:'Ukmergė',reg:'Aukštaitija',pop:12,ind:['flax'],st:{grain:30,potatoes:20,timber:20,planks:20},
     d:'Old market town on the Šventoji river, with forests and flax land around it.'},
-  {id:'mar',n:'Marijampolė',reg:'Suvalkija',pop:14,ind:['farm'],st:{grain:30,potatoes:10,timber:20},
+  {id:'mar',n:'Marijampolė',reg:'Suvalkija',pop:14,ind:['farm'],st:{grain:30,potatoes:10,timber:20,planks:20},
     d:'Capital of Suvalkija, the richest farmland in the country.'},
-  {id:'aly',n:'Alytus',reg:'Dzūkija',pop:8,ind:['forestry'],st:{grain:30,potatoes:20,timber:20},
+  {id:'aly',n:'Alytus',reg:'Dzūkija',pop:8,ind:['forestry','sawmill'],st:{grain:30,potatoes:20,timber:20,planks:20},
     d:'Gateway to the pine forests of Dzūkija, on a bend of the Nemunas. The railway from Varėna reached it in 1899.'},
-  {id:'tau',n:'Tauragė',reg:'Žemaitija',pop:8,ind:['forestry'],st:{grain:30,potatoes:20,timber:20},
+  {id:'tau',n:'Tauragė',reg:'Žemaitija',pop:8,ind:['forestry'],st:{grain:30,potatoes:20,timber:20,planks:20},
     d:'Samogitian border town on the Jūra, on the old highway from Riga to Tilsit. No railway reaches it yet.'},
-  {id:'tel',n:'Telšiai',reg:'Žemaitija',pop:7,ind:['forestry'],st:{grain:50,potatoes:20,timber:20},
+  {id:'tel',n:'Telšiai',reg:'Žemaitija',pop:7,ind:['forestry'],st:{grain:50,potatoes:20,timber:20,planks:20},
     d:'Capital of Žemaitija, on Lake Mastis in the Samogitian uplands.'},
-  {id:'ute',n:'Utena',reg:'Aukštaitija',pop:6,ind:['flax'],st:{grain:30,potatoes:20,timber:30},
+  {id:'ute',n:'Utena',reg:'Aukštaitija',pop:6,ind:['flax'],st:{grain:30,potatoes:20,timber:30,planks:20},
     d:'Gateway to the Aukštaitija lake district, on the St Petersburg–Warsaw highway and a narrow-gauge railway. Its lakes could cool a power plant one day.'}
 ];
 /* More towns of 1918 and a few villages: [id, name, residents (thousands), region, description, flags]. Their places come from PLACES (geo.js).
@@ -176,6 +193,14 @@ const PLACE_NAMES=[['Elektrėnai',24.646,54.776],['Visaginas',26.439,55.6],['Nau
 const HIST_ROUTES=[['kau','vil','rail','steam',1],['kau','sia','rail','steam',1],['sia','pan','rail','steam',1],['kau','ukm','road','cart',3],['kau','mar','road','cart',3],['sia','tel','road','cart',2]];
 
 Object.assign(ICON,{
+  planks:'<rect x="2.5" y="5.5" width="19" height="3.8" rx=".9"/><rect x="5" y="10.1" width="16.5" height="3.8" rx=".9"/><rect x="2.5" y="14.7" width="16" height="3.8" rx=".9"/><path d="M6 7.4h3M15 12h3M6.5 16.6h3"/>',
+  beer:'<path d="M6 8.5h9V19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M15 10.5h2.2a2 2 0 0 1 2 2v2.5a2 2 0 0 1-2 2H15"/><path d="M6 8.5c-1.4-2.6 1.2-4.6 3-3.2.9-2.2 4.2-2.2 4.9 0 2-.6 3.2 1.6 1.1 3.2"/><path d="M9.3 12v5.5M11.8 12v5.5"/>',
+  beet:'<path d="M12 21.5c-3.6-1.8-5.5-5-5.5-8a5.5 5.5 0 0 1 11 0c0 3-1.9 6.2-5.5 8z"/><path d="M12 8V3.5M12 8C10.6 5.4 8.6 4.8 7 5.4M12 8c1.4-2.6 3.4-3.2 5-2.6"/>',
+  sugar:'<path d="M12 3 6.5 18.5h11z"/><path d="M5 18.5h14V21H5z"/><path d="M10.4 9.5h3.2M9 14h6"/>',
+  cement:'<path d="M8 4h8l-1.3 3.2c2.3 1.8 3.3 4.5 3.3 7.3 0 3.3-2 5.5-6 5.5s-6-2.2-6-5.5c0-2.8 1-5.5 3.3-7.3z"/><path d="M9.3 7.2h5.4M9.5 13.5h5M10.5 16.5h3"/>',
+  fert:'<path d="M12 3c3.2 4 5.7 6.9 5.7 10.2a5.7 5.7 0 0 1-11.4 0C6.3 9.9 8.8 7 12 3z"/><path d="M12 17.5V12M12 15c-1.4 0-2.3-.9-2.3-2.3M12 13.6c1.4 0 2.3-.9 2.3-2.3"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.2l3.4 2"/>',
+  gov:'<path d="M3 9.5 12 4l9 5.5M4 9.5h16M5 20.5h14M6.5 20.5v-8M10.2 20.5v-8M13.8 20.5v-8M17.5 20.5v-8"/>',
   potato:'<ellipse cx="12" cy="13" rx="7.5" ry="6" transform="rotate(-20 12 13)"/><circle cx="9.5" cy="11" r=".6"/><circle cx="13.5" cy="14.5" r=".6"/><circle cx="14" cy="10.5" r=".6"/>',
   meat:'<path d="M14.5 4.5c3.5 0 5.5 2.5 5 5.5-.6 3.4-4.5 5.6-8 6.5l-3.5 3.5-2-2 3.5-3.5c.9-3.5 1.5-10 5-10z"/><circle cx="6" cy="18" r="1.6"/>',
   fish:'<path d="M3 12c3-4 8-5.5 12-3.5l4-3v13l-4-3c-4 2-9 .5-12-3.5z"/><circle cx="8.5" cy="11.2" r=".8"/>',

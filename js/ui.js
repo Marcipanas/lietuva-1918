@@ -15,7 +15,7 @@ function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');cle
 const toastBusy=()=>$('toast').classList.contains('show');
 function hint(m){const h=$('hint');if(!m){h.hidden=true;return}h.textContent=m;h.hidden=false;clearTimeout(ht);ht=setTimeout(()=>{h.hidden=true},8000)}
 const WIDE=()=>window.innerWidth>=960;
-Object.assign(VIEW,{sheet:0,prev:'nat',bcat:null,bti:-1,iss:null,tsort:'need',tall:false,seen:0,spd:1});
+Object.assign(VIEW,{sheet:0,prev:'nat',bcat:null,bti:-1,iss:null,tsort:'need',tall:false,seen:0,spd:1,nseg:'over',good:null});
 
 /* ---------- top bar and speed ---------- */
 function setSpeed(n){if(n>0)VIEW.spd=n;S.speed=n;updateTop();save()}
@@ -35,6 +35,7 @@ function navTo(k){if(TOOL.k!=='inspect')setTool('inspect');
   if(!WIDE()&&VIEW.sheet>0&&S.tab===k){setSheet(0);return}
   if(k==='build'){VIEW.bti=VIEW.sel&&VIEW.sel.kind==='t'?VIEW.sel.ti:-1;VIEW.bcat=null}
   if(k==='chron')VIEW.seen=S.day;
+  if(k==='nat')VIEW.good=null;
   S.tab=k;S.confirmReset=false;S.confirmRoute=null;openSide(true);renderPanel(true);$('pbody').scrollTop=0}
 
 /* ---------- the sheet: closed, half or full on phones; always open beside the map on wide screens ---------- */
@@ -109,11 +110,15 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
       i.lots.length?`${i.lots.length} zoned lot${i.lots.length>1?'s':''}`:''].filter(Boolean).join(' · ')+'. Nothing is refunded.';state='warn';btns=`<button class="btn ghost" data-act="cancelp">${ic('close')}Clear</button>`+pri('Remove','trash',false,'danger')}}
   else if(k==='place'){const T0=BT[TOOL.bt];icon=bIcon(TOOL.bt);title=T0.n;extra=`<button class="btn sm ghost" data-act="buildmenu" data-cat="${T0.cat}"${TOOL.ti>=0?` data-ti="${TOOL.ti}"`:''}>Change</button>`;
     const turn=`<button class="btn ghost" data-act="rotg" aria-label="Turn">${ic('turn')}Turn</button>`,find=`<button class="btn ghost" data-act="find">${ic('spot')}Find a spot</button>`;
-    if(!p||p.kind!=='place'){sub=TOOL.built?`${TOOL.built} built. Tap the map to place another, or close.`:'Tap the map to place it.';state=TOOL.built?'good':'';btns=find}
+    if(!p||p.kind!=='place'){sub=TOOL.built?`${TOOL.built} planned. Tap the map to plan another, or close.`:'Tap the map to place it.';state=TOOL.built?'good':'';btns=find}
     else if(!p.ok){sub=p.why+(VIEW.need&&/^Needs|^Too wet/.test(p.why)?'. The lit ground suits it.':'.');state='bad';btns=turn+find+pri('Build','check',true)}
-    else{const m=missing(p.cost,town),jt=p.jt>=0?S.towns[p.jt]:null;
-      sub=m||(p.bonus?'Good land: it makes more here. ':T0.bonus?'It makes more on the lit ground. ':'')+(jt?(p.acc?`Joins ${jt.n}. `:`Joins ${jt.n} once a road reaches it: you lay one next. `):`No town will take it here: it needs a road to a town hall within ${kmTxt(TERRITORY)} km. `)+'Drag it to move.';
-      state=m||!jt?'bad':p.bonus?'good':'';cost=costHTML(p.cost);btns=turn+pri('Build','check',!!m)}}
+    else if(TOOL.bt==='hall'){const m=missing(p.cost,town);sub=m||'Founds a new town here, paid at once. Drag it to move.';state=m?'bad':'';cost=costHTML(p.cost);btns=turn+pri('Found town','check',!!m)}
+    else{const jt=p.jt>=0?S.towns[p.jt]:null,lack=jt?Object.keys(p.cost).filter(q=>q!=='lt'&&(jt.stock[q]||0)<p.cost[q]).map(rname):[];
+      if(S.funds-(S.keep||0)<p.cost.lt)lack.unshift('money');
+      /* nothing has to be in hand: the site takes money and materials as they come */
+      sub=(p.bonus?'Good land: it makes more here. ':T0.bonus?'It makes more on the lit ground. ':'')+(jt?(p.acc?`Joins ${jt.n}. `:`Joins ${jt.n} once a road reaches it: you lay one next. `):`No town will supply it here: it needs a road to a town hall within ${kmTxt(TERRITORY)} km. `)
+        +(jt?(lack.length?`The site will wait for ${lack.join(' and ')}.`:`Ready in about ${daysTxt(T0.bd)}.`):'');
+      state=!jt?'bad':lack.length?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
   const html=`<div class="bh"><span class="bico">${ic(icon)}</span>${extra&&extra.startsWith('<div class="seg')?'':`<b class="btitle">${title}</b>`}${extra}<button class="ib" data-act="tooloff" aria-label="Close the tool">${ic('close')}</button></div>
     <p class="bsub" data-c="${state}">${sub}</p>${cost||btns?`<div class="bfoot">${cost?`<div class="cost">${cost}</div>`:'<span></span>'}<div class="bbtn">${btns}</div></div>`:''}`;
   if(html!==lastBar){bar.innerHTML=html;lastBar=html}}
@@ -147,15 +152,26 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'iss':VIEW.iss=VIEW.iss===d.k?null:d.k;break;
     case 'tsort':VIEW.tsort=d.k;break;
     case 'tall':VIEW.tall=!VIEW.tall;break;
-    case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(+d.q||25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*S.prices[rs]*(port?1.4:1);
-      t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*Math.pow(0.985,a/25));toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
-    case 'buy':{const t=S.towns[ti],rs=d.r,c=buyVal(ti,rs);if(!canBuyHere(ti,rs))return toast('Metal can only be imported through a sea port');if(S.funds<c)return toast(`Need ${fmt(c-S.funds)} more Lt`);
+    case 'sell':{const t=S.towns[ti],rs=d.r,a=Math.min(+d.q||25,Math.floor(t.stock[rs]||0));if(a<1)return toast(`No ${rname(rs)} in ${t.n} to sell`);const port=townPort(ti),val=a*sellUnit(ti,rs);
+      t.stock[rs]-=a;S.funds+=val;if(port)S.stats.portSales+=val;S.prices[rs]=Math.max(RI[rs].p*0.6,S.prices[rs]*Math.pow(0.975,a/25));toast(`Sold ${a} ${rname(rs)} for ${fmt(val)} Lt`);break}
+    case 'buy':{const t=S.towns[ti],rs=d.r,c=buyVal(ti,rs);if(!canBuyHere(ti,rs))return toast(`${RI[rs].n} comes only from abroad: ${t.n} needs a sea port or a border post`);if(S.funds<c)return toast(`Need ${fmt(c-S.funds)} more Lt`);
       if(room(t,rs)<25)return toast(`No storage room in ${t.n}. Build a warehouse.`);S.funds-=c;t.stock[rs]=(t.stock[rs]||0)+25;S.prices[rs]=Math.min(RI[rs].p*1.6,S.prices[rs]*1.01);toast(`Bought 25 ${rname(rs)} for ${t.n}`);break}
-    case 'up':{if(!b)return;if(b.town<0)return toast('Connect it to a town first');const c=upCost(b),t=S.towns[b.town],m=missing(c,t);if(m)return toast(m);pay(c,t);b.lv++;log(`${BT[b.t].n} near ${t.n} modernized to Lv ${b.lv}.`,'good');break}
+    /* a modernization is a building site on a building that keeps working */
+    case 'up':{if(!b||b.c)return;if(b.town<0)return toast('Connect it to a town first');startUpgrade(b);toast(`Modernization planned: ${daysTxt(b.c.d)} of work once it has its materials`);break}
     case 'toggle':if(b)b.on=!b.on;break;
+    case 'shold':if(b&&b.c){b.c.hold=b.c.hold?0:1;b.cw=b.c.hold?'On hold':'Planned';if(isSite(b))b.why=b.cw;toast(b.c.hold?'On hold: the site takes nothing':'Work goes on')}break;
+    case 'spri':if(b&&b.c){b.c.pri=b.c.pri?0:1;toast(b.c.pri?'This site is served first':'Back in the queue')}break;
+    case 'scancel':{if(!b||!b.c)return;const up=b.c.up;cancelSite(b);analyze();if(!up&&VIEW.sel&&VIEW.sel.kind==='b'&&VIEW.sel.id===b.id)VIEW.sel=null;toast(up?'Modernization cancelled':'Plan cancelled. Its money and materials are back');break}
+    case 'keep':S.keep=+d.q||0;break;
+    case 'tax':{const q=clamp(+d.q|0,0,2);S.hist.tax=q;toast(TAXES[q].n+' taxes');break}
+    case 'pol':{const P=POLICY[d.k];if(!P||!polOpen(d.k))return;S.hist.pol[d.k]=S.hist.pol[d.k]?0:1;toast(S.hist.pol[d.k]?`${P.n}: ${P.cost} Lt a day`:`${P.n} ended`);break}
+    case 'nseg':VIEW.nseg=d.k;VIEW.good=null;if(S.tab!=='nat'){S.tab='nat';openSide(true)}renderPanel(true);$('pbody').scrollTop=0;return;
+    case 'works':VIEW.nseg='works';VIEW.good=null;if(TOOL.k!=='inspect')setTool('inspect');S.tab='nat';openSide(true);renderPanel(true);$('pbody').scrollTop=0;return;
+    case 'good':if(!RI[d.r])return;VIEW.good=d.r;if(TOOL.k!=='inspect')setTool('inspect');S.tab='nat';openSide(true);renderPanel(true);$('pbody').scrollTop=0;return;
+    case 'goodback':VIEW.good=null;VIEW.nseg='eco';renderPanel(true);$('pbody').scrollTop=0;return;
     case 'demolish':S.confirmDemo=b?b.id:null;break;case 'canceld':S.confirmDemo=null;break;
     case 'demolish2':if(b){removeB(b);analyze();VIEW.sel=null;toast('Demolished')}S.confirmDemo=null;break;
-    case 'era':{if(!eraReady())return toast('Not every requirement is met yet');S.funds-=ERAS[S.era+1].req.lt;S.era++;log(`Lithuania enters the ${ERAS[S.era].n} era.`,'hist');
+    case 'era':{if(!eraReady())return toast('Not every requirement is met yet');S.funds-=ERAS[S.era+1].req.lt;S.era++;S.eraDay=S.day;log(`Lithuania enters the ${ERAS[S.era].n} era.`,'hist');
       /* a card marks the new era and what it brings; the clock waits while it is open */
       S.eraCard=S.era;VIEW.eraSpd=S.speed;S.speed=0;showCard();break}
     case 'eraok':{S.eraCard=0;S.speed=VIEW.eraSpd||0;showCard();toast(`${ERAS[S.era].n} era begins`);break}
@@ -185,7 +201,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'dq':{const x=S.deals.find(y=>y.id===+d.d);if(x)x.q=Math.max(1,x.q+(+d.q>0?(x.q>=10?5:1):(x.q>10?-5:-1)));break}
     case 'ddel':S.deals=S.deals.filter(y=>y.id!==+d.d);toast('Deal ended');break;
     case 'dlim':{const x=S.deals.find(y=>y.id===+d.d);if(x)x.lim=+d.q;break}
-    case 'prodshow':VIEW.prod=d.r;prodBar();if(!WIDE())setSheet(0);toast(`Where ${RI[d.r].n.toLowerCase()} is made: zoom out to see each town's amount`);return;
+    case 'prodshow':if(!PRODUCER[d.r])return toast(`${RI[d.r].n} is not made in Lithuania`);VIEW.prod=d.r;prodBar();if(!WIDE())setSheet(0);toast(`Where ${RI[d.r].n.toLowerCase()} is made: zoom out to see each town's amount`);return;
     case 'reset':S.confirmReset=true;break;case 'cancelr':S.confirmReset=false;break;
     case 'reset2':{newGame();NOTES.length=0;VIEW.oldSave=false;analyze();initScene();VIEW.sel=null;VIEW.route=null;setTool('inspect');camHome();setSheet(0);showCard();break}
     case 'confirm':return doConfirm();case 'cancelp':return clearPreview();case 'rotg':return rotateGhost();
@@ -195,14 +211,15 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
 const VIEW_ONLY=new Set(['bcat','bback','iss','tsort','tall','rdel','rkeep','demolish','canceld','reset','cancelr']);
 
 /* ---------- decision cards: history waits for the player ---------- */
-function cardDate(w){if(w.length===4)return w;const d=new Date(w+'T00:00:00Z');return d.getUTCDate()+' '+['January','February','March','April','May','June','July','August','September','October','November','December'][d.getUTCMonth()]+' '+d.getUTCFullYear()}
+function cardDate(w){if(w.length===4)return w;const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  if(w.length===7)return MO[+w.slice(5,7)-1]+' '+w.slice(0,4);const d=new Date(w+'T00:00:00Z');return d.getUTCDate()+' '+MO[d.getUTCMonth()]+' '+d.getUTCFullYear()}
 let cardShown='';
 function showCard(){const el=$('card'),nw=S.hist.news[0],id=S.intro?'intro':S.eraCard?'era'+S.eraCard:nw?'news:'+nw.id:S.hist.cards[0];if(id===cardShown&&!el.hidden===!!id)return;cardShown=id||'';VIEW.pick=-1;
   if(!id){el.hidden=true;document.body.classList.remove('carded');return}
   if(id==='intro'||S.eraCard||nw){el.innerHTML=id==='intro'?introHTML():S.eraCard?eraHTML(S.eraCard):newsHTML(nw);el.hidden=false;document.body.classList.add('carded');return}
-  const c=CARDS[id],sec=Math.round(S.hist.sec);
-  el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${cardTxt(c.txt)}</p><div class="opts" role="radiogroup" aria-labelledby="cardt">${c.opts.map((o,i)=>{const r=o.risk,ok=r&&sec>=r.sec;
-    return `<button class="opt${o.h?' hist':''}" role="radio" aria-checked="false" data-pick="${i}"><b>${o.t}</b><span>${cardTxt(o.d)}</span>${r?`<em class="${ok?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}</button>`}).join('')}</div>
+  const c=CARDS[id],sec=Math.round(S.hist.sec),pt=Math.round(pubTrust());
+  el.innerHTML=`<div class="cbox"><div class="eyebrow">${cardDate(c.when)}</div><h2 id="cardt">${c.t}</h2><p>${cardTxt(c.txt)}</p><div class="opts" role="radiogroup" aria-labelledby="cardt">${c.opts.map((o,i)=>{const r=o.risk;
+    return `<button class="opt${o.h?' hist':''}" role="radio" aria-checked="false" data-pick="${i}"><b>${o.t}</b><span>${cardTxt(o.d)}</span>${r&&r.sec!==undefined?`<em class="${sec>=r.sec?'ok':'bad'}">${ic('shield')}Security ${sec} of ${r.sec} needed</em>`:''}${r&&r.pt!==undefined?`<em class="${pt>=r.pt?'ok':'bad'}">${ic('heart')}Public trust ${pt} of ${r.pt} needed</em>`:''}</button>`}).join('')}</div>
     <div class="cfoot"><span class="note" id="cpick">Choose one, then confirm.</span><button class="btn pri" data-confirm disabled>Confirm</button></div></div>`;
   el.hidden=false;document.body.classList.add('carded')}
 /* a tap on an option only marks it; Confirm applies it, so a slip of the finger decides nothing */
@@ -221,7 +238,7 @@ function frame(now){const dt=Math.min(0.1,(now-(last||now))/1000);last=now;acc+=
   pT+=dt;if(pT>0.3){pT=0;updateTop();renderPanel(false);showBar();tutTick();updateTask();if(NOTES.length&&!toastBusy()&&!carded()&&!S.intro&&!S.eraCard)toast(NOTES.shift())}requestAnimationFrame(frame)}
 /* the production view's switch and its row of goods, each with how many buildings make it */
 function prodBar(){const bar=$('prodbar'),btn=$('prodbtn');if(!bar)return;const on=!!VIEW.prod;btn.setAttribute('aria-pressed',on?'true':'false');bar.hidden=!on;if(!on)return;
-  const made={};S.bld.forEach(b=>{const T0=BT[b.t];if(b.town<0||!T0.out||b.t==='house')return;for(const r in T0.out)made[r]=(made[r]||0)+1});
+  const made={};S.bld.forEach(b=>{const T0=BT[b.t];if(b.town<0||!T0.out||b.t==='house'||isSite(b))return;for(const r in T0.out)made[r]=(made[r]||0)+1});
   bar.innerHTML=`<button data-prod="all" class="${VIEW.prod==='all'?'on':''}">All goods</button>`+RES.filter(r=>made[r]).map(r=>`<button data-prod="${r}" class="${VIEW.prod===r?'on':''}" style="--c:var(--r-${r})">${ic(RI[r].ic)}${RI[r].n}<small>${made[r]}</small></button>`).join('')}
 /* the ministry task on the map, above the bottom bar: tap it to see all tasks */
 let taskTxt=null;

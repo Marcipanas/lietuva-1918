@@ -1,7 +1,7 @@
 /* Lietuva 1918 — offline support (service worker).
    Bump VERSION whenever any shipped file changes, and keep SHELL in sync with the files the game loads.
    tools/check.js fails if a js/ file is missing from SHELL. */
-const VERSION='l1918-0.11.1';
+const VERSION='l1918-0.12.0';
 const FONTS='l1918-fonts';
 const SHELL=['./','index.html','css/style.css','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png',
   'vendor/three.min.js','js/common.js','js/data.js','js/geo.js','js/land.js','js/geom.js','js/terrain.js','js/world.js','js/world1918.js','js/sim.js','js/history.js','js/models.js','js/scene.js','js/agents.js',

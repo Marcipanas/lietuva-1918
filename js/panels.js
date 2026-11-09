@@ -14,19 +14,24 @@ function growthTxt(t){if(t.hint)return t.hint;if(t.fed<0.99)return t.pop>t.pop0?
   const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0);if(t.pop>=t.pop0-0.05&&((t.fdays||0)<8||fbal<-0.01))return `Holding steady: its own fields feed ${popStr(t.pop0)}. More food lets it grow.`;
   return t.pop<t.house*0.92?'Moving into empty homes':'Building new homes on zoned land'}
 const attrs=a=>Object.entries(a).map(([k,x])=>`data-${k}="${x}"`).join(' ');
-const fixBtn=f=>`<button class="btn sm${f.b?' ghost':''}" ${attrs(f.a)}>${f.a.act==='newroute'||f.a.act==='rveh'?ic('route'):f.a.act==='build'||f.a.act==='buildmenu'?ic('factory'):f.a.act==='tool'?ic(f.a.tool==='zone'?'zone':f.a.tool):''}${f.t}</button>`;
+/* "20 Feb 1926", "February 1926" or "1926", by how exactly a date is known (0 the day, 2 the month, 1 the year) */
+function whenTxt(day,yo){const t=dOf(day);return yo===1?String(t.getUTCFullYear()):yo===2?MON[t.getUTCMonth()]+' '+t.getUTCFullYear():dateStr(day)}
+const daysTxt=n=>n+(n===1?' day':' days');
+const fixBtn=f=>`<button class="btn sm${f.b?' ghost':''}" ${attrs(f.a)}>${f.a.act==='newroute'||f.a.act==='rveh'?ic('route'):f.a.act==='build'||f.a.act==='buildmenu'?ic('factory'):f.a.act==='tool'?ic(f.a.tool==='zone'?'zone':f.a.tool):f.a.act==='buy'?ic('coin'):f.a.act==='works'?ic('hammer'):f.a.act==='nav'?ic('globe'):''}${f.t}</button>`;
 
 /* ---------- the sheet header ---------- */
 function sheetHead(){const s=VIEW.sel;let eb='',tt='',x='',back='';
   if(S.tab==='sel'&&s&&s.kind==='t'&&S.towns[s.ti]){const t=S.towns[s.ti];eb=(t.capital?(t.id==='vil'?'Capital':'Temporary capital'):townPort(s.ti)?'Sea port':t.vil?'Village':'Town')+(t.reg?' · '+t.reg:'');tt=t.n;
     x=`<button class="ib" data-act="focus" data-ti="${s.ti}" aria-label="Show on map">${ic('target')}</button>`}
   else if(S.tab==='sel'&&s&&s.kind==='b'&&BMAP.get(s.id)){const b=BMAP.get(s.id),t=b.town>=0?S.towns[b.town]:null;
-    eb=b.lm&&LANDMARKS[b.lm]?'Landmark · '+LANDMARKS[b.lm].town:t?t.n+(b.cd?' · '+Math.round(b.cd)+' km by road':''):'No town';tt=bName(b)}
+    eb=b.lm&&LANDMARKS[b.lm]?'Landmark · '+LANDMARKS[b.lm].town:isSite(b)?'Building site · '+(t?t.n:'no town'):t?t.n+(b.cd?' · '+kmTxt(b.cd)+' km by road':''):'No town';tt=bName(b)}
   else if(S.tab==='build'){const bt=VIEW.bti>=0&&S.towns[VIEW.bti]?S.towns[VIEW.bti]:null;eb=bt?'Build near '+bt.n:'Build';
     if(VIEW.bcat){tt=(CATS.find(c=>c[0]===VIEW.bcat)||['',''])[1];back=`<button class="ib" data-act="bback" aria-label="Back">${ic('back')}</button>`}else tt='What to build'}
   else if(S.tab==='routes'){eb=S.routes.length+' running';tt='Routes'}
   else if(S.tab==='trade'){const sov=S.hist.path==='soviet';eb=sov?'Soviet Lithuania':'Foreign trade';tt=sov?'The plan':'Markets abroad'}
   else if(S.tab==='chron'){eb=dateStr(S.day);tt='Chronicle'}
+  else if(VIEW.good&&RI[VIEW.good]){const r=VIEW.good;eb=RI[r].food?'Food':MATS.includes(r)?'Building material':WANTS.some(W=>W.r===r)?'Wanted in towns':FUEL.includes(r)?'Fuel':'Good';tt=RI[r].n;
+    back=`<button class="ib" data-act="goodback" aria-label="Back">${ic('back')}</button>`}
   else {eb=ERAS[S.era].n+' era';tt='Lithuania'}
   return `<div class="shb">${back}<div class="sht"><div class="eyebrow">${eb}</div><h2>${tt}</h2></div>${x}<button class="ib" data-act="close" aria-label="Close">${ic('close')}</button></div>`}
 
@@ -34,7 +39,7 @@ function sheetHead(){const s=VIEW.sel;let eb='',tt='',x='',back='';
 const CAT_IC={food:'grain',raw:'timber',industry:'factory',power:'bolt',transport:'box',civic:'school'};
 const CAT_COL={food:'var(--r-grain)',raw:'var(--r-timber)',industry:'var(--r-bricks)',power:'#ffd84d',transport:'var(--r-flax)',civic:'#9fd3e8'};
 const NEED_TXT={open:'Open land',forest:'In a forest',bog:'On a peat bog',clay:'On clay ground',water:'On a shore',coast:'On the sea coast',lake:'Next to a lake',
-  river:'Across a river',rail:'Next to a railway',border:'Within 3 km of the border'};
+  river:'Across a river',rail:'Next to a railway',border:'Within 3 km of the border',lime:'On limestone'};
 function needTxt(t){const T0=BT[t],p=[];if(T0.need)p.push(NEED_TXT[T0.need]);if(T0.bonus==='fertile')p.push('35% more on fertile soil');if(T0.bonus==='flaxland')p.push('40% more in the flax belt');
   if(T0.pol)p.push('Smoky');return p.join(' · ')}
 function whatTxt(t){const T0=BT[t];if(T0.store)return `Adds ${fmt(WH_CAP[1])} storage for every good`;if(T0.svc==='school')return 'Raises output in its town';if(T0.svc==='clinic')return 'Lifts morale and growth';
@@ -44,13 +49,15 @@ function lineCost(k){const sp=(k==='road'?ROADT:RAILT)[k==='road'?roadMax():rail
 function buildPanel(){const c=VIEW.bcat;
   if(!c){const tools=[['road','road','Road',lineCost('road')],['rail','rail','Railway',lineCost('rail')],['zone','zone','Zone homes',`${ZONE_COST} Lt a lot`],['bull','trash','Remove','Nothing is refunded']];
     return `<div class="sec"><h3>Lines and land</h3><div class="tgrid">${tools.map(([k,i,n,d])=>`<button class="ttile" data-act="tool" data-tool="${k}"${VIEW.bti>=0?` data-ti="${VIEW.bti}"`:''}><span class="ci">${ic(i)}</span><b>${n}</b><small>${d}</small></button>`).join('')}</div></div>
-    <div class="sec"><h3>Buildings</h3><div class="cgrid">${CATS.map(([k,n])=>{const all=Object.keys(BT).filter(t=>BT[t].cat===k),open=all.filter(unlocked).length;
+    <div class="sec"><h3>Buildings<span>a plan builds as money and materials come</span></h3><div class="cgrid">${CATS.map(([k,n])=>{const all=Object.keys(BT).filter(t=>BT[t].cat===k),open=all.filter(unlocked).length;
       return `<button class="ctile${open?'':' lock'}" data-act="bcat" data-cat="${k}" style="--c:${CAT_COL[k]}"><span class="ci">${ic(CAT_IC[k])}</span><b>${n}</b><small>${open?open+' of '+all.length+' open':'Later eras'}</small></button>`}).join('')}</div></div>`}
   const items=Object.keys(BT).filter(t=>BT[t].cat===c).sort((a,b)=>(unlocked(a)?0:1)-(unlocked(b)?0:1)||BT[a].era-BT[b].era);
-  return `<ul class="bpick">${items.map(t=>{const T0=BT[t],lk=!unlocked(t),poor=!lk&&S.funds<T0.cost.lt;
+  const bt=VIEW.bti>=0&&S.towns[VIEW.bti]&&!S.towns[VIEW.bti].lock?S.towns[VIEW.bti]:null;
+  return `<ul class="bpick">${items.map(t=>{const T0=BT[t],lk=!unlocked(t),poor=!lk&&(S.funds-(S.keep||0)<T0.cost.lt||(bt&&Object.keys(T0.cost).some(k=>k!=='lt'&&(bt.stock[k]||0)<T0.cost[k])));
     return `<li><button class="brow${lk?' lock':''}" data-act="pick" data-bt="${t}"${lk?' disabled':''} style="--c:${bCol(t)}"><span class="bi">${ic(lk?'lock':bIcon(t))}</span>
       <span class="bt"><b>${T0.n}</b><small>${lk?'Opens in the '+ERAS[T0.era].n+' era':whatTxt(t)}</small>${needTxt(t)?`<small class="nd">${needTxt(t)}</small>`:''}</span>
-      <span class="bc${poor?' bad':''}">${costTxt(T0.cost).split(' · ').join('<br>')}</span></button></li>`}).join('')}</ul>
+      <span class="bc${poor?' warn':''}">${costTxt(T0.cost).split(' · ').join('<br>')}${T0.bd?`<br><em>${daysTxt(T0.bd)}</em>`:''}</span></button></li>`}).join('')}</ul>
+    <p class="note">${ic('hammer')}A building starts as a plan. Its site takes the money and materials when they are there${bt?`, from the treasury and from ${bt.n}`:''}, and then the builders need the days shown. Costs in amber are not all at hand yet: the site will wait for them.</p>
     ${c==='power'&&S.era<2?`<p class="note">Power stations open in the Industrialization era. Open the Lithuania view to see what it takes.</p>`:''}`}
 
 /* ---------- town dashboard ---------- */
@@ -71,9 +78,9 @@ function issuesHTML(iss,key){return `<ul class="iss">${iss.map(x=>`<li data-sev=
 function goodsHTML(rows,key,title){if(!rows.length)return '';
   return `<div class="sec"><h3>${title||'Goods a day'}<span>net counts routes and trade</span></h3><div class="gt" role="table">
     <div class="gr gh" role="row"><span>Good</span><span>Made</span><span>Used</span><span>Net</span><span>Stock</span></div>
-    ${rows.map(x=>`<div class="gr" role="row" style="--c:var(--r-${x.r})"><button class="gn link" data-act="prodshow" data-r="${x.r}" aria-label="Show where ${RI[x.r].n.toLowerCase()} is made">${ic(RI[x.r].ic)}${RI[x.r].n}</button><span>${v(key+'m'+x.r,num(x.mk))}</span><span>${v(key+'u'+x.r,num(x.us))}</span><span>${v(key+'n'+x.r,fd(x.dl),'sign')}</span><span>${v(key+'s'+x.r,fmt(x.st))}</span></div>`).join('')}</div></div>`}
-function marketTiles(ti){const t=S.towns[ti],port=townPort(ti),cap=t.cap||STORE_BASE;let h=`<p class="note">${S.hist.path==='soviet'?'State shops only.':port?'Port prices: sell for 40% more, imports cheaper.':'Local merchants buy and sell in lots of 25.'}</p><div class="tiles">`;
-  RES.filter(r=>RI[r].era<=S.era).forEach(r=>{const s=t.stock[r]||0;h+=`<div class="tile" style="--c:var(--r-${r})"><div class="th">${ic(RI[r].ic)}${RI[r].n}</div>
+    ${rows.map(x=>`<div class="gr" role="row" style="--c:var(--r-${x.r})"><button class="gn link" data-act="good" data-r="${x.r}" aria-label="${RI[x.r].n}: where it is made and used">${ic(RI[x.r].ic)}${RI[x.r].n}</button><span>${v(key+'m'+x.r,num(x.mk))}</span><span>${v(key+'u'+x.r,num(x.us))}</span><span>${v(key+'n'+x.r,fd(x.dl),'sign')}</span><span>${v(key+'s'+x.r,fmt(x.st))}</span></div>`).join('')}</div></div>`}
+function marketTiles(ti){const t=S.towns[ti],port=townPort(ti),cap=t.cap||STORE_BASE;let h=`<p class="note">${S.hist.path==='soviet'?'State shops only.':port?'Port prices: merchants pay more here, and imports are cheaper.':'Local merchants buy and sell in lots of 25. They pay less than markets abroad.'}</p><div class="tiles">`;
+  RES.filter(r=>RI[r].era<=S.era||(t.stock[r]||0)>=1).forEach(r=>{const s=t.stock[r]||0;h+=`<div class="tile" style="--c:var(--r-${r})"><div class="th">${ic(RI[r].ic)}${RI[r].n}</div>
     <div class="ta">${v(ti+'s'+r,fmt(s))}<small>${v(ti+'d'+r,fd(t.dl[r]||0)+'/d','sign')}</small></div><div class="sbar">${w(ti+'f'+r,Math.round(Math.min(1,s/cap)*100))}</div>
     ${S.hist.path==='soviet'?'':`<div class="tb"><button class="btn sm ghost" data-act="sell" data-ti="${ti}" data-r="${r}">Sell ${v(ti+'sv'+r,'+'+fmt(sellVal(ti,r)))}</button>${canBuyHere(ti,r)
       ?`<button class="btn sm ghost" data-act="buy" data-ti="${ti}" data-r="${r}">Buy ${v(ti+'bv'+r,'−'+fmt(buyVal(ti,r)))}</button>`:`<span class="note">Import via a port or border post</span>`}</div>`}</div>`});return h+'</div>'}
@@ -101,6 +108,25 @@ function tradersTxt(t){const tr=t.tr||{},inn=[],out=[];RES.forEach(r=>{const q=t
   if(!inn.length&&!out.length)return 'Merchants carry nothing here now. They bring goods a town runs short of from neighbours with plenty, slowly.';
   const ls=L0=>L0.sort((a,b)=>b[0]-a[0]).slice(0,3).map(([q,r])=>num(q)+' '+rname(r)).join(', ');
   return `Merchants ${inn.length?'bring '+ls(inn):''}${inn.length&&out.length?' and ':''}${out.length?'take '+ls(out):''} a day.`}
+/* a building site in a list: how far it is and what it waits for */
+function siteLi(b){const T0=BT[b.t],q=siteInfo(b);
+  return `<li><button class="bl site" data-act="selb" data-id="${b.id}" style="--c:${bCol(b.t)}"${sc('ss'+b.id,q.st)}><span class="bi">${ic(bIcon(b.t))}</span><span class="bn">${T0.n}${b.c.up?` <em>to Lv ${b.lv+1}</em>`:''}<span class="pct">${v('sp'+b.id,q.pc+'%')}</span></span>
+    <span class="meter">${w('sm'+b.id,q.pc)}</span><span class="bs">${v('sx'+b.id,siteTxt(b))}</span></button></li>`}
+/* what a site has taken of what its plan costs */
+function needsHTML(b){const c=b.c;return `<ul class="needs">${Object.keys(c.n).map(k=>{const got=c.g[k]||0,pc=Math.round(Math.min(1,got/c.n[k])*100);
+  return `<li style="--c:${k==='lt'?'var(--amber)':`var(--r-${k})`}">${ic(k==='lt'?'coin':RI[k].ic)}<span>${k==='lt'?'Money':RI[k].n}</span><b>${v('ng'+b.id+k,fmt(Math.floor(got+1e-6)))} of ${fmt(c.n[k])}${k==='lt'?' Lt':''}</b><div class="sbar">${w('nb'+b.id+k,pc)}</div></li>`}).join('')}</ul>`}
+function sitePanel(b){const T0=BT[b.t],c=b.c,t=b.town>=0?S.towns[b.town]:null,q=siteInfo(b),iss=t?townIssues(b.town).filter(x=>x.k.startsWith('site:')&&q.lack.includes(x.k.slice(5))):[];
+  return `${T0.d?`<p class="lede">${T0.d}</p>`:''}
+    <p class="status big site"${sc('sst'+b.id,q.st)}>${ic('hammer')}${v('sx'+b.id,siteTxt(b))}</p>
+    <div class="kpis"><div class="kpi"><span class="k">${ic('hammer')}Built</span><b>${v('sp'+b.id,q.pc+'%')}</b><div class="mbar">${w('sm'+b.id,q.pc)}</div></div>
+      <div class="kpi"><span class="k">${ic('clock')}Work left</span><b>${v('sd'+b.id,daysTxt(q.days))}</b><small>of ${c.d}, once supplied</small></div></div>
+    <div class="sec"><h3>On site<span>${t?`money from the treasury, materials from ${t.n}`:'needs a road to a town'}</span></h3>${needsHTML(b)}</div>
+    ${iss.length?issuesHTML(iss,'s'+b.id):q.st==='road'&&b.na!=='locked'?`<p class="note">A site gets its materials from the town whose hall a road reaches within ${kmTxt(TERRITORY)} km. <button class="link sm" data-act="tool" data-tool="road">Build a road to it</button></p>`:''}
+    ${T0.out||T0.pow?`<p class="note">When finished it ${io(T0,1)} per day${T0.w?`, with ${popStr(T0.w)} workers`:''}.</p>`:T0.store?`<p class="note">When finished it adds ${fmt(WH_CAP[1])} storage for every good.</p>`:''}
+    <div class="row"><button class="btn ghost" data-act="shold" data-id="${b.id}">${c.hold?ic('play')+'Resume':ic('pause')+'Hold'}</button>
+      <button class="btn ghost" data-act="spri" data-id="${b.id}" aria-pressed="${!!c.pri}">${ic('up')}${c.pri?'Built first':'Build first'}</button>
+      ${t?`<button class="btn ghost" data-act="seltown" data-ti="${b.town}">Open ${t.n}</button>`:''}</div>
+    <div class="row"><button class="btn sm ghost" data-act="scancel" data-id="${b.id}">${ic('trash')}Cancel the plan</button><span class="note">Its money and materials come back.</span></div>`}
 function townPanel(ti){const t=S.towns[ti];
   if(t.lock)return lockHTML(t);
   const iss=townIssues(ti),link=t.capital?(t.id==='vil'?'The capital':'The temporary capital'):NET.rail.has(ti)?'Linked by rail':NET.linked.has(ti)?'Linked by paved road':t.vil?'Village':'Not linked to '+capital().n;
@@ -116,9 +142,10 @@ function townPanel(ti){const t=S.towns[ti];
   if(notes.length)h+=issuesHTML(notes,ti);
   h+=goodsHTML(goodsRows(ti),'t'+ti);
   h+=`<p class="note tradn">${ic('cart')}${v('trd'+ti,tradersTxt(t))}</p>`;
-  const prod=bOfTown(ti).filter(b=>b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'),lms=S.bld.filter(b=>b.lm&&b.t==='landmark'&&LANDMARKS[b.lm].town===t.n);
+  const prod=bOfTown(ti).filter(b=>b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&!isSite(b)),lms=S.bld.filter(b=>b.lm&&b.t==='landmark'&&LANDMARKS[b.lm].town===t.n),sites=sitesOf(ti).filter(isSite);
+  if(sites.length)h+=`<div class="sec"><h3>Building sites<span>${sites.length} · tap to manage</span></h3><ul class="blist">${sites.map(siteLi).join('')}</ul></div>`;
   h+=`<div class="sec"><h3>Buildings<span>${prod.length?prod.length+' · tap to manage':'nothing yet'}</span></h3><ul class="blist">${prod.map(b=>{const T0=BT[b.t],p=Math.round(b.eff*100),staffed=T0.w;
-    return `<li><button class="bl" data-act="selb" data-id="${b.id}" style="--c:${bCol(b.t)}"><span class="bi">${ic(bIcon(b.t))}</span><span class="bn">${T0.n}${T0.noUp?'':` <em>Lv ${b.lv}</em>`}<span class="pct">${staffed?v('e'+b.id,p+'%'):''}</span></span>
+    return `<li><button class="bl" data-act="selb" data-id="${b.id}" style="--c:${bCol(b.t)}"><span class="bi">${ic(bIcon(b.t))}</span><span class="bn">${T0.n}${T0.noUp?'':` <em>Lv ${b.lv}${b.c?' → '+(b.lv+1):''}</em>`}<span class="pct">${staffed?v('e'+b.id,p+'%'):''}</span></span>
       ${staffed?`<span class="meter">${w('m'+b.id,p)}</span><span class="bs">${v('y'+b.id,b.on?b.why:'Paused','stat')}</span>`:`<span class="bs">${T0.store?'Adds '+fmt(WH_CAP[b.lv])+' storage':'Links the town'}</span>`}</button></li>`}).join('')}</ul>
     <div class="row"><button class="btn sm" data-act="buildmenu" data-ti="${ti}">${ic('plus')}Build near ${t.n}</button><button class="btn sm ghost" data-act="tool" data-tool="zone" data-ti="${ti}">${ic('zone')}Zone land</button></div>
     ${lms.length?`<p class="note">${ic('star')}Landmarks: ${lms.map(b=>`<button class="link sm" data-act="selb" data-id="${b.id}">${LANDMARKS[b.lm].n}</button>`).join(', ')}</p>`:''}</div>`;
@@ -137,8 +164,11 @@ function buildingPanel(b){const T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
     return `<p class="lede">${L.d}</p><div class="row">${ti>=0?`<button class="btn sm" data-act="seltown" data-ti="${ti}">Open ${S.towns[ti].n}</button>`:''}</div>`}
   if(b.t==='house')return `<p class="lede">Homes for ${popStr(houseCap(b))} people. ${b.lv<S.era?'The town will rebuild these bigger when it needs room.':''}${polAt(b.x,b.z)>0.3?' The air here is smoky.':''}</p>
     <div class="row">${t?`<button class="btn sm" data-act="seltown" data-ti="${b.town}">Open ${t.n}</button>`:''}</div>`;
-  const p=Math.round(b.eff*100);let up='';
-  if(!T0.noUp){if(b.lv>=3)up=`<span class="note">Fully modernized</span>`;else if(S.era<b.lv+1)up=`<span class="note">Lv ${b.lv+1} in the ${ERAS[b.lv+1].n} era</span>`;
+  if(isSite(b))return sitePanel(b);
+  const p=Math.round(b.eff*100);let up='',upb='';
+  if(b.c)upb=`<div class="sec upg"><h3>Modernizing to Lv ${b.lv+1}<span>${v('sx'+b.id,siteTxt(b))}</span></h3><div class="mbar">${w('sm'+b.id,Math.round(b.c.p*100))}</div>${needsHTML(b)}
+    <div class="row"><button class="btn sm ghost" data-act="shold" data-id="${b.id}">${b.c.hold?'Resume':'Hold'}</button><button class="btn sm ghost" data-act="scancel" data-id="${b.id}">Cancel the modernization</button></div></div>`;
+  else if(!T0.noUp){if(b.lv>=3)up=`<span class="note">Fully modernized</span>`;else if(S.era<b.lv+1)up=`<span class="note">Lv ${b.lv+1} in the ${ERAS[b.lv+1].n} era</span>`;
     else up=`<button class="btn" data-act="up" data-id="${b.id}">${ic('up')}Modernize to Lv ${b.lv+1} <span class="bv">${costTxt(upCost(b))}</span></button>`}
   const status=b.town<0?naTxt(b):null,staffed=T0.w||T0.pow;
   /* the town's problems that hold this building back, with their fixes */
@@ -149,7 +179,8 @@ function buildingPanel(b){const T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
     ${staffed?`<div class="kpis"><div class="kpi"><span class="k">${ic(bIcon(b.t))}Output</span><b>${v('e'+b.id,p+'%')}</b><div class="mbar">${w('m'+b.id,p)}</div></div>
       <div class="kpi"><span class="k">${ic('people')}Workers</span><b>${popStr(T0.w||0)}</b><small>needed</small></div></div>`:''}
     ${T0.store?`<p class="status">${ic('box')}Adds ${fmt(WH_CAP[b.lv])} storage for every good in ${t?t.n:'its town'}.</p>`:''}
-    ${T0.out||T0.pow?`<p class="note">At full output it ${io(T0,b.lv,b.k)} per day${b.k&&b.k!==1&&!T0.pow?` (land ×${num(b.k)})`:''}.</p>`:''}
+    ${T0.out||T0.pow?`<p class="note">At full output it ${io(T0,b.lv,b.k)} per day${b.k&&b.k!==1&&!T0.pow?` (land ×${num(b.k)})`:''}.${T0.fert?(b.fz?' Fertiliser adds 30% on top.':unlocked('fert')?' With fertiliser in the town it would make 30% more.':''):''}</p>`:''}
+    ${upb}
     ${T0.pol?`<p class="note">${ic('smog')}Pollutes homes within ${kmTxt(POL_R)} km.</p>`:''}
     <div class="row">${up}${staffed?`<button class="btn ghost" data-act="toggle" data-id="${b.id}">${b.on?'Pause':'Resume'}</button>`:''}${t?`<button class="btn ghost" data-act="seltown" data-ti="${b.town}">Open ${t.n}</button>`:''}</div>
     <div class="row">${S.confirmDemo===b.id?`<span class="note">Demolish ${T0.n}? Nothing is refunded.</span><button class="btn sm" data-act="demolish2" data-id="${b.id}">Demolish</button><button class="btn sm ghost" data-act="canceld">Keep</button>`
@@ -159,7 +190,7 @@ function buildingPanel(b){const T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
 function movedTxt(r,dir){const m=dir==='ab'?r.mAB:r.mBA;if(!r.ok)return '';const e=Object.entries(m||{}).filter(([k,q])=>q>0.05).sort((a,b)=>b[1]-a[1]).slice(0,3);
   return e.length?e.map(([k,q])=>num(q)+' '+rname(k)).join(', ')+' a day':'nothing to carry'}
 function cargoRow(r,dir,A,B0){const spec=r[dir],auto=spec==='auto';
-  return `<div class="cg"><div class="cgh"><b>${A.n} → ${B0.n}</b>${v('rm'+r.id+dir,movedTxt(r,dir))}</div><div class="chips2"><button class="chipb${auto?' on':''}" data-act="rauto" data-r="${r.id}" data-dir="${dir}">Auto</button>${RES.filter(x=>RI[x].era<=S.era).map(x=>
+  return `<div class="cg"><div class="cgh"><b>${A.n} → ${B0.n}</b>${v('rm'+r.id+dir,movedTxt(r,dir))}</div><div class="chips2"><button class="chipb${auto?' on':''}" data-act="rauto" data-r="${r.id}" data-dir="${dir}">Auto</button>${RES.filter(goodOpen).map(x=>
     `<button class="chipb ico${!auto&&spec.includes(x)?' on':''}" data-act="rcargo" data-r="${r.id}" data-dir="${dir}" data-res="${x}" style="--c:var(--r-${x})" title="${RI[x].n}" aria-label="${RI[x].n}">${ic(RI[x].ic)}</button>`).join('')}</div></div>`}
 function routeCard(r){routeEval(r);const A=S.towns[r.a],B0=S.towns[r.b],V0=VT[r.vt],vts=Object.keys(VT).filter(k=>VT[k].mode===r.mode&&VT[k].era<=S.era),nx=vts[(vts.indexOf(r.vt)+1)%vts.length];
   return `<li class="rc${VIEW.route===r.id?' on':''}"><div class="rh"><span class="rmode">${ic(r.mode==='rail'?'train':'cart')}</span><div class="rt"><b>${A.n} ⇄ ${B0.n}</b><div class="lks">${r.ok?`${Math.round(r.len/MAPK)} km · round trip ${num(r.trip)} days`:`<span class="bad">${r.why}</span>`}</div></div>
@@ -174,7 +205,10 @@ function routeCard(r){routeEval(r);const A=S.towns[r.a],B0=S.towns[r.b],V0=VT[r.
 function townOpts(sel){const by=v0=>S.towns.map((t,n)=>[t,n]).filter(([t])=>!t.lock&&!!t.vil===v0).sort((a,b)=>a[0].n.localeCompare(b[0].n,'lt')).map(([t,n])=>`<option value="${n}"${n===sel?' selected':''}>${t.n}</option>`).join('');
   return `<optgroup label="Towns">${by(false)}</optgroup><optgroup label="Villages">${by(true)}</optgroup>`}
 function routesPanel(){const s=VIEW.sel&&VIEW.sel.kind==='t'?VIEW.sel.ti:0;
-  return `<p class="note">Goods move only on routes. The quickest way to start one: open a town and tap a neighbour.</p>
+  const up=S.routes.reduce((a,r)=>a+(r.held?0:r.n*VT[r.vt].up),0),idle=S.routes.filter(r=>r.ok&&(r.used||0)<0.01&&!r.pax).length,held=S.routes.filter(r=>r.held).length;
+  return `<div class="kpis"><div class="kpi"><span class="k">${ic('route')}Routes</span><b>${S.routes.length}</b><small>${v('rsum',`${idle} carry nothing now${held?' · '+held+' wait':''}`)}</small></div>
+    <div class="kpi"><span class="k">${ic('coin')}Vehicles</span><b>${v('rup',num(up)+' Lt')}</b><small>upkeep a day</small></div></div>
+    <p class="note">Routes move goods in bulk; merchants carry a little on their own. The quickest way to start a route: open a town and tap a neighbour.</p>
     <div class="sec"><h3>New route<span>needs a road, or a railway with a station in each town</span></h3><div class="newr"><select id="nrA" aria-label="From">${townOpts(s)}</select><span>⇄</span><select id="nrB" aria-label="To">${townOpts(-1)}</select>
     <select id="nrM" aria-label="Mode"><option value="road">Road</option><option value="rail">Rail</option></select><button class="btn pri" data-act="rcreate">Create</button></div></div>
     <div class="sec"><h3>Routes<span>Auto carries what the other town is short of</span></h3><ul class="routes">${S.routes.map(routeCard).join('')}</ul></div>`}
@@ -201,33 +235,41 @@ function townsBlock(){const sort=VIEW.tsort||'need',heatOn=seasonOf(S.day).heat>
     ${L0.length>10?`<button class="btn sm ghost wide" data-act="tall">${VIEW.tall?'Show fewer':'Show all '+L0.length+' towns'}</button>`:''}
     <p class="note">${vils.length} villages with ${v('tvp',popStr(vils.reduce((a,n)=>a+S.towns[n].pop,0)))} people farm the land between the towns${vp.length?`. ${vp.length} need help: ${vp.slice(0,6).map(n=>`<button class="link sm" data-act="seltown" data-ti="${n}">${S.towns[n].n}</button>`).join(', ')}${vp.length>6?' and more':''}`:''}.</p></div>`}
 /* where the treasury's money comes from and goes, a day (smoothed over about ten days) */
-const BUD_ROWS=[['tax','Taxes'],['trade','Trade abroad'],['homes','New homes'],['bld','Building upkeep'],['lines','Roads and railways'],['routes','Route vehicles'],['army','Army and allies']];
-function budgetHTML(){const b=S.bud||{},st=x=>x<-0.05?'neg':x>0.05?'pos':'';
-  return `<div class="sec"><h3>Money a day</h3><div class="bud">${BUD_ROWS.map(([k,n])=>`<span>${n}</span><b${sc('bc'+k,st(b[k]||0))}>${v('bu'+k,fd(b[k]||0)+' Lt')}</b>`).join('')}
-    <span class="tot">Balance</span><b class="tot"${sc('bctot',st(S.inc))}>${v('butot',fd(S.inc)+' Lt')}</b></div></div>`}
-function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.filter(x=>x.ok).length:0;let h='';
+const BUD_ROWS=[['tax','Taxes'],['trade','Trade abroad'],['bld','Building upkeep'],['lines','Roads and railways'],['routes','Route vehicles'],['army','Army and allies'],['policy','Policies']];
+function budgetHTML(){const b=S.bud||{},st=x=>x<-0.05?'neg':x>0.05?'pos':'',rows=BUD_ROWS.filter(([k])=>k!=='policy'||Math.abs(b.policy||0)>0.05||Object.values(S.hist.pol||{}).some(Boolean));
+  return `<div class="sec"><h3>Money a day<span>${TAXES[S.hist.tax===undefined?1:S.hist.tax].n.toLowerCase()} taxes</span></h3><div class="bud">${rows.map(([k,n])=>`<span>${n}</span><b${sc('bc'+k,st(b[k]||0))}>${v('bu'+k,fd(b[k]||0)+' Lt')}</b>`).join('')}
+    <span class="tot">Balance</span><b class="tot"${sc('bctot',st(S.inc))}>${v('butot',fd(S.inc)+' Lt')}</b>
+    <span class="sub">Building sites take</span><b class="sub"${sc('bcbuild',st(b.build||0))}>${v('bubuild',fd(b.build||0)+' Lt')}</b>
+    <span class="sub">New homes in towns take</span><b class="sub"${sc('bchomes',st(b.homes||0))}>${v('buhomes',fd(b.homes||0)+' Lt')}</b></div>
+    <p class="note">The balance is what comes in and goes out every day; the top bar shows it. Building sites and new homes are paid from the treasury besides.</p></div>`}
+const NSEG=[['over','Overview'],['eco','Economy'],['works','Works'],['towns','Towns'],['state','State']];
+function natPanel(){if(VIEW.good&&RI[VIEW.good])return goodPanel(VIEW.good);
+  const seg=NSEG.some(q=>q[0]===VIEW.nseg)?VIEW.nseg:'over',ns=sitesOf(-1).length;
+  return `<div class="seg nseg" role="tablist" aria-label="Parts of the Lithuania view">${NSEG.map(([k,l])=>`<button data-act="nseg" data-k="${k}" role="tab" aria-selected="${seg===k}" aria-pressed="${seg===k}">${l}${k==='works'&&ns?`<i>${ns}</i>`:''}</button>`).join('')}</div>`
+    +(seg==='eco'?ecoPanel():seg==='works'?worksPanel():seg==='towns'?townsBlock():seg==='state'?statePanel():overPanel())}
+function overPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.filter(x=>x.ok).length:0,sites=sitesOf(-1);let h='';
   h+=`<div class="kgrid">${kpiTile('p','people','Residents',v('tp',popStr(t.pop)),v('tpg',trendTxt(popTrend())),sparkSvg('sp',ser.map(x=>x[1])))}
-    ${kpiTile('f','coin','Treasury',v('tf',fmt(S.funds)+' Lt'),v('tfi',fd(S.inc)+' Lt a day'),sparkSvg('sf',ser.map(x=>x[2])))}
-    ${kpiTile('l','rail','Linked towns',v('tl',t.linked+' of '+t.towns),'by rail or paved road',`<div class="mbar">${w('tlb',Math.round(t.linked/Math.max(1,t.towns)*100))}</div>`)}
+    ${kpiTile('f','coin','Treasury',v('tf',fmt(S.funds)+' Lt'),v('tfi',fd(S.inc)+' Lt a day'),sparkSvg('sf',ser.map(x=>x[2])),{act:'nseg',k:'eco'})}
+    ${kpiTile('l','rail','Linked towns',v('tl',t.linked+' of '+t.towns),'by rail or paved road',`<div class="mbar">${w('tlb',Math.round(t.linked/Math.max(1,t.towns)*100))}</div>`,{act:'nseg',k:'towns'})}
     ${L0?kpiTile('e','star','Next era',v('te',done+' of '+L0.length),'requirements met',`<div class="mbar">${w('teb',Math.round(done/L0.length*100))}</div>`,{act:'goto',k:'era'}):kpiTile('e','star','Era',ERAS[S.era].n,'the last era','')}</div>`;
+  if(sites.length){const wait=sites.filter(b=>siteInfo(b).st!=='build').length;
+    h+=`<button class="wline" data-act="nseg" data-k="works">${ic('hammer')}<span><b>${v('wl1',sites.length+(sites.length===1?' building site':' building sites'))}</b>${v('wl2',wait?`${wait} ${wait===1?'waits':'wait'} for money, materials or a road`:'all at work')}</span>${ic('down')}</button>`}
   h+=natIssuesHTML();
-  h+=budgetHTML();
-  h+=goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day');
-  h+=townsBlock();
   h+=S.won?`<div class="goal"><b>Plan fulfilled</b><span>Every town is linked and lit, and ${popStr(t.pop)} people live in them.</span></div>`
     :`<div class="goal"><b>Goal: light up Lithuania</b><span>Reach the Modern era with every town linked to the capital by rail or paved road and powered, and ${popStr(goalPop())} residents.</span></div>`;
   const open=OBJ.filter(o=>!S.obj[o.id]&&(!o.can||o.can())).slice(0,4),nd=OBJ.length-OBJ.filter(o=>!S.obj[o.id]).length;
   h+=`<div class="sec" id="tasks"><h3>Ministry tasks<span>${nd} of ${OBJ.length} done</span></h3><ul class="objs">${open.map(o=>`<li>${ic('star')}<span>${o.t}</span><b>+${fmt(o.r)} Lt</b></li>`).join('')}</ul></div>`;
   h+=`<div class="ebox" id="era"><div><div class="eyebrow">Current era</div><div class="enow">${ERAS[S.era].n}</div></div><div class="eras">${[1,2,3].map(n=>`<div class="es${n<=S.era?' done':''}${n===S.era?' now':''}" style="--ec:${ERAS[n].c}"><i></i><b>${ERAS[n].n}</b></div>`).join('')}</div>`;
-  if(L0){const nx=ERAS[S.era+1];h+=`<div class="req">${L0.map((x,i)=>`<span class="m">${v('rq'+i,x.ok?'✓':'·','chk')}</span><span>${x.t}</span><span class="q">${v('rn'+i,x.q)}</span>`).join('')}</div>
-    <p class="unl">Unlocks ${nx.unl.charAt(0).toLowerCase()+nx.unl.slice(1)}</p><div class="row"><button class="btn pri" data-act="era">Begin ${nx.n} · ${fmt(nx.req.lt)} Lt</button></div>`}
-  h+='</div>'+secBlock();
-  h+=`<details data-k="how"><summary>How it works</summary><ul><li>Each town has its own stock. Storage holds ${STORE_BASE} of each good, plus ${WH_CAP[1]} per warehouse. Full storage stops production.</li>
-    <li>Goods move only on routes. Each route has vehicles; more vehicles and shorter distances carry more. Auto cargo sends what the other town is short of; or pick goods yourself.</li>
-    <li>Every town and village feeds and heats its people of 1918 from its own fields and woodlots, so it keeps that size without help. Growth beyond it needs food from farms or routes, zoned land and work.</li>
-    <li>Trade abroad goes through a border post near the border or a sea port, from that town’s stock. History opens and closes markets: the Depression, a German boycott, war.</li>
-    <li>On key dates history asks you to decide. Some choices can avoid what happened, if Lithuania has enough security: allies, an army, friends in the West.</li>
-    <li>People eat grain, potatoes, dairy, meat and fish. Each extra kind adds morale. In winter homes burn peat or timber.</li>
+  if(L0){const nx=ERAS[S.era+1],ready=L0.every(x=>x.ok);h+=`<div class="req">${L0.map((x,i)=>`<span class="m">${v('rq'+i,x.ok?'✓':'·','chk')}</span><span>${x.t}</span><span class="q">${v('rn'+i,x.q)}</span>`).join('')}</div>
+    <p class="unl">Unlocks ${nx.unl.charAt(0).toLowerCase()+nx.unl.slice(1)}</p><div class="row"><button class="btn pri" data-act="era"${ready?'':' disabled'}>Begin ${nx.n} · ${fmt(nx.req.lt)} Lt</button>${ready?'':`<span class="note">when every requirement is met</span>`}</div>`}
+  h+='</div>';
+  h+=`<details data-k="how"><summary>How it works</summary><ul><li>A building starts as a plan. Its site takes the money from the treasury and the materials from its town as they come, and then the builders need some days. Nothing has to be in hand when you place it. Planks from the sawmills are what most buildings are made of; later come bricks, metal from abroad and cement.</li>
+    <li>Each town has its own stock. Storage holds ${STORE_BASE} of each good, plus ${WH_CAP[1]} per warehouse. Full storage stops production.</li>
+    <li>Goods move on routes. Each route has vehicles; more vehicles and shorter distances carry more. Auto cargo sends what the other town is short of, building sites included; or pick goods yourself.</li>
+    <li>Every town and village feeds its people of 1918 from its own fields and heats them from its own woodlots, so it keeps that size without help. Growth beyond it needs food from farms or routes, a winter’s peat or timber put by, zoned land and work.</li>
+    <li>Trade abroad goes through a border post near the border or a sea port, from that town’s stock. History opens and closes markets: the Depression, a German boycott, war. Metal comes only from abroad.</li>
+    <li>On key dates history asks you to decide. Some choices can avoid what happened, if Lithuania has enough security or enough public trust.</li>
+    <li>People eat grain, potatoes, dairy, meat and fish. Each extra kind adds morale. Towns are happier with beer, and in later eras come to expect linen cloth, sugar and electronics. In winter homes burn peat or timber.</li>
     <li>Merchants carry goods on their own between neighbouring towns, from one with plenty to one that runs short, a few loads a day at most: more by paved road, most by rail. Routes move goods in bulk.</li>
     <li>Workers fill local jobs first, then walk to towns within ${kmTxt(WALK_KM)} km by road, or ride routes set to carry commuters.</li>
     <li>Factories and kilns pollute homes within ${kmTxt(POL_R)} km. Schools raise output; clinics lift morale and growth.</li>
@@ -238,7 +280,91 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li>Keys: R road, T rail, Z zone, X remove, B build, Esc cancel, Enter build, Backspace undo, Space pause, [ and ] turn, Page Up and Down tilt, N north up.</li>
     <li><button class="link sm" data-act="tutorial">Show the tutorial again</button></li></ul></details>`;
   h+=S.confirmReset?`<div class="row"><span class="note">Start again from 1918? This game will be lost.</span><button class="btn sm" data-act="reset2">Start again</button><button class="btn sm ghost" data-act="cancelr">Keep playing</button></div>`
-    :`<div class="row"><button class="btn sm ghost" data-act="reset">New game</button></div>`;return h}
+    :`<div class="row"><button class="btn sm ghost" data-act="reset">New game</button><span class="note">Version ${SAVE_KEY.replace(/^.*-/,'')}</span></div>`;return h}
+
+/* ---------- Economy: money, goods, chains and work ---------- */
+function chainsHTML(){const rows=CHAINS.map(c=>c.filter(goodOpen)).filter(c=>c.length>1);if(!rows.length)return '';const T=totals(),made={},used={};
+  S.towns.forEach(t=>{if(t.lock)return;RES.forEach(r=>{made[r]=(made[r]||0)+(t.mk?t.mk[r]||0:0);used[r]=(used[r]||0)+(t.us?t.us[r]||0:0)})});
+  const chip=r=>{const net=(made[r]||0)-(used[r]||0),st=net<-0.05&&T.stock[r]<Math.max(20,(used[r]||0)*10)?'bad':(made[r]||0)<0.05?'off':'good';
+    return `<button class="cchip" data-act="good" data-r="${r}" style="--c:var(--r-${r})"${sc('cc'+r,st)}>${ic(RI[r].ic)}<span>${RI[r].n}</span><small>${v('cm'+r,num(made[r]||0))}</small></button>`};
+  return `<div class="sec"><h3>From field to shop<span>made a day · tap a good</span></h3><div class="chains">${rows.map(c=>`<div class="chain">${c.map(chip).join(`<i>${ic('back')}</i>`)}</div>`).join('')}</div></div>`}
+function workHTML(){const q=workStats();
+  return `<div class="sec"><h3>Work<span>half of all residents work</span></h3><div class="kpis"><div class="kpi"><span class="k">${ic('people')}Workers</span><b>${v('wkw',popStr(q.wf))}</b><small>${v('wkc',popStr(q.com)+' walk or ride to work')}</small></div>
+    <div class="kpi"><span class="k">${ic('factory')}Jobs</span><b>${v('wkj',popStr(q.jobs))}</b><small>${v('wkv',popStr(q.vac)+' unfilled')}</small></div>
+    <div class="kpi"><span class="k">${ic('house')}Out of work</span><b>${v('wku',popStr(q.un))}</b><small>beyond those on their own land</small></div></div></div>`}
+function ecoPanel(){return budgetHTML()+goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day')+chainsHTML()+workHTML()}
+
+/* ---------- one good: where it comes from, where it goes, and how its stock has moved ---------- */
+function townChips(L0,fn){return L0.length?`<div class="chips3 flat">${L0.map(([ti,q])=>`<button class="tchip" data-act="seltown" data-ti="${ti}">${S.towns[ti].n}<small>${fn(q)}</small></button>`).join('')}</div>`:''}
+function goodPanel(r){const q=goodInfo(r),R0=RI[r],gs=S.gs&&S.gs.v&&S.gs.v[r]?S.gs.v[r]:[],prod=PRODUCER[r],why=Object.entries(q.why).sort((a,b)=>b[1]-a[1]);
+  const uses=[];if(R0.food)uses.push('food for every town and village');if(FUEL.includes(r))uses.push('heating in winter');
+  if(q.users.length)uses.push(q.users.map(t=>BT[t].n.toLowerCase()).join(', '));
+  const inCost=Object.keys(BT).filter(t=>BT[t].cost&&BT[t].cost[r]),lineMat=[...ROADT,...RAILT].filter(x=>x&&x.mat[r]).map(x=>x.n.toLowerCase()),homeLv=HOUSE.cost.findIndex(c=>c&&c[r]);
+  if(inCost.length||lineMat.length||homeLv>0)uses.push('building: '+[inCost.length?`${inCost.length} kinds of building`:'',homeLv>0?HOUSE.n[homeLv].toLowerCase():'',...lineMat].filter(Boolean).join(', '));
+  if(r==='fertiliser')uses.push('fields, which grow 30% more with it');
+  if(q.want)uses.push(q.want.down?`towns, which come to expect it (morale +${q.want.up} with it, −${q.want.down} without)`:`towns, which are happier with it (morale +${q.want.up})`);
+  const mk=Object.keys(MARKETS).filter(m=>MARKETS[m].buy[r]||MARKETS[m].sell[r]);
+  let h=`<div class="kgrid">${kpiTile('gm','factory','Made a day',v('gm'+r,num(q.mk)),v('gmb'+r,`${q.run} ${q.run===1?'building':'buildings'} at work`),'')}
+    ${kpiTile('gu','people','Used a day',v('gu'+r,num(q.us)),v('gn'+r,'net '+fd(q.dl)+' a day'),'')}
+    ${kpiTile('gs','box','In stock',v('gs'+r,fmt(q.st)),v('gd'+r,q.days<900?`${Math.round(q.days)} days of use`:'not used now'),sparkSvg('gsp'+r,gs))}
+    ${kpiTile('gp','coin','Price',v('gp'+r,num(S.prices[r])+' Lt'),`base ${num(R0.p)} Lt a load`,'')}</div>`;
+  h+=`<div class="sec"><h3>Made by<span>${prod?'':R0.port?'only bought abroad':''}</span></h3>${q.makers.length?`<ul class="objs">${q.makers.map(t=>`<li>${ic(bIcon(t))}<span>${BT[t].n}${unlocked(t)?'':` · ${ERAS[BT[t].era].n} era`}<small>${io(BT[t],1)}</small></span>${unlocked(t)?`<button class="btn sm" data-act="build" data-bt="${t}">Build</button>`:'<b></b>'}</li>`).join('')}</ul>`
+    :`<p class="note">Lithuania has no ore. ${R0.n} comes through a sea port or a border post: set up a deal in the Trade view.</p>`}
+    ${q.idle||q.sites?`<p class="note">${q.idle?`${q.idle} ${q.idle===1?'building stands':'buildings stand'} idle${why.length?': '+why.slice(0,3).map(([k,n])=>`${k.toLowerCase()} (${n})`).join(', '):''}. `:''}${q.sites?`${q.sites} more ${q.sites===1?'is':'are'} being built.`:''}</p>`:''}
+    ${townChips(q.mkT,x=>num(x)+' a day')}</div>`;
+  h+=`<div class="sec"><h3>Used for</h3><p class="note">${uses.length?uses.map((u,i)=>i?u:u.charAt(0).toUpperCase()+u.slice(1)).join('; ')+'.':'Sold abroad.'}</p>${townChips(q.usT,x=>num(x)+' a day')}</div>`;
+  h+=`<div class="sec"><h3>Where it is<span>${Math.round(q.st/Math.max(1,q.cap)*100)}% of all storage</span></h3>${townChips(q.stT,x=>fmt(x))||'<p class="note">None in store anywhere.</p>'}
+    ${q.lowT.length?`<p class="note">Running short: ${q.lowT.map(([ti,d])=>`<button class="link sm" data-act="seltown" data-ti="${ti}">${S.towns[ti].n}</button> (${num(d)} days)`).join(', ')}.</p>`:''}</div>`;
+  if(mk.length&&S.hist.path!=='soviet')h+=`<div class="sec"><h3>Abroad<span>Lt a load</span></h3><ul class="objs">${mk.map(m=>{const b=mktPrice(m,r,'out'),c=mktPrice(m,r,'in'),o=S.mkt[m].open;
+    return `<li>${ic('globe')}<span>${MARKETS[m].n}${o?'':` <small>${S.mkt[m].why}</small>`}</span><b>${[b?'buys at '+b.toFixed(1):'',c?'sells at '+c.toFixed(1):''].filter(Boolean).join(' · ')}</b></li>`}).join('')}</ul></div>`;
+  h+=`<div class="row"><button class="btn sm ghost" data-act="prodshow" data-r="${r}">${ic('target')}Show on the map</button><button class="btn sm ghost" data-act="goodback">${ic('back')}All goods</button></div>`;
+  return h}
+
+/* ---------- Works: every building site, what it waits for, and how much the treasury keeps back ---------- */
+function worksPanel(){const L0=sitesOf(-1).map(siteInfo),ord={build:0,wait:1,road:2,hold:3},need=siteNeeds();
+  L0.sort((a,b)=>(b.b.c.pri||0)-(a.b.c.pri||0)||ord[a.st]-ord[b.st]||a.b.id-b.b.id);
+  const nb=L0.filter(q=>q.st==='build').length,keep=S.keep||0;
+  let h=`<div class="kpis"><div class="kpi"><span class="k">${ic('hammer')}Sites</span><b>${v('wn',L0.length)}</b><small>${v('wb',nb+' at work')}</small></div>
+    <div class="kpi"><span class="k">${ic('coin')}Still to pay</span><b>${v('wm',fmt(need.lt||0)+' Lt')}</b><small>${v('wd',fd(S.bud?S.bud.build||0:0)+' Lt a day now')}</small></div></div>`;
+  const mats=Object.keys(need).filter(k=>k!=='lt');
+  if(mats.length)h+=`<p class="note">Materials still to come: ${mats.map(k=>`<button class="link sm" data-act="good" data-r="${k}">${fmt(Math.ceil(need[k]))} ${rname(k)}</button>`).join(', ')}.</p>`;
+  h+=`<div class="sec"><h3>Keep in the treasury<span>sites take only what is above this</span></h3><div class="row">${[0,500,2000,5000].map(q=>`<button class="chipb${keep===q?' on':''}" data-act="keep" data-q="${q}">${q?fmt(q)+' Lt':'Nothing'}</button>`).join('')}</div></div>`;
+  h+=L0.length?`<div class="sec"><h3>Building sites<span>first in the list is served first</span></h3><ul class="blist">${L0.map(q=>{const b=q.b,T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
+    return `<li class="srow"><button class="bl site" data-act="selb" data-id="${b.id}" style="--c:${bCol(b.t)}"${sc('ss'+b.id,q.st)}><span class="bi">${ic(bIcon(b.t))}</span><span class="bn">${T0.n}${b.c.up?` <em>to Lv ${b.lv+1}</em>`:''}<small>${t?t.n:'no town'}</small><span class="pct">${v('sp'+b.id,q.pc+'%')}</span></span>
+      <span class="meter">${w('sm'+b.id,q.pc)}</span><span class="bs">${v('sx'+b.id,siteTxt(b))}</span></button>
+      <div class="sbtn"><button class="ib" data-act="spri" data-id="${b.id}" aria-pressed="${!!b.c.pri}" aria-label="${b.c.pri?'Stop building this first':'Build this first'}">${ic('up')}</button><button class="ib" data-act="shold" data-id="${b.id}" aria-label="${b.c.hold?'Resume':'Hold'}">${ic(b.c.hold?'play':'pause')}</button></div></li>`}).join('')}</ul></div>`
+    :`<p class="okline">${ic('hammer')}<span>No building sites. Pick a building in the Build view and place it: the plan waits here until it has its money and materials, and the builders are done.</span></p>`;
+  return h}
+
+/* ---------- State: who governs, public trust, taxes, policies, security, and what weighs on the country now ---------- */
+function moodWhere(m){return m.vil?'villages':m.towns?'towns':m.reg?m.reg:m.ti!==undefined&&S.towns[m.ti]?S.towns[m.ti].n:m.at?'one district':'everywhere'}
+function effectsHTML(){const h=S.hist,L0=[];
+  (h.mood||[]).forEach(m=>{if(S.day<=m.until)L0.push([m.n||'History',`morale ${m.v>0?'+':'−'}${Math.abs(m.v)} · ${moodWhere(m)}`,m.until,m.v>0])});
+  (S.fx||[]).forEach(e=>{if(S.day<=e.until)L0.push([e.n||'Chance',e.ti!==undefined&&S.towns[e.ti]?S.towns[e.ti].n:e.reg||'everywhere',e.until,e.f>1])});
+  if(h.war)L0.push(['War','output and taxes cut',null,false]);
+  if(S.day<(h.purge||0))L0.push(['Inspectors from Moscow','output −10%',h.purge,false]);
+  if(h.sup&&S.day<=h.sup)L0.push(['The state buys up farm produce','15 Lt a day',h.sup,true]);
+  if(!L0.length)return '';
+  return `<div class="sec"><h3>In force now<span>what history and chance have brought</span></h3><ul class="fxl">${L0.sort((a,b)=>(a[2]||1e9)-(b[2]||1e9)).map(([n,d,u,good])=>`<li data-c="${good?'good':'warn'}"><b>${n}</b><span>${d}</span><time>${u?'until '+MON[dOf(u).getUTCMonth()]+' '+dOf(u).getUTCFullYear():''}</time></li>`).join('')}</ul></div>`}
+function statePanel(){const h=S.hist,g=govNow(),sov=h.path==='soviet';let o='';
+  o+=`<div class="gov">${ic('gov')}<div><div class="eyebrow">${dateStr(S.day)}</div><b>${g.f}</b>${g.who?`<span>${g.who}</span>`:''}</div></div>`;
+  if(sov)o+=`<div class="kpis"><div class="kpi"><span class="k">${ic('star')}Party trust</span><b>${v('trs',Math.round(h.trust))}</b><small>of 100</small><div class="mbar">${w('trsb',Math.round(h.trust))}</div></div></div>
+    <p class="note">Moscow decides taxes and policy. Fulfil the plan and it invests; fail it and inspectors come. The plan is in the Plan view.</p>`;
+  else{const tp=trustParts(),pt=pubTrust(),tx=h.tax===undefined?1:h.tax;
+    o+=`<div class="kpis"><div class="kpi"><span class="k">${ic('heart')}Public trust</span><b>${v('ptv',Math.round(pt))}</b><small>${v('ptt',Math.abs(tp.v-pt)<1.5?'steady':(tp.v>pt?'rising':'falling')+' toward '+Math.round(tp.v))}</small><div class="mbar">${w('ptb',Math.round(pt))}</div></div>
+      <div class="kpi"><span class="k">${ic('shield')}Security</span><b>${v('sec',Math.round(h.sec))}</b><small>of 100</small><div class="mbar">${w('secw',Math.round(h.sec))}</div></div></div>
+    <p class="note">Trust follows the mood of the country. With more of it people pay their taxes more readily (${v('ptx',(histTax()/TAXES[tx].f*100-100>=0?'+':'−')+Math.abs(Math.round(histTax()/TAXES[tx].f*100-100))+'%')} now), elections go the government’s way, and some choices history offers only work with enough of it.</p>
+    <details class="more" data-k="trust"><summary>What moves trust<span>${tp.parts.length===1?'one thing now':tp.parts.length+' things now'}</span></summary><ul class="fxl">${tp.parts.map(([n,x])=>`<li data-c="${x>=0?'good':'warn'}"><b>${n}</b><span></span><time>${x>=0?'+':'−'}${Math.abs(x).toFixed(1)}</time></li>`).join('')}</ul></details>
+    <div class="sec"><h3>Taxes<span>${fd(S.bud?S.bud.tax||0:0)} Lt a day now</span></h3><div class="row">${TAXES.map((T,i)=>`<button class="chipb${tx===i?' on':''}" data-act="tax" data-q="${i}">${T.n}</button>`).join('')}</div>
+      <p class="note">${tx===0?'Low taxes bring in a quarter less. Morale +3, trust +5.':tx===2?'High taxes bring in 30% more. Morale −4, trust −8.':'Lower taxes cheer people and cost the treasury; higher ones do the reverse.'}</p></div>
+    <div class="sec"><h3>Policies<span>paid every day</span></h3><ul class="pols">${Object.keys(POLICY).map(id=>{const P=POLICY[id],on=polOn(id),open=polOpen(id);
+      return `<li${on?' class="on"':''}><span class="ii">${ic(P.ic)}</span><div class="ib2"><b>${P.n}</b><p>${P.d}</p></div>${open?`<button class="btn sm${on?' pri':''}" data-act="pol" data-k="${id}" aria-pressed="${on}">${on?'On':'Off'} · ${P.cost} Lt</button>`:`<span class="note">from ${P.from.slice(0,4)}</span>`}</li>`}).join('')}</ul></div>
+    <div class="sec"><h3>Army<span>${h.path==='neutral'?'a neutral state':'security can turn back ultimatums'}</span></h3>
+      <div class="row">${[0,10,25,50].map(q=>`<button class="chipb${h.def===q?' on':''}" data-act="def" data-q="${q}">${q?q+' Lt a day':'None'}</button>`).join('')}</div>
+      <p class="note">An army adds up to 10 security a year, treaties and trade with Britain add more. Holding Vilnius in 1920 and refusing the ultimatums of 1938 to 1940 work only with enough security.${h.ally?` Baltic alliance: ${h.ally} Lt a day.`:''}</p></div>`}
+  o+=effectsHTML();
+  const D=decisions();if(D.length)o+=`<p class="note">${D.length} ${D.length===1?'decision':'decisions'} taken so far, ${D.filter(x=>x.as===1).length} as in history. <button class="link sm" data-act="nav" data-tab="chron">Open the Chronicle</button></p>`;
+  return o}
 /* The intro of a new game: 16 February 1918, and the player's part in what follows */
 function introHTML(){return `<div class="cbox intro"><div class="eyebrow">Vilnius · 16 February 1918</div><h2 id="cardt">The Act of Independence</h2>
   <p>The twenty members of the Council of Lithuania sign the Act of Independence. It restores an independent, democratic Lithuania, with Vilnius as its capital.</p>
@@ -250,14 +376,14 @@ function eraHTML(n){const E=ERAS[n];return `<div class="cbox intro era" style="-
   <p>${E.unl}</p><p class="lead">${n===2?'Plan the power grid as you grow: towns without electric light lose heart.':'The last era. Light up every town and link it to the capital to fulfil the plan.'}</p>
   <div class="opts"><button class="btn pri big" data-eraok="1">Continue</button></div></div>`}
 /* History that moved a border or the capital: what happened, what changed hands, and what it means for the player */
-function newsHTML(nw){const e=HEV.find(x=>x.id===nw.id)||{},d=e.d||'';return `<div class="cbox intro news"><div class="eyebrow">${cardDate(e.y?d.slice(0,4):d)}</div><h2 id="cardt">${e.news||''}</h2>
+function newsHTML(nw){const e=HEV.find(x=>x.id===nw.id)||{},d=e.d||'';return `<div class="cbox intro news"><div class="eyebrow">${cardDate(e.y===1?d.slice(0,4):e.y===2?d.slice(0,7):d)}</div><h2 id="cardt">${e.news||''}</h2>
   <p>${e.t||''}</p>${nw.more?`<p class="more">${nw.more}</p>`:''}${e.nd?`<p class="lead">${e.nd}</p>`:''}
   <div class="opts"><button class="btn pri big" data-newsok="1">Continue</button></div></div>`}
 /* The decisions taken so far, each marked as history went or not, then the chronicle itself */
 function chronPanel(){const D=decisions(),as=D.filter(x=>x.as===1).length,off=D.filter(x=>x.as===0).length;
   const dec=D.length?`<details class="more" data-k="decisions"${D.length<=3?' open':''}><summary>Your decisions<span>${as} as in history${off?`, ${off} not`:''}</span></summary><ul class="decs">${D.map(x=>
-    `<li${sc('dc'+x.id,x.as===1?'good':x.as===0?'warn':'off')}><time>${x.when.length===4?x.when:dateStr(Math.round((Date.parse(x.when)-START)/864e5))}</time><b>${x.t}</b><span>${x.o}${x.failed?' (failed)':''}</span><em>${x.as===1?'As in history':x.as===0?'Not as in history':'History was mixed'}</em></li>`).join('')}</ul></details>`:'';
-  return dec+`<ul class="chron">${S.log.map(e=>`<li class="${e.k}"><time>${e.yo?dOf(e.d).getUTCFullYear():dateStr(e.d)}</time><p>${e.t}</p></li>`).join('')}</ul>`}
+    `<li${sc('dc'+x.id,x.as===1?'good':x.as===0?'warn':'off')}><time>${x.when.length===4?x.when:x.when.length===7?cardDate(x.when):dateStr(Math.round((Date.parse(x.when)-START)/864e5))}</time><b>${x.t}</b><span>${x.o}${x.failed?' (failed)':''}</span><em>${x.as===1?'As in history':x.as===0?'Not as in history':'A choice history never had'}</em></li>`).join('')}</ul></details>`:'';
+  return dec+`<ul class="chron">${S.log.map(e=>`<li class="${e.k}"><time>${whenTxt(e.d,e.yo)}</time><p>${e.t}</p></li>`).join('')}</ul>`}
 
 /* ---------- foreign trade, and the Soviet plan ---------- */
 const MKT_ORDER=['gb','de','lv','pl','su'];
@@ -268,14 +394,14 @@ function dealRow(d){const t=S.towns[d.ti],M=MARKETS[d.m],out=d.dir==='out';
     <button class="btn sm ghost" data-act="ddel" data-d="${d.id}" aria-label="Remove deal">${ic('trash')}</button></div>
     <div class="row lim"><span class="note">${out?'Keep in store':'Fill store to'}</span>${DEAL_LIM[d.dir].map(q=>`<button class="chipb${(d.lim===undefined?(out?0.5:1):d.lim)===q?' on':''}" data-act="dlim" data-d="${d.id}" data-q="${q}">${Math.round(q*100)}%</button>`).join('')}</div></li>`}
 function priceChips(m){const M=MARKETS[m],ch=[];
-  for(const r in M.buy)if(RI[r].era<=S.era)ch.push(`<span class="pc" style="--c:var(--r-${r})" title="They buy ${RI[r].n}">${ic(RI[r].ic)}${v('pb'+m+r,mktPrice(m,r,'out').toFixed(1))}</span>`);
-  const sl=Object.keys(M.sell).filter(r=>RI[r].era<=S.era).map(r=>`<span class="pc in" style="--c:var(--r-${r})" title="They sell ${RI[r].n}">${ic(RI[r].ic)}${v('ps'+m+r,mktPrice(m,r,'in').toFixed(1))}</span>`);
+  for(const r in M.buy)if(goodOpen(r))ch.push(`<span class="pc" style="--c:var(--r-${r})" title="They buy ${RI[r].n}">${ic(RI[r].ic)}${v('pb'+m+r,mktPrice(m,r,'out').toFixed(1))}</span>`);
+  const sl=Object.keys(M.sell).filter(r=>RI[r].era<=S.era||goodOpen(r)).map(r=>`<span class="pc in" style="--c:var(--r-${r})" title="They sell ${RI[r].n}">${ic(RI[r].ic)}${v('ps'+m+r,mktPrice(m,r,'in').toFixed(1))}</span>`);
   return `<div class="pcs"><span class="pl">They buy</span>${ch.join('')}</div>${sl.length?`<div class="pcs"><span class="pl">They sell</span>${sl.join('')}</div>`:''}`}
 function dealForm(ms){const gt=S.towns.map((t,n)=>[t,n]).filter(([t,n])=>!t.lock&&townGates(n).size&&[...townGates(n)].some(g=>ms.some(m=>MARKETS[m].gate.includes(g)))).sort((a,b)=>a[0].n.localeCompare(b[0].n,'lt'));
   if(!gt.length)return `<p class="note">No town can trade yet. Build a border post within 3 km of the border, or a sea port on the coast.</p>`;
   return `<div class="newr nd"><select id="ndM" aria-label="Market">${ms.map(m=>`<option value="${m}">${MARKETS[m].n}</option>`).join('')}</select>
     <select id="ndD" aria-label="Sell or buy"><option value="out">Sell</option><option value="in">Buy</option></select>
-    <select id="ndR" aria-label="Good">${RES.filter(r=>RI[r].era<=S.era).map(r=>`<option value="${r}">${RI[r].n}</option>`).join('')}</select>
+    <select id="ndR" aria-label="Good">${RES.filter(goodOpen).map(r=>`<option value="${r}">${RI[r].n}</option>`).join('')}</select>
     <select id="ndQ" aria-label="Loads a day">${[1,2,5,10,20].map(q=>`<option value="${q}"${q===5?' selected':''}>${q} a day</option>`).join('')}</select>
     <select id="ndT" aria-label="Through">${gt.map(([t,n])=>`<option value="${n}">via ${t.n}</option>`).join('')}</select>
     <button class="btn pri" data-act="dcreate">Add deal</button></div>`}
@@ -286,7 +412,14 @@ function tradePanel(){const h=S.hist,sov=h.path==='soviet';
     <div class="lks">${gt.length?'Through '+gt.map(n=>S.towns[n].n).join(', '):'Needs '+MARKETS[m].gate.map(g=>GATE_N[g]).join(' or ')}</div>${s.open?priceChips(m):''}</li>`}).join('')}</ul>`;
   o+=`<div class="sec"><h3>Deals<span>${S.deals.length?'run every day':'none yet'}</span></h3><ul class="deals">${S.deals.map(dealRow).join('')}</ul>${dealForm(ms.filter(m=>S.mkt[m].open))}</div>`;
   if(DEPRESSION[dOf(S.day).getUTCFullYear()])o+=`<p class="note">${ic('coin')}The Depression has cut farm prices abroad to ${Math.round(depAt('dairy')*100)}% of normal.</p>`;
-  return o}
+  return o+balanceHTML()}
+/* The year's trade abroad so far and last year's: sold, bought and the balance by market, and the goods that earned most */
+function balanceHTML(){const a=S.tb,b=S.tb0,any=x=>x&&(sumVals(x.ex)+sumVals(x.im)>0.5);if(!any(a)&&!any(b))return '';
+  const tbl=x=>{const ms=MKT_ORDER.filter(m=>(x.ex[m]||0)+(x.im[m]||0)>0.5),ex=sumVals(x.ex),im=sumVals(x.im),top=Object.entries(x.eg).sort((p,q)=>q[1]-p[1]).slice(0,3),bought=Object.entries(x.ig).sort((p,q)=>q[1]-p[1]).slice(0,3);
+    return `<div class="tw"><table><thead><tr><th>${x.y}${x===a?' so far':''}</th><th class="n">Sold</th><th class="n">Bought</th><th class="n">Balance</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${MARKETS[m].n}</td><td class="n">${fmt(x.ex[m]||0)}</td><td class="n">${fmt(x.im[m]||0)}</td><td class="n">${fmt((x.ex[m]||0)-(x.im[m]||0))}</td></tr>`).join('')}
+      <tr class="tot"><td>All markets</td><td class="n">${fmt(ex)}</td><td class="n">${fmt(im)}</td><td class="n">${fmt(ex-im)}</td></tr></tbody></table></div>
+      ${top.length?`<p class="note">Earned most: ${top.map(([r,q])=>`${rname(r)} ${fmt(q)} Lt`).join(', ')}.${bought.length?` Bought most: ${bought.map(([r,q])=>`${rname(r)} ${fmt(q)} Lt`).join(', ')}.`:''}</p>`:bought.length?`<p class="note">Bought most: ${bought.map(([r,q])=>`${rname(r)} ${fmt(q)} Lt`).join(', ')}.</p>`:''}`};
+  return `<div class="sec"><h3>Trade balance<span>Lt, by deals abroad</span></h3>${any(a)?tbl(a):''}${any(b)?tbl(b):''}</div>`}
 function planPanel(){const h=S.hist,p=S.plan;let o=`<h3 class="ph">${p?p.name+': the plan for '+p.y:h.war?'War':'No plan this year'}</h3>
     <p class="lede">${h.war?'The war has stopped the plan. Factories and farms work at reduced strength.':'Moscow sets what the republic delivers to the Union each year. Deliver through towns with a railway station, with deals below.'}</p>`;
   if(p){o+=`<div class="kpis"><div class="kpi"><span class="k">${ic('plan')}Plan done</span><b>${v('pls',Math.round(planShare(p)*100)+'%')}</b><small>of the year’s target</small></div>
@@ -296,7 +429,3 @@ function planPanel(){const h=S.hist,p=S.plan;let o=`<h3 class="ph">${p?p.name+':
   if(h.plans&&h.plans.length)o+=`<p class="note">Past plans: ${h.plans.slice(-6).map(q=>q.y+' '+q.share+'%').join(' · ')}</p>`;
   o+=`<div class="sec"><h3>Deliveries to the Union<span>through railway stations</span></h3><ul class="deals">${S.deals.map(dealRow).join('')}</ul>${dealForm(['su'].filter(m=>S.mkt[m].open))}</div>`;
   return o}
-function secBlock(){const h=S.hist;if(h.path==='soviet')return `<div class="sec"><h3>Soviet rule<span>since 1940</span></h3><p class="note">Party trust ${v('trs',Math.round(h.trust))} of 100. Fulfil the plan and Moscow invests; fail it and inspectors come.</p></div>`;
-  return `<div class="sec"><h3>Security<span>${h.path==='neutral'?'a neutral state':'can turn back ultimatums'}</span></h3><div class="secb"><b>${v('sec',Math.round(h.sec))}</b><span>of 100</span><div class="mbar">${w('secw',Math.round(h.sec))}</div></div>
-    <p class="note">Allies, an army and trade with Britain make Lithuania harder to bully. Holding Vilnius in 1920 and refusing the ultimatums of 1938 to 1940 work only with enough security.</p>
-    <div class="row"><span class="note">Army budget</span>${[0,10,25,50].map(q=>`<button class="chipb${h.def===q?' on':''}" data-act="def" data-q="${q}">${q?q+' Lt a day':'None'}</button>`).join('')}</div>${h.ally?`<p class="note">Baltic alliance: ${h.ally} Lt a day.</p>`:''}</div>`}

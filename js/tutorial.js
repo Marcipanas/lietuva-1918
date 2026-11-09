@@ -12,7 +12,7 @@ const TUT_STEPS = [
   { t: 'Build a road', d: 'Tap Build, then Road. Tap where the road starts, then where it goes. It finds its way around lakes. Press Build.', done: () => !!TUT.ev.road },
   { t: 'Start a route', d: 'A road alone moves nothing. Open a town and tap Road route beside a neighbour.', done: () => S.stats.routesMade > 0 },
   { t: 'Room for homes', d: 'Towns grow into zoned lots. Tap Build, then Zone homes, and tap a few streets.', done: () => !!TUT.ev.zone },
-  { t: 'Farms and industry', d: 'Tap Build and pick a group, then a building. It appears on a good spot. Drag it to move it, then press Build.', done: () => !!TUT.ev.build },
+  { t: 'Farms and industry', d: 'Tap Build and pick a group, then a building. It appears on a good spot. Drag it to move it, then press Build. It starts as a plan: the site takes money and materials as they come, and the builders need some days.', done: () => !!TUT.ev.build },
   { t: 'Time and history', d: 'Press ▶ at the top right to start the clock; the button beside it makes time run faster. On key dates history stops the clock and asks you to choose. Good luck!', done: () => S.speed >= 1, last: true }
 ];
 function tutRead() { try { return localStorage.getItem(TUT_KEY); } catch (e) { return 'done'; } }

@@ -1,5 +1,5 @@
 'use strict';
-/* Lietuva 1918 — terrain. A hidden raster of CELL-km cells holds terrain type and features (forest, soil, bog, clay)
+/* Lietuva 1918 — terrain. A hidden raster of CELL-km cells holds terrain type and features (forest, soil, bog, clay, limestone)
    for the rules and the path planner. The player sees smooth 3D ground drawn from it; nothing snaps to it. */
 const TT = new Uint8Array(GW * GH), TF = new Uint8Array(GW * GH), TF0 = new Uint8Array(GW * GH);
 /* CTY: the country of each cell today, 0 for water. CTY_ID gives the codes; CTY_KEY the key in S.own for who held it then.
@@ -148,7 +148,7 @@ function genTerrain() {
   const N1 = lattice(2 * MAPK, 24 * MAPK, 3), N2 = lattice(1.5 * MAPK, 9 * MAPK, 5), N3 = lattice(1, 2.4, 8);
   /* soils: fertile plains, the flax belt (centres converted to km once) */
   const toKm = (list, f) => list.map(([lo, la, r]) => { const c = ll2xz(lo, la); return [c[0], c[1], r * f * MAPK]; });
-  const fields = toKm(FIELDS, 85), flaxr = toKm(FLAXR, 1), fors = toKm(FOR, 95), bogs = toKm(BOGS, 1), clays = toKm(CLAYS, 1);
+  const fields = toKm(FIELDS, 85), flaxr = toKm(FLAXR, 1), fors = toKm(FOR, 95), bogs = toKm(BOGS, 1), clays = toKm(CLAYS, 1), limes = toKm(LIMES, 1);
   /* distance to the nearest centre, with wobbly edges so soils and bogs are not circles */
   const wobble = (x, z) => 0.62 + N2(x, z) * 0.55 + N3(x, z) * 0.2;
   const near = (x, z, list, wob) => {
@@ -184,6 +184,7 @@ function genTerrain() {
     const x = cellX(k), z = cellZ(k), wb = wobble(x, z);
     if (near(x, z, bogs, wb) > 0) { TF[k] |= F_BOG; TF[k] &= ~F_FOREST; }
     if (near(x, z, clays, wb) > 0) TF[k] |= F_CLAY;
+    if (near(x, z, limes, wb) > 0) TF[k] |= F_LIME;
   }
   TF0.set(TF); TERRAIN_READY = true;
 }

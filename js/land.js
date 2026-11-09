@@ -20,6 +20,9 @@ const BOGS = [[23.30, 55.82, 9], [25.18, 54.48, 9], [23.55, 54.48, 7], [21.45, 5
   [22.45, 55.30, 6]];
 const CLAYS = [[23.95, 54.97, 7], [23.30, 56.00, 7], [25.35, 54.72, 7], [22.85, 56.25, 7], [22.30, 55.92, 6]];
 const FLAXR = [[24.40, 55.80, 28], [25.55, 55.50, 24], [24.85, 55.30, 18], [25.60, 55.85, 20]];
+/* limestone near the surface: the Akmenė beds in the north-west, where the cement works came in 1952, and the dolomite and
+   gypsum country of Pakruojis and Biržai */
+const LIMES = [[22.86, 56.30, 8], [23.95, 56.02, 5], [24.72, 56.20, 5]];
 /* Names on the map beyond Lithuania, in Lithuanian: [name, lon, lat, kind] with kind c country, s water, t town.
    The Kaliningrad region was German East Prussia until 1945; the game names it so. */
 const MAP_LBL = [['LATVIJA', 24.3, 56.49, 'c'], ['RYTŲ PRŪSIJA', 21.75, 54.75, 'c'], ['LENKIJA', 22.85, 53.93, 'c'], ['BALTARUSIJA', 26.3, 54.2, 'c'], ['MOZŪRIJA', 21.9, 54.03, 'c'],

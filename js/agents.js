@@ -7,7 +7,8 @@ const AG = new Pool(7, false);
 const SHIRTS = [['#5b4a3a', '#2f3f5a', '#e8e2d0', '#6b2f2a', '#4a5a3a'], ['#3d5a8a', '#8a3d3d', '#d9b26a', '#e8e2d0', '#3d6b5a'],
   ['#e05d44', '#3a86c8', '#f2c14e', '#7bbf6a', '#e8e2d0', '#9b59b6']];
 const RCOL = { grain: '#e7bd55', potatoes: '#b08850', dairy: '#f3e3a8', meat: '#c96a5a', fish: '#8fb7c9', timber: '#c48d5c', peat: '#7a6650', flax: '#86aef0',
-  bricks: '#e07a55', textiles: '#d9a7cd', furniture: '#9fcf9c', metal: '#adbdca', electronics: '#62d6c8' };
+  bricks: '#e07a55', textiles: '#d9a7cd', furniture: '#9fcf9c', metal: '#adbdca', electronics: '#62d6c8', beet: '#b7c98a', planks: '#f0cf9a', beer: '#f0a030', sugar: '#f4f2ea',
+  cement: '#c9c4b4', fertiliser: '#b6e36a' };
 
 /* a walk along town streets between two road points */
 function streetPath(a, b) {

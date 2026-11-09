@@ -11,6 +11,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
   --lt-y:#fdb913; --lt-g:#0f7b4f; --lt-r:#c1272d;
   --r-grain:#e7bd55; --r-timber:#c48d5c; --r-peat:#ad9a7f; --r-flax:#86aef0; --r-bricks:#e07a55;
   --r-potatoes:#c49a5c; --r-dairy:#f3e3a8; --r-meat:#d97a6a; --r-fish:#8fc3d6; --r-textiles:#d9a7cd; --r-furniture:#9fcf9c; --r-metal:#adbdca; --r-electronics:#62d6c8;
+  --r-beet:#b7c98a; --r-planks:#f0cf9a; --r-beer:#f0a030; --r-sugar:#f4f2ea; --r-cement:#c9c4b4; --r-fertiliser:#b6e36a;
   --f-disp:'Josefin Sans','Futura','Century Gothic',system-ui,sans-serif;
   --f-body:'Jost','Futura','Century Gothic',system-ui,sans-serif;
   --f-text:'Spectral',Georgia,'Times New Roman',serif;
@@ -397,3 +398,52 @@ body.tooling .prodbar,body.carded .prodbar,body.sheeted .prodbar{display:none}
 #labels .pm.town span{display:flex;align-items:center;gap:3px;font:600 11px/1 var(--f-body);color:var(--ink);font-variant-numeric:tabular-nums}
 #labels .pm.town svg{width:12px;height:12px;color:var(--c)}
 .gr .gn.link{display:flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+
+/* ---------- v0.12: the Lithuania view in parts, building sites, goods and chains, the state ---------- */
+.nseg{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;align-self:flex-start;max-width:100%}
+.nseg::-webkit-scrollbar{display:none}
+.nseg button{flex:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding:6px 9px}
+@media (min-width:420px){.nseg button{padding:6px 12px}}
+.nseg i{font-style:normal;font-size:10.5px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:grid;place-items:center;background:var(--amber);color:var(--amber-ink)}
+.nseg button[aria-pressed="true"] i{background:var(--amber-ink);color:var(--amber2)}
+.wline{display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:10px;align-items:center;width:100%;text-align:left;border:1px solid rgba(242,169,59,.45);background:rgba(242,169,59,.07);border-radius:12px;padding:10px 12px;cursor:pointer;color:var(--ink);font:inherit}
+.wline>.ic:first-child{color:var(--amber);width:20px;height:20px}.wline>.ic:last-child{color:var(--muted);transform:rotate(-90deg)}
+.wline span{display:flex;flex-direction:column;min-width:0;font-size:12.5px;color:var(--muted)}.wline b{font-size:14px;font-weight:600;color:var(--ink)}
+.bc.warn{color:var(--amber2)}.bc em{font-style:normal;color:var(--muted)}
+/* a building site in a list: amber while the builders work, grey-blue while it waits */
+.bl.site{--sv:var(--amber);border-left:3px solid var(--sv)}
+.bl.site[data-c="wait"]{--sv:#8fb1c4}.bl.site[data-c="hold"]{--sv:var(--dim)}.bl.site[data-c="road"]{--sv:var(--warn)}
+.bl.site .meter i{background:linear-gradient(90deg,var(--sv),var(--sv))}
+.bn small{font-weight:400;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:stretch}
+.sbtn{display:flex;flex-direction:column;gap:4px;justify-content:center}.sbtn .ib{width:34px;height:34px}
+.ib[aria-pressed="true"],.btn[aria-pressed="true"]{color:var(--amber2);border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
+.status.site[data-c="wait"] .ic{color:#8fb1c4}.status.site[data-c="road"] .ic{color:var(--warn)}.status.site[data-c="hold"] .ic{color:var(--dim)}
+.needs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.needs li{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:4px 9px;align-items:center;font-size:13.5px}
+.needs .ic{color:var(--c);width:18px;height:18px}.needs b{font-weight:500;font-variant-numeric:tabular-nums;font-size:13px}.needs .sbar{grid-column:1/-1;height:4px;margin-top:0}
+.upg{background:var(--panel);border:1px solid rgba(242,169,59,.4);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}.upg h3{margin:0}.upg .mbar{margin-top:0}
+/* which good is made from which */
+.chains{display:flex;flex-direction:column;gap:6px}
+.chain{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+.chain>i{display:grid;place-items:center;color:var(--dim);transform:rotate(180deg)}.chain>i .ic{width:14px;height:14px}
+.cchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--panel);border-radius:10px;padding:6px 9px;cursor:pointer;font:inherit;font-size:12.5px;color:var(--ink);min-width:0}
+.cchip .ic{width:16px;height:16px;color:var(--c)}.cchip small{font-size:12px;font-variant-numeric:tabular-nums;color:var(--good)}
+.cchip[data-c="bad"]{border-color:rgba(239,123,88,.6)}.cchip[data-c="bad"] small{color:var(--warn)}.cchip[data-c="off"] small{color:var(--dim)}
+.chips3.flat{padding-left:0;margin-top:8px}
+.objs li small{display:block;font-size:12px;color:var(--muted)}.objs li .btn{min-height:30px;padding:3px 10px}
+tr.tot td{font-weight:600;border-bottom:0}
+/* the state */
+.gov{display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:center;background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.gov>.ic{width:30px;height:30px;color:var(--amber)}.gov b{display:block;font-family:var(--f-disp);font-weight:700;font-size:15px;letter-spacing:.05em;line-height:1.25}.gov span{font-size:13px;color:var(--soft)}
+.pols{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pols li{--sv:var(--line2);display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--sv);border-radius:12px;padding:10px 12px}
+.pols li.on{--sv:var(--good)}.pols .btn{white-space:nowrap}.pols .note{white-space:nowrap}
+.fxl{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
+.fxl li{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13px}
+.fxl b{font-weight:500}.fxl span{color:var(--muted);font-size:12px}.fxl time{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fxl li[data-c="good"] b{color:var(--good)}.fxl li[data-c="warn"] b{color:var(--amber2)}
+.bud .sub{color:var(--muted);font-weight:400;font-size:12.5px}
+/* over a building site on the map: how far it is, or that it waits */
+#labels .st.cs{width:auto;min-width:30px;height:18px;border-radius:9px;padding:0 6px;background:var(--amber);color:var(--amber-ink);font-size:10.5px;font-weight:700}
+#labels .st.cs.wait{background:#8fb1c4;color:#10242c}#labels .st.cs.bad{background:var(--warn);color:#fff}

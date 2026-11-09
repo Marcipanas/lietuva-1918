@@ -301,6 +301,75 @@ function M_elec() {
   m.cb(-0.4, 0.62, 0.5, 0.2, 0, 0.1, '#d4dde3', '#9fb0bc');
   return { geo: m.geometry(), h: 0.27 };
 }
+/* sawmill: an open saw shed with its steam engine, logs waiting on one side and stacked planks on the other */
+function M_sawmill() {
+  const m = new MB(), post = '#6d4a31';
+  m.pad(0, 0.02, 1.12, 0.92, 0.002, '#b9a37a');
+  m.cb(-0.08, -0.14, 0.7, 0.36, 0, 0.02, '#9a8462');
+  for (const x of [-0.42, -0.2, 0.04, 0.26]) for (const z of [-0.31, 0.03]) m.cb(x, z, 0.022, 0.022, 0.02, 0.13, post);
+  m.cb(-0.08, -0.31, 0.7, 0.02, 0.02, 0.07, '#8a6a48').gable(-0.08, -0.14, 0.72, 0.4, 0.13, 0.1, '#5f5a54', '#8a6a48', false, 0.02);
+  m.cb(-0.08, -0.14, 0.5, 0.05, 0.02, 0.055, '#c9a877').cb(0.1, -0.14, 0.04, 0.09, 0.02, 0.1, '#55504a');
+  m.cb(0.36, -0.14, 0.2, 0.3, 0, 0.14, '#8d5a44', '#6f5a4e').cyl(0.4, -0.24, 0.028, 0.14, 0.4, '#5f4a40', MC.soot, 8);
+  for (let r = 0; r < 3; r++) for (let q = 0; q < 4 - r; q++) m.cb(-0.3, 0.26 + (q + r * 0.5) * 0.05, 0.42, 0.04, r * 0.036, r * 0.036 + 0.036, r % 2 ? '#a9744a' : '#b88254', '#d2a271');
+  for (const [x, z, n] of [[0.2, 0.3, 4], [0.42, 0.3, 3], [0.31, 0.12, 2]]) for (let q = 0; q < n; q++) m.cb(x, z, 0.16, 0.3, q * 0.022, q * 0.022 + 0.018, q % 2 ? '#e3c595' : '#d9b983');
+  return { geo: m.geometry(), h: 0.4, smoke: [[0.4, 0.4, -0.24, 'grey']] };
+}
+/* brewery: a brick brewhouse, a malt kiln under its pyramid roof and vent, a tall chimney and barrels in the yard */
+function M_brewery() {
+  const m = new MB();
+  m.pad(0, 0.08, 1.0, 0.8, 0.002, '#b9ae8c');
+  m.cb(-0.12, -0.14, 0.56, 0.36, 0, 0.22, '#a8553c', '#7d4a3a').gable(-0.12, -0.14, 0.56, 0.36, 0.22, 0.1, '#55504c', '#a8553c').boxWins(-0.12, -0.14, 0.56, 0.36, 0.02, 0.2, 2, 4, 2, '#e9dcb8', 0.36);
+  m.cb(0.3, -0.16, 0.24, 0.24, 0, 0.3, '#b7634a', '#8a5644').hip(0.3, -0.16, 0.24, 0.24, 0.3, 0.16, '#6a5a50', 0.012).cb(0.3, -0.16, 0.05, 0.05, 0.44, 0.52, '#3f3a36');
+  m.cyl(-0.36, -0.3, 0.035, 0, 0.6, MC.smokeStack, MC.soot, 10, 0.027);
+  for (const [x, z] of [[-0.3, 0.2], [-0.2, 0.2], [-0.25, 0.29], [0.05, 0.24], [0.15, 0.24]]) m.cyl(x, z, 0.04, 0, 0.07, '#8a5a34', '#a8743f', 8);
+  m.cb(0.32, 0.22, 0.18, 0.1, 0.012, 0.05, '#7a5536', '#8e6644');
+  return { geo: m.geometry(), h: 0.6, smoke: [[-0.36, 0.6, -0.3, 'grey']] };
+}
+function M_beet() {
+  const m = new MB();
+  m.pad(-0.65, 0.65, 0.6, 0.6, 0.002, '#b7a37c');
+  m.cb(-0.7, 0.7, 0.32, 0.2, 0, 0.08, '#8f7f6a').gable(-0.7, 0.7, 0.32, 0.2, 0.08, 0.07, '#5a5450', '#8f7f6a', true);
+  for (let q = 0; q < 3; q++) m.cone(-0.5 + q * 0.09, 0.5, 0.045, 0, 0.06, '#d9d2bd', 6);
+  return { geo: m.geometry(), h: 0.18, fields: [[0.35, 0, 1.25, 1.9, 'beet'], [-0.6, -0.35, 0.75, 1.2, 'beet']] };
+}
+/* sugar factory: a whitewashed mill hall, lime kiln tower, two sugar silos and a tall chimney */
+function M_sugar() {
+  const m = new MB(), wall = '#e4dfd2';
+  m.pad(0, 0.3, 1.9, 0.5, 0.002, '#a9a08a');
+  m.cb(-0.2, -0.12, 1.1, 0.8, 0, 0.26, wall, '#bdb8ab').boxWins(-0.2, -0.12, 1.1, 0.8, 0.03, 0.24, 2, 7, 4, '#55616b', 0.4).gable(-0.2, -0.12, 1.1, 0.8, 0.26, 0.12, '#8f3f2c', wall);
+  m.cb(0.5, -0.3, 0.3, 0.3, 0, 0.5, '#d9d3c4', '#b9b3a4').hip(0.5, -0.3, 0.3, 0.3, 0.5, 0.08, '#6f6a63', 0.01);
+  for (const x of [0.52, 0.76]) m.cyl(x, 0.18, 0.11, 0, 0.36, '#f1eee6', '#d2cec4', 12).cone(x, 0.18, 0.11, 0.36, 0.06, '#c9c5ba', 12);
+  m.cyl(-0.82, -0.4, 0.045, 0, 0.8, MC.smokeStack, MC.soot, 10, 0.034);
+  for (let q = 0; q < 5; q++) m.cone(-0.7 + q * 0.11, 0.42, 0.05, 0, 0.07, '#d9d2bd', 6);
+  return { geo: m.geometry(), h: 0.8, smoke: [[-0.82, 0.8, -0.4, 'grey']] };
+}
+/* cement works: a quarry face, the long kiln on its piers, a preheater tower, silos and a dusty chimney */
+function M_cement() {
+  const m = new MB(), con = '#b6b3aa', con2 = '#9d9a92';
+  m.pad(0, 0, 1.9, 1.7, 0.002, '#c9c5b6');
+  m.cb(-0.55, -0.45, 0.34, 0.34, 0, 0.75, con, con2).boxWins(-0.55, -0.45, 0.34, 0.34, 0.05, 0.7, 5, 2, 2, '#59636b', 0.4);
+  for (let q = 0; q < 4; q++) m.cb(-0.2 + q * 0.26, -0.45, 0.05, 0.14, 0, 0.16 - q * 0.02, con2);
+  m.quad([-0.36, 0.3, -0.37], [0.72, 0.2, -0.37], [0.72, 0.2, -0.53], [-0.36, 0.3, -0.53], '#8b8f93').quad([-0.36, 0.18, -0.37], [0.72, 0.08, -0.37], [0.72, 0.2, -0.37], [-0.36, 0.3, -0.37], '#7b8084')
+    .quad([0.72, 0.08, -0.53], [-0.36, 0.18, -0.53], [-0.36, 0.3, -0.53], [0.72, 0.2, -0.53], '#7b8084');
+  m.cb(0.74, -0.45, 0.2, 0.24, 0, 0.24, con, con2);
+  for (const [x, z] of [[-0.6, 0.2], [-0.32, 0.2], [-0.04, 0.2]]) m.cyl(x, z, 0.13, 0, 0.5, '#c4c1b8', '#a9a69d', 12);
+  m.cb(0.5, 0.25, 0.6, 0.4, 0, 0.18, '#a7a49b', '#8d8a82').boxWins(0.5, 0.25, 0.6, 0.4, 0.03, 0.16, 1, 5, 3, '#59636b', 0.4);
+  m.cyl(0.78, -0.72, 0.05, 0, 0.95, '#bdb9ae', MC.soot, 10, 0.038);
+  for (const [x, z, s] of [[-0.78, 0.66, 0.1], [-0.6, 0.72, 0.07], [0.2, 0.7, 0.08]]) m.cone(x, z, s, 0, s * 0.8, '#d6d2c4', 7);
+  return { geo: m.geometry(), h: 0.95, smoke: [[0.78, 0.95, -0.72, 'grey'], [-0.55, 0.76, -0.45, 'steam']] };
+}
+/* fertiliser plant: storage tanks, a prilling tower, pipe bridges and a low hall */
+function M_fert() {
+  const m = new MB(), st = '#c9cdd0', st2 = '#a9afb3';
+  m.pad(0, 0, 1.9, 1.7, 0.002, '#bcbcb2');
+  for (const [x, z] of [[-0.6, -0.5], [-0.3, -0.5], [-0.6, -0.2]]) m.cyl(x, z, 0.13, 0, 0.3, st, st2, 12).cone(x, z, 0.13, 0.3, 0.05, st2, 12);
+  m.cb(0.25, -0.5, 0.16, 0.16, 0, 0.85, '#d9d6cc', '#bcb9af').cb(0.25, -0.5, 0.22, 0.22, 0.85, 0.9, '#8f959a');
+  m.cb(-0.18, -0.5, 0.7, 0.03, 0.26, 0.29, '#8f959a').cb(-0.3, -0.35, 0.03, 0.3, 0.26, 0.29, '#8f959a');
+  m.cb(0.35, 0.3, 0.9, 0.6, 0, 0.2, '#a9b7ad', '#86948b').boxWins(0.35, 0.3, 0.9, 0.6, 0.03, 0.18, 1, 7, 4, '#4f5a61', 0.4);
+  m.cyl(0.72, -0.6, 0.045, 0, 0.7, '#c9c5ba', '#8f8b82', 10, 0.035);
+  for (let q = 0; q < 3; q++) m.cb(-0.62 + q * 0.2, 0.5, 0.16, 0.2, 0, 0.07, q % 2 ? '#e8e2cf' : '#d9d2bd');
+  return { geo: m.geometry(), h: 0.9, smoke: [[0.72, 0.7, -0.6, 'steam']] };
+}
 /* border post: a customs house, a flagpole and a striped barrier across the road */
 function M_customs() {
   const m = new MB();
@@ -480,6 +549,7 @@ function LM_anyk() {
 const MODEL_FN = { hall: () => M_hall(false), hallCap: () => M_hall(true), chapel: M_chapel, customs: M_customs, farm: M_farm, potato: M_potato, flax: M_flax, peat: M_peat, dairy: M_dairy, pigs: M_pigs,
   fishery: M_fishery, forestry: M_forestry, brick: M_brick, warehouse: M_warehouse, station: M_station, port: M_port, school: M_school, clinic: M_clinic,
   power: M_power, linen: M_factory('#cdb99a'), furniture: M_factory('#9b7652'), hydro: M_hydro, nuclear: M_nuclear, elec: M_elec,
+  sawmill: M_sawmill, brewery: M_brewery, beet: M_beet, sugar: M_sugar, cement: M_cement, fert: M_fert,
   landmark: LM_kpil, lm_gedim: LM_gedim, lm_cath: LM_cath, lm_onos: LM_onos, lm_vrot: LM_vrot, lm_krot: LM_krot, lm_kpil: LM_kpil, lm_mykl: LM_mykl,
   lm_ktea: LM_ktea, lm_scat: LM_scat, lm_kryz: LM_kryz, lm_trak: LM_trak, lm_palg: LM_palg, lm_anyk: LM_anyk };
 const MODELS = {};
@@ -638,6 +708,26 @@ const TOWN_WALL = ['#a6713f', '#8a5a3a', '#6f8f6a', '#7f97ad', '#c49a5c', '#9b4f
 const VIL_WALL = ['#7a5a3e', '#6e5039', '#8a6a4a', '#5f4a36', '#8f7a62'], THATCH = ['#a8935f', '#968458', '#8a7d62', '#b29b66'];
 const PART_PAL = { woodWalls: WALL_TINT, woodRoof: ROOF_TINT, ten2: CITY_WALL, ten3: CITY_WALL, tenW: CITY_WALL, ten2R: CITY_ROOF, ten3R: CITY_ROOF, tenWR: CITY_ROOF,
   thW: TOWN_WALL, thL: TOWN_WALL, thR: TOWN_ROOF, thLR: TOWN_ROOF, trW: VIL_WALL, klW: VIL_WALL, kbW: VIL_WALL, trR: THATCH, klR: THATCH, kbR: THATCH, cityFar: CITY_WALL, townFar: TOWN_WALL, farmFar: VIL_WALL };
+
+/* ---------- building sites: a scaffold (a unit frame, scaled to the building), a pile of materials and a sign ---------- */
+const SITE_GEO = {};
+function siteGeo(k) {
+  if (SITE_GEO[k]) return SITE_GEO[k];
+  const m = new MB(), pole = '#9a7a52', rail = '#b08d60';
+  if (k === 'scaf') {
+    /* written at twice its size like every model: geometry() halves it to a 1 x 1 x 1 km frame */
+    for (const x of [-1, -0.34, 0.34, 1]) for (const z of [-1, 1]) m.cb(x, z, 0.03, 0.03, 0, 2, pole);
+    for (const z of [-0.34, 0.34]) for (const x of [-1, 1]) m.cb(x, z, 0.03, 0.03, 0, 2, pole);
+    for (const y of [0.66, 1.33, 1.97]) { for (const z of [-1, 1]) m.cb(0, z, 2.03, 0.022, y, y + 0.03, rail); for (const x of [-1, 1]) m.cb(x, 0, 0.022, 2.03, y, y + 0.03, rail); }
+  } else if (k === 'pile') {
+    for (let q = 0; q < 4; q++) m.cb(0, 0, 0.2, 0.09, q * 0.016, q * 0.016 + 0.013, q % 2 ? '#e3c595' : '#d6b780');
+    for (let q = 0; q < 6; q++) m.cb(0.16 + (q % 3) * 0.035, -0.02 + Math.floor(q / 3) * 0.045, 0.03, 0.04, 0, 0.03 + (q % 2) * 0.012, '#c96a4c', '#d9805f');
+    m.cone(-0.17, 0.02, 0.05, 0, 0.045, '#c9c2ae', 6);
+  } else if (k === 'sign') {
+    m.cb(-0.03, 0, 0.008, 0.008, 0, 0.1, '#6d4a31').cb(0.03, 0, 0.008, 0.008, 0, 0.1, '#6d4a31').cb(0, 0, 0.1, 0.008, 0.06, 0.11, '#f1ead8').cb(0, 0.0045, 0.07, 0.002, 0.08, 0.095, '#f2a93b');
+  }
+  return SITE_GEO[k] = m.geometry();
+}
 
 /* ---------- trees ---------- */
 const TREE_GEO = {};

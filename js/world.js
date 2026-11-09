@@ -342,7 +342,7 @@ function validPlace(t, x, z, rot, gen) {
   const B0 = BT[t];
   if (!gen && !unlocked(t)) return bad(`Unlocks in the ${ERAS[B0.era].n} era`);
   const o = { x, z, rot, w: B0.fp[0], d: B0.fp[1] };
-  let n = 0, fert = 0, flx = 0, bog = 0, clay = 0, riv = 0, err = '';
+  let n = 0, fert = 0, flx = 0, bog = 0, clay = 0, lime = 0, riv = 0, err = '';
   forCellsIn(o, 0, k => {
     n++;
     const tt = TT[k], f = TF[k];
@@ -350,7 +350,7 @@ function validPlace(t, x, z, rot, gen) {
     if (!gen && heldOff(k)) { err = err || heldTxt(RGN_KEY[RGN[k]]); return; }
     if (tt === T_RIVER) riv++;
     else if (tt !== T_LAND && tt !== T_SAND) { err = err || 'Cannot build on water'; return; }
-    if (f & F_FERTILE) fert++; if (f & F_FLAX) flx++; if (f & F_BOG) bog++; if (f & F_CLAY) clay++;
+    if (f & F_FERTILE) fert++; if (f & F_FLAX) flx++; if (f & F_BOG) bog++; if (f & F_CLAY) clay++; if (f & F_LIME) lime++;
   });
   if (err) return bad(err);
   if (B0.need === 'river') { if (!riv) return bad('Must be built across a river'); }
@@ -371,6 +371,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'forest': if (ring(0.6, (tt, f) => f & F_FOREST) < 3) return bad('Needs forest around it'); break;
     case 'bog': if (bog < Math.max(2, n * 0.4)) return bad('Needs peat bog under it'); break;
     case 'clay': if (!clay) return bad('Needs clay ground'); break;
+    case 'lime': if (!lime) return bad('Needs limestone under it'); break;
     case 'open': if (bog > n * 0.25) return bad('Too wet: this is bog'); break;
     case 'rail': if (!gen && !accessOf(o, 'rail', 0.25)) return bad('Must be next to a railway track'); break;
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
@@ -457,7 +458,7 @@ function bullPlan(trace, R) {
   return { b, lots, segs, road, rail };
 }
 function applyBull(plan) {
-  plan.b.forEach(removeB);
+  plan.b.forEach(b => { if (isSite(b)) cancelSite(b); else removeB(b); });
   plan.lots.forEach(removeLot);
   for (const q of plan.segs) {
     const e = q.e;
@@ -584,7 +585,7 @@ function analyze() {
     const lock = heldOffAt(b.x, b.z), q = lock ? null : own(bOBB(b), b.t !== 'house');
     if (!q || q.o < 0) { b.town = -1; b.cd = 0; b.na = lock ? 'locked' : q ? 'far' : 'noroad'; return; }
     b.town = q.o; b.cd = q.d;
-    if (b.t === 'customs') b.gate = borderOf(b.x, b.z);
+    if (b.t === 'customs') b.gate = b.c ? '' : borderOf(b.x, b.z);
     else if (b.t === 'forestry') { let c = 0; forDisk(b.x, b.z, 1.6, k => { if (TF[k] & F_FOREST) c++; }); b.k = clamp(c / 20, 0.3, 1.4); }
     else if (BT[b.t].bonus) {
       const bit = BT[b.t].bonus === 'fertile' ? F_FERTILE : F_FLAX;
@@ -596,7 +597,7 @@ function analyze() {
   S.lots.forEach(l => { l.town = -1; l.cd = 0; const q = heldOffAt(l.x, l.z) ? null : own(lotOBB(l), false); if (q && q.o >= 0) { l.town = q.o; l.cd = q.d; } });
   /* stations: where trains stop for each town */
   NET.stSrc = [];
-  S.bld.forEach(b => { if (b.t !== 'station' || b.town < 0) return; const a = accessOf(bOBB(b), 'rail', 0.35); if (a) NET.stSrc.push({ e: a.e, s: a.s, o: b.town }); });
+  S.bld.forEach(b => { if (b.t !== 'station' || b.town < 0 || b.c) return; const a = accessOf(bOBB(b), 'rail', 0.35); if (a) NET.stSrc.push({ e: a.e, s: a.s, o: b.town }); });
   /* comp: settlements joined by any road or railway (goods can travel between them).
      grid: settlements joined by railways and paved roads, which also carry the power lines; linked: those in the capital's.
      A settlement reaches the paved network when one starts within its streets (by road from the hall). */
@@ -656,7 +657,7 @@ function analyze() {
   NET.edges.forEach((e, n) => { NET.adj[e.a].push(n); NET.adj[e.b].push(n); });
   NET.km = { road: [0, 0, 0, 0], rail: [0, 0, 0] }; NET.up = 0;
   EDGES.forEach(e => { if (!e.off) { NET.km[e.k][e.lv] += e.L; NET.up += e.L * espec(e).up; } });
-  NET.pol = S.bld.filter(b => BT[b.t].pol).map(b => ({ x: b.x, z: b.z, p: BT[b.t].pol }));
+  NET.pol = S.bld.filter(b => BT[b.t].pol && !isSite(b)).map(b => ({ x: b.x, z: b.z, p: BT[b.t].pol }));
   NET.ver++; NET.dirty = false;
 }
 /* Nodes on railways or paved roads within lim km by road of a hall's access point {e, s}. */
@@ -1375,13 +1376,13 @@ function settlements() {
     if (d0) o = { id: d0.id, reg: d0.reg, capital: d0.cap || 0, d: d0.d, pop0: d0.pop, stock: { ...d0.st }, vil: 0 };
     else if (d1) {
       const vil = (d1[5] || '').includes('v') ? 1 : 0, pop = d1[2];
-      o = { id: d1[0], reg: d1[3], d: d1[4], pop0: pop, vil, stock: vil ? { grain: 4, potatoes: 4, timber: 5 } : { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2) } };
+      o = { id: d1[0], reg: d1[3], d: d1[4], pop0: pop, vil, stock: vil ? { grain: 4, potatoes: 4, timber: 5, planks: 3 } : { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2), planks: Math.round(8 + pop * 2) } };
     } else if (town) {
       const pop = Math.round(clamp(gp ? 0.8 + gp / 1000 * 0.12 : 1.4, 1, 3) * 10) / 10;
-      o = { id: slugOf(name), d: TOWN_TXT[name] || '', pop0: pop, vil: 0, stock: { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2) } };
+      o = { id: slugOf(name), d: TOWN_TXT[name] || '', pop0: pop, vil: 0, stock: { grain: Math.round(10 + pop * 3), potatoes: Math.round(6 + pop * 2), timber: Math.round(12 + pop * 2), planks: Math.round(8 + pop * 2) } };
     } else {
       const k = cellAt(x, z), pop = Math.round((0.4 + Math.min(0.6, (rs - 94) / 300) + (k >= 0 && TF[k] & F_FERTILE ? 0.2 : 0)) * 10) / 10;
-      o = { id: 'v' + i, d: '', pop0: pop, vil: 1, stock: { grain: 3, potatoes: 3, timber: 4 } };
+      o = { id: 'v' + i, d: '', pop0: pop, vil: 1, stock: { grain: 3, potatoes: 3, timber: 4, planks: 2 } };
     }
     if (ids.has(o.id)) o.id += '_' + i;
     ids.add(o.id);
@@ -1441,7 +1442,7 @@ function genWorld(log) {
 /* A town founded by the player: hall, two short streets, one house and a few zoned lots. */
 function foundTown(x, z, rot, name) {
   const n = S.towns.length;
-  S.towns.push(newTown('t' + S.nid, name, x, z, { d: 'A new town founded by the planning ministry.', reg: regionAt(x, z), rg: rgnAt(x, z), R: 1.2, pop: 2, pop0: 2, stock: { grain: 40, timber: 24 } }));
+  S.towns.push(newTown('t' + S.nid, name, x, z, { d: 'A new town founded by the planning ministry.', reg: regionAt(x, z), rg: rgnAt(x, z), R: 1.2, pop: 2, pop0: 2, stock: { grain: 40, timber: 24, planks: 12 } }));
   const hall = addB('hall', x, z, rot, 1);
   hall.ti = n;
   const fx = Math.sin(rot), fz = Math.cos(rot), rx = Math.cos(rot), rz = -Math.sin(rot), px = x + fx * 0.5, pz = z + fz * 0.5;

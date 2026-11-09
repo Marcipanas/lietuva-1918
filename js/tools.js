@@ -16,7 +16,7 @@ function railMax() { return S.era >= 3 ? 2 : 1; }
    dirt roads in the first era, though paved roads can be picked, at a price in bricks) */
 function lineLevel(k) { const mx = k === 'road' ? roadMax() : railMax(), c = TOOL.lv[k]; return c >= 1 && c <= mx ? c : k === 'road' ? Math.min(mx, S.era) : mx; }
 /* what the ground overlay highlights while placing a building: where it can go, or where it does best */
-function needKey(bt) { const T0 = BT[bt]; if (!T0) return null; return T0.need === 'clay' || T0.need === 'bog' || T0.need === 'forest' ? T0.need : T0.bonus || null; }
+function needKey(bt) { const T0 = BT[bt]; if (!T0) return null; return T0.need === 'clay' || T0.need === 'bog' || T0.need === 'forest' || T0.need === 'lime' ? T0.need : T0.bonus || null; }
 
 function setTool(k, bt, ti) {
   TOOL.k = k; TOOL.bt = bt || null; TOOL.rot = 0; TOOL.ti = ti >= 0 ? ti : -1; TOOL.built = '';
@@ -278,7 +278,7 @@ function prepareLine() {
   let w = 0, br = 0;
   runs.forEach(r => { w += waterKm(r.p); br += bridges(r.p); });
   ups.forEach(g => { w += waterKm(polySlice(g.e.p, g.e.c, g.s0, g.s1)) * 0.6; });
-  const f = km + upKm * 0.6 + w * (BRIDGE - 1);
+  const f = (km + upKm * 0.6 + w * (BRIDGE - 1)) * lineDisc(k);
   const cost = { lt: Math.round(spec.lt * f), [mk]: Math.ceil(spec.mat[mk] * f) };
   PEND = { kind: 'line', mode: k, pts, runs, ups, lv, km, upKm, br, cost, ti: linePayer(cost, [TRACE[0], TRACE[TRACE.length - 1]]), name: spec.n };
   const hit = runs.map(r => lineHitsBuilding(r.p, spec.w / 2)).find(Boolean);
@@ -286,6 +286,8 @@ function prepareLine() {
   if (hit) { PEND.bad = `${hit.t === 'house' ? 'Houses are' : bName(hit) + ' is'} in the way. Drag a point around it, or tap to add a bend.`; VIEW.pathOk = false; VIEW.ver++; }
   showBar();
 }
+/* with road gangs on the payroll (a policy), roads cost a quarter less to lay */
+function lineDisc(k) { return k === 'road' && polOn('roads') ? 0.75 : 1; }
 /* raise the level of the spans a plan follows; spans that cover part of an edge split it first, from the far end back */
 function applyUps(ups, lv) {
   ups.forEach(g => {
@@ -298,7 +300,7 @@ function applyUps(ups, lv) {
   netChanged();
 }
 function prepareUpgrade(e) {
-  const lv = lineLevel(e.k), spec = (e.k === 'road' ? ROADT : RAILT)[lv], mk = Object.keys(spec.mat)[0], f = (e.L + waterKm(e.p) * (BRIDGE - 1)) * 0.6;
+  const lv = lineLevel(e.k), spec = (e.k === 'road' ? ROADT : RAILT)[lv], mk = Object.keys(spec.mat)[0], f = (e.L + waterKm(e.p) * (BRIDGE - 1)) * 0.6 * lineDisc(e.k);
   const cost = { lt: Math.round(spec.lt * f), [mk]: Math.ceil(spec.mat[mk] * f) };
   PEND = { kind: 'up', e, lv, km: e.L, cost, ti: linePayer(cost, [e.p[0], e.p[e.p.length - 1]]), name: spec.n };
   VIEW.path = e.p; VIEW.pathOk = true; VIEW.ver++;
@@ -398,6 +400,7 @@ function quickNeed(need, x, z) {
   if (!(f & F_LT) || heldOffAt(x, z)) return false;
   if (need === 'border' || need === 'coast' || need === 'lake' || need === 'water') { const k = cellAt(x, z); return k >= 0 && nearMask(need)[k] === 1; }
   if (need === 'clay') { let c = 0; forDisk(x, z, 0.6, k => { if (TF[k] & F_CLAY) c++; }); return c > 0; }
+  if (need === 'lime') { let c = 0; forDisk(x, z, 0.6, k => { if (TF[k] & F_LIME) c++; }); return c > 0; }
   if (need === 'bog') return !!(f & F_BOG);
   if (need === 'forest') { let c = 0; forDisk(x, z, 0.9, k => { if (TF[k] & F_FOREST) c++; }); return c >= 3; }
   if (need === 'open') return !(f & F_BOG);
@@ -501,17 +504,21 @@ function doConfirm() {
   } else if (p.kind === 'place') {
     const v = validPlace(p.t, p.x, p.z, p.rot);
     if (!v.ok) return toast(v.why);
-    if (!town) return toast('No town nearby to pay for it');
-    const m = missing(p.cost, town);
-    if (m) return toast(m);
-    pay(p.cost, town);
-    if (p.t === 'hall') newTownAt(p.x, p.z, p.rot);
-    else { placed = addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
+    if (p.t === 'hall') {
+      if (!town) return toast('No town nearby to pay for it');
+      const m = missing(p.cost, town);
+      if (m) return toast(m);
+      pay(p.cost, town); newTownAt(p.x, p.z, p.rot);
+    } else {
+      const T0 = BT[p.t], jt = p.jt >= 0 ? S.towns[p.jt] : null;
+      placed = siteNew(addB(p.t, p.x, p.z, p.rot, 1), T0.cost, T0.bd);
+      toast(`${T0.n} planned`); log(`${T0.n} planned${jt ? ' near ' + jt.n : ''}.`); tutEvent('build');
+    }
     VIEW.ghost = null; PEND = null; VIEW.ver++; TOOL.built = BT[p.t].n;
   }
   analyze(); save(); renderPanel(true); showBar();
   /* built with no road to a town: lay out the road to it, for the player to confirm */
-  if (placed && placed.na === 'noroad' && offerAccess(placed)) toast(`${BT[placed.t].n} built. It needs a road to town: build the road shown, or draw your own.`);
+  if (placed && placed.na === 'noroad' && offerAccess(placed)) toast(`${BT[placed.t].n} planned. It needs a road to town: build the road shown, or draw your own.`);
 }
 /* A dirt road from a building that no road reaches to the nearest street of the town that would take it, planned in the Road
    tool. A station's front faces its track, so its road leaves from the back or a side. Returns true when there is a plan. */

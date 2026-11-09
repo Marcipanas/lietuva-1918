@@ -103,7 +103,7 @@ const session = `(function(){const out={};let t=0;
   act({act:'newroute',a:String(ki),b:String(ai),m:'road'});const r=S.routes[S.routes.length-1];routeEval(r);out.newRouteOk=r.ok&&r.a===ki&&r.b===ai;
   act({act:'rveh',r:String(r.id),d:'1'});act({act:'rcargo',r:String(r.id),dir:'ab',res:'grain'});act({act:'rpax',r:String(r.id)});out.routeEdit=r.n===3&&Array.isArray(r.ab)&&r.pax;
   /* place buildings around Kaunas, the way the ghost follows a finger */
-  cam.dist=12;cam.x=kau.x;cam.z=kau.z;applyCam();kau.stock.timber=600;S.funds+=4000;
+  cam.dist=12;cam.x=kau.x;cam.z=kau.z;applyCam();kau.stock.timber=600;kau.stock.planks=600;S.funds+=4000;
   const place=type=>{setTool('place',type);for(let rr=2;rr<11;rr+=0.5)for(let q=0;q<24;q++){const an=q/24*Math.PI*2;setGhost(kau.x+Math.sin(an)*rr,kau.z+Math.cos(an)*rr);
     if(PEND&&PEND.ok&&PEND.ti>=0&&!missing(PEND.cost,S.towns[PEND.ti])){const n=S.bld.length;doConfirm();return S.bld.length===n+1?S.bld[S.bld.length-1]:null}}return null};
   const placed=['warehouse','school','pigs','dairy'].map(place);out.placed=placed.map(Boolean);
@@ -141,10 +141,12 @@ const session = `(function(){const out={};let t=0;
   out.moved=Object.values(r.mAB||{}).reduce((a,b)=>a+b,0);out.housesNow=S.bld.filter(b=>b.t==='house').length;
   out.steady=S.towns.filter(x=>!x.lock).every(x=>x.pop>=x.pop0*0.95);out.low=S.towns.filter(x=>!x.lock&&x.pop<x.pop0*0.95).map(x=>x.n+' '+x.pop.toFixed(1)+'/'+x.pop0).join(', ');
   /* foreign trade: a border post in Kybartai, and a deal selling grain to Germany */
-  const ky=S.towns.find(x=>x.id==='kyb'),kyi=S.towns.indexOf(ky);cam.dist=8;cam.x=ky.x;cam.z=ky.z;applyCam();ky.stock.timber=200;ky.stock.grain=140;S.funds+=2000;
+  const ky=S.towns.find(x=>x.id==='kyb'),kyi=S.towns.indexOf(ky);cam.dist=8;cam.x=ky.x;cam.z=ky.z;applyCam();ky.stock.planks=200;ky.stock.grain=140;S.funds+=2000;
   const post=(()=>{setTool('place','customs');for(let rr=0.4;rr<4;rr+=0.2)for(let q=0;q<24;q++){const an=q/24*Math.PI*2;setGhost(ky.x+Math.sin(an)*rr,ky.z+Math.cos(an)*rr);
     if(PEND&&PEND.ok&&PEND.ti===kyi&&!missing(PEND.cost,ky)){const n=S.bld.length;doConfirm();return S.bld.length===n+1?S.bld[S.bld.length-1]:null}}return null})();
-  setTool('inspect');analyze();out.post=!!post&&post.town===kyi&&post.gate==='de';out.postWhy=post?post.gate+' town '+post.town:'not placed';
+  /* the post is a building site first: it trades only once the builders are done */
+  setTool('inspect');analyze();out.postSite=!!post&&!!post.c&&!townGates(kyi).has('de');for(let q=0;q<40&&post&&post.c;q++)tick();analyze();
+  out.post=!!post&&!post.c&&post.town===kyi&&post.gate==='de';out.postWhy=post?post.gate+' town '+post.town:'not placed';
   addDeal('de','grain','out',5,kyi);S.speed=0;const f0=S.funds;for(let q=0;q<3;q++)tick();const dl=S.deals[0];out.deal=dl.done>0&&dl.val>0;out.dealWhy=dl.why||dl.done.toFixed(1)+' a day for '+dl.val.toFixed(0)+' Lt';
   S.tab='trade';renderPanel(true);renderPanel(false);
   /* history: Żeligowski marches on Vilnius in October 1920. Defending it works only with enough security; holding the line at
@@ -193,7 +195,7 @@ const session = `(function(){const out={};let t=0;
   /* ---- v0.11, on a fresh game ---- */
   newGame();analyze();S.intro=0;S.speed=0;setTool('inspect');
   /* the army's budget is paid before the day's balance is counted, so the balance shows it */
-  S.hist.def=25;for(let q=0;q<60;q++)tick();out.budArmy=Math.round(S.bud.army);out.budGap=Math.abs(Object.values(S.bud).reduce((a,x)=>a+x,0)-S.inc);S.hist.def=0;
+  S.hist.def=25;for(let q=0;q<60;q++)tick();out.budArmy=Math.round(S.bud.army);out.budGap=Math.abs(Object.entries(S.bud).reduce((a,[k,x])=>a+(k==='build'||k==='homes'?0:x),0)-S.inc);S.hist.def=0;
   /* stations, warehouses and border posts say what they do */
   out.idle=S.bld.filter(b=>IDLE.has(b.t)&&b.town>=0&&!S.towns[b.town].lock).map(b=>b.why);
   /* a drawn map twice the real size, shown in real km, its terrain shipped packed; paved roads from 1918, dirt by default */
@@ -262,7 +264,7 @@ assert(o.finite, 'no NaN or infinite values in towns or treasury');
 assert(o.pop > o.pop0, `towns grow (${Math.round(o.pop0)}k to ${Math.round(o.pop)}k residents, ${o.housesNow} house lots, income ${o.inc.toFixed(1)} Lt a day)`);
 assert(o.steady, `towns and villages keep their 1918 size without help${o.low ? ' (shrank: ' + o.low + ')' : ''}`);
 assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`);
-assert(o.post, `a border post in Kybartai trades with Germany (${o.postWhy})`);
+assert(o.postSite && o.post, `a border post in Kybartai is a building site first, then trades with Germany (${o.postWhy})`);
 assert(o.deal, `a deal sells grain to Germany (${o.dealWhy})`);
 assert(o.vil19 === 'pl,pl,pl,lv,lv,' + (o.sejny ? 'pl' : 'de') + ',Kaunas,1' && o.red19, `the government moves to Kaunas, the Red Army takes Vilnius in January 1919 and Poland in April; Latvia takes the Palanga coast (${o.vil19})`);
 assert(['gov19', 'red19', 'pl19'].every(k => o.news.includes(k)), `a card explains each change: the government in Kaunas, the Red Army and then Poland in Vilnius (${o.news.join(', ')})`);
@@ -288,7 +290,7 @@ assert(o.drop, 'a new version removes saves of older versions and keeps the tuto
 assert(o.intro && o.introGone && o.kauHomes && o.task0 === 'route', `a new game opens on the Act of Independence, paused, with Kaunas housed and a first ministry task (${o.task0})`);
 assert(o.hungry <= 3 && o.coldSummer === 0 && o.warnDays <= 1 && o.heldRoute, `no hunger from starting stocks (${o.hungry} hungry in March 1920), no cold homes in summer, one warning line a day, and the route to Vilnius waits at no cost`);
 assert(o.tut0 && o.tut >= 1, `the first-time tutorial starts and follows the player (reached step ${o.tut + 1})`);
-assert(o.budArmy <= -24 && o.budGap < 0.5, `the army's 25 Lt a day is in the day's balance, which adds up from its parts (army ${o.budArmy}, off by ${o.budGap.toFixed(2)})`);
+assert(o.budArmy <= -24 && o.budGap < 0.5, `the army's 25 Lt a day is in the day's balance, which adds up from its parts without one-off building (army ${o.budArmy}, off by ${o.budGap.toFixed(2)})`);
 assert(o.idle.length > 0 && o.idle.every(w => w && w !== 'Starting'), `stations, warehouses and border posts say what they do (${[...new Set(o.idle)].slice(0, 2).join('; ')})`);
 assert(o.km === '2,15,800' && o.ras && o.paved1, `the map is drawn twice its size and shown in real km (${o.km}), its terrain ships packed, and paved roads can be built from 1918`);
 assert(o.sty === 'ctv' || o.sty === 'cmtv', `house lots take their place's style: city tenements, town houses and farmsteads (${o.sty})`);

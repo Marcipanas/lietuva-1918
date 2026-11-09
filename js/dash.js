@@ -2,10 +2,11 @@
 /* Lietuva 1918 — dashboards: what each town and the whole country make, use and lack, the problems to fix, and one-tap fixes.
    No DOM and no THREE: plain data for panels.js. Problems come from the figures the day tick leaves on each town
    (fed, heat, house, jobs, pr, pol, hint, note) and from its buildings (why, lack). A fix is a button: {t: label, a: act data}. */
-const PRODUCER={grain:'farm',potatoes:'potato',dairy:'dairy',meat:'pigs',fish:'fishery',timber:'forestry',peat:'peat',flax:'flax',bricks:'brick',textiles:'linen',furniture:'furniture',electronics:'elec'};
+const PRODUCER={grain:'farm',potatoes:'potato',dairy:'dairy',meat:'pigs',fish:'fishery',timber:'forestry',peat:'peat',flax:'flax',beet:'beet',planks:'sawmill',bricks:'brick',beer:'brewery',sugar:'sugar',textiles:'linen',
+  furniture:'furniture',cement:'cement',fertiliser:'fert',electronics:'elec'};
 const pct=q=>Math.round((q||0)*100)+'%';
-/* buildings of a settlement: the day tick's grouping when there is one */
-function bOfTown(ti){return BYT[ti]||S.bld.filter(b=>b.town===ti)}
+/* working buildings of a settlement (the day tick's grouping when there is one); building sites are listed apart (sitesOf) */
+function bOfTown(ti){return BYT[ti]||S.bld.filter(b=>b.town===ti&&!isSite(b))}
 /* "Brickworks ×2, Linen mill" */
 function typeList(bs){const c=new Map();bs.forEach(b=>c.set(b.t,(c.get(b.t)||0)+1));return [...c].map(([t,n])=>BT[t].n+(n>1?' ×'+n:'')).join(', ')}
 
@@ -28,6 +29,12 @@ function suggestOutlet(ti,r){let best=null;
   if(rt)return rt.ok?{t:`Add a ${VT[rt.vt].one} to ${nm}`,a:{act:'rveh',r:rt.id,d:1}}:null;
   return {t:`Route to ${nm}`,a:{act:'newroute',a:ti,b:best.o,m:best.m}}}
 function buildFix(bt,ti,label){return bt&&BT[bt]&&unlocked(bt)?{t:label||BT[bt].n,a:{act:'build',bt,ti},b:1}:null}
+/* buy a lot of 25 from the local merchants, where they trade and the town may buy this good */
+function buyFix(ti,r){return S.hist.path!=='soviet'&&canBuyHere(ti,r)&&RI[r].era<=S.era?{t:`Buy 25 ${rname(r)}`,a:{act:'buy',ti,r},b:1}:null}
+/* goods that only come from abroad: open the Trade view */
+function importFix(ti,r){return {t:`Import ${rname(r)}`,a:{act:'nav',tab:'trade'},b:1}}
+/* the material the homes of each era are built of */
+const HOUSE_MAT=[null,'planks','bricks','cement'];
 
 /* Problems of one settlement, worst first: {k, sev (2 urgent, 1 holds it back, 0 a note), ic, t, d, fix}.
    lite: skip the fixes (the national list only counts). */
@@ -43,7 +50,15 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
     [NET.linked.has(ti)?F(buildFix,'power',ti):{t:'Link it by paved road',a:{act:'tool',tool:'road',ti,lv:2}}]);
   if(t.pop>(t.house||0)+0.3)add('crowd',1,'house','Overcrowded',`${popStr(t.pop-t.house)} more people than homes.`,[zone]);
   else if(t.hint&&t.hint.startsWith('No room'))add('room',1,'zone','No land to build on','Every zoned lot has houses. Zone land along its streets so it can keep growing.',[zone]);
-  if(t.hint&&t.hint.startsWith('Needs')){const r=S.era>=2?'bricks':'timber';add('mat',1,RI[r].ic,'Can’t build homes',t.hint+'.',[F(suggestRoute,ti,[r]),F(buildFix,PRODUCER[r],ti)])}
+  if(t.hint&&t.hint.startsWith('Needs')){const r=t.hmat&&RI[t.hmat]?t.hmat:HOUSE_MAT[S.era];add('mat',1,RI[r].ic,'Can’t build homes',t.hint+'.',[F(suggestRoute,ti,[r]),F(buildFix,PRODUCER[r],ti),F(buyFix,ti,r)])}
+  /* fuel put by: a town takes in no more people than it can keep warm */
+  if(t.nofuel&&t.pop-t.pop0>=0.3&&!(heatOn&&t.heat<0.9))add('fuel',1,'fire','No fuel for more homes',`Its own woodlots heat ${popStr(t.pop0)}. For the ${popStr(t.pop-t.pop0)} beyond that it has ${pct(Math.min(1,t.fuelw||0))} of a winter’s peat or timber in store, so it takes in no one new.`,
+    [F(suggestRoute,ti,FUEL),F(buildFix,'forestry',ti),F(buildFix,'peat',ti)]);
+  /* building sites that wait: for a material, for money, or for a road */
+  {const waits={},noroad=[];S.bld.forEach(b=>{if(!b.c||b.c.hold)return;if(b.town!==ti)return;(b.wait||[]).forEach(k=>{if(b.cw!=='Building')(waits[k]=waits[k]||[]).push(b)})});
+    for(const k in waits){const L0=waits[k],lack=L0.reduce((a,b)=>a+Math.max(0,b.c.n[k]-(b.c.g[k]||0)),0);
+      if(k==='lt')add('site:lt',1,'coin','Building waits for money',`${typeList(L0)} ${L0.length>1?'need':'needs'} ${fmt(lack)} Lt more. Sites take what the treasury has above the reserve you keep.`,[{t:'Open the works',a:{act:'works'}}]);
+      else add('site:'+k,1,RI[k].ic,'Building waits for '+rname(k),`${typeList(L0)} ${L0.length>1?'need':'needs'} ${fmt(Math.ceil(lack))} more ${rname(k)} in ${t.n}.`,[F(suggestRoute,ti,[k]),RI[k].port?F(importFix,ti,k):F(buildFix,PRODUCER[k],ti),F(buyFix,ti,k)])}}
   if((t.unemp||0)>(t.wf||0)*0.25+1&&S.hist.path!=='soviet')add('jobless',1,'people','People out of work',`${popStr(t.unemp)} people have no work.`,[{t:'Build a workplace',a:{act:'buildmenu',ti},b:1}]);
   const miss={},staff=[],full=[];
   bOfTown(ti).forEach(b=>{if(b.t==='house'||b.t==='hall'||b.t==='landmark'||!b.on)return;
@@ -58,8 +73,8 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
     add('full',1,'box','Storage full',`${typeList(full)} ${full.length>1?'have':'has'} stopped: the stores are full${gs.length?' of '+gs.map(rname).join(' and '):''}.`,
       [g0?F(suggestOutlet,ti,g0):null,g0&&S.hist.path!=='soviet'?{t:`Sell ${q} ${rname(g0)}`,a:{act:'sell',ti,r:g0,q},b:1}:null,F(buildFix,'warehouse',ti,'Warehouse')])}
   if(t.pol>0.3)add('smog',1,'smog','Smoky air','Industry pollutes its homes, and morale suffers.',[]);
-  if(S.era>=2&&t.note==='Want linen cloth')add('want:textiles',1,'textiles','Wants linen cloth','Morale suffers without it.',[F(suggestRoute,ti,['textiles']),F(buildFix,'linen',ti)]);
-  if(S.era>=3&&t.note==='Want electronics')add('want:electronics',1,'chip','Wants electronics','Morale suffers without them.',[F(suggestRoute,ti,['electronics']),F(buildFix,'elec',ti)]);
+  if(!t.vil&&t.want){const k0=wantK();WANTS.forEach(W=>{const got=t.want[W.r];if(got===undefined||got>=0.99||!W.down||(W.era===S.era&&k0<=0.3))return;
+    add('want:'+W.r,1,RI[W.r].ic,'Wants '+rname(W.r),`It gets ${pct(got)} of the ${rname(W.r)} it wants, and morale suffers.`,[F(suggestRoute,ti,[W.r]),F(buildFix,PRODUCER[W.r],ti)])})}
   if(t.h<45)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below 45% a town stops growing.`,[]);
   /* dirt roads never link a town: before industrialization only a railway does */
   if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,'Bring a railway or a paved road to its streets. Dirt roads do not count.',
@@ -78,7 +93,7 @@ function townAlert(t,heatOn){if(t.lock||t.fed===undefined)return 0;
   if(t.fed<0.97||(heatOn&&t.heat<0.9)||(!t.vil&&S.era>=2&&t.pr<0.8))return 2;
   if(t.vil)return 0;
   const note=t.note||'';
-  if(t.pop>(t.house||0)+0.3||t.h<45||t.pol>0.3||(t.hint&&t.hint.length)||note==='Unemployment'||note==='Blackouts'||note.startsWith('Want'))return 1;
+  if(t.pop>(t.house||0)+0.3||t.h<45||t.pol>0.3||(t.hint&&t.hint.length)||(t.nofuel&&t.pop-t.pop0>=0.3)||note==='Unemployment'||note==='Blackouts'||note.startsWith('Want'))return 1;
   return note==='Thriving'?-1:0}
 
 /* The country's problems: each kind with the settlements that have it, worst and most common first. Kept for the day. */
@@ -106,3 +121,33 @@ function sparkPath(vals,w,h,n){if(vals.length<2)return '';n=n||60;
 /* change of residents per month, from the weekly samples */
 function popTrend(){const L0=S.series||[];if(L0.length<2)return 0;const a=L0[Math.max(0,L0.length-9)],b=L0[L0.length-1];return b[0]>a[0]?(b[1]-a[1])/(b[0]-a[0])*30:0}
 function trendTxt(perMonth){return Math.abs(perMonth)<0.05?'steady':(perMonth>0?'+':'−')+popStr(Math.abs(perMonth))+' a month'}
+
+/* ---------- building sites ---------- */
+/* How a site stands: {b, st: 'build' | 'wait' | 'hold' | 'road', lack: what it waits for, days: days of work left, pc: percent built} */
+function siteInfo(b){const c=b.c,lack=(b.wait||Object.keys(c.n).filter(k=>(c.g[k]||0)<c.n[k]-1e-6)),got=siteGot(c);
+  const st=c.hold?'hold':b.town<0?'road':c.p<got-1e-9||!lack.length?'build':'wait';
+  return {b,st,lack,days:siteDays(b),pc:Math.round(c.p*100)}}
+/* "Building · 43% · about 8 days of work left", "Waiting for planks and money" */
+function siteTxt(b){const q=siteInfo(b);if(q.st==='hold')return 'On hold';if(q.st==='road')return b.na==='locked'?naTxt(b):b.na==='far'?'Too far from a town hall':'Waits for a road to a town';
+  if(q.st==='wait')return 'Waits for '+q.lack.map(k=>k==='lt'?'money':rname(k)).join(' and ');
+  return q.lack.length?`Building, ${q.pc}% done. Still short of ${q.lack.map(k=>k==='lt'?'money':rname(k)).join(' and ')}`:`Building, ${q.pc}% done · ${q.days} day${q.days===1?'':'s'} left`}
+/* what all sites of the country still need: {lt, planks, …} */
+function siteNeeds(ti){const n={};sitesOf(ti===undefined?-1:ti).forEach(b=>{if(b.c.hold)return;for(const k in b.c.n){const m=b.c.n[k]-(b.c.g[k]||0);if(m>0.01)n[k]=(n[k]||0)+m}});return n}
+
+/* ---------- goods and chains ---------- */
+/* Which good is made from which, shown as rows in the Economy view */
+const CHAINS=[['grain','beer'],['grain','dairy'],['potatoes','meat'],['timber','planks','furniture'],['peat','bricks'],['flax','textiles'],['beet','sugar'],['peat','cement'],['peat','fertiliser'],['metal','electronics']];
+/* a good is in play once its era has come, or there is some of it, or a Union project opened its works early */
+function goodOpen(r){return RI[r].era<=S.era||(PRODUCER[r]&&unlocked(PRODUCER[r]))||S.towns.some(t=>!t.lock&&(t.stock[r]||0)>=1)}
+/* Everything about one good in the whole country: made, used, net and stock a day, the buildings that make it and what holds
+   them back, and the towns that make, use and hold the most. */
+function goodInfo(r){const o={r,mk:0,us:0,dl:0,st:0,cap:0,run:0,idle:0,sites:0,why:{},mkT:[],usT:[],stT:[],lowT:[]};
+  S.towns.forEach((t,ti)=>{if(t.lock)return;const mk=t.mk?t.mk[r]||0:0,us=t.us?t.us[r]||0:0,st=t.stock[r]||0,dem=t.dem?t.dem[r]||0:0;o.mk+=mk;o.us+=us;o.dl+=t.dl[r]||0;o.st+=st;o.cap+=t.cap||STORE_BASE;
+    if(mk>=0.05)o.mkT.push([ti,mk]);if(us>=0.05)o.usT.push([ti,us]);if(st>=1)o.stT.push([ti,st]);if(!t.vil&&dem>=0.05&&st<dem*5)o.lowT.push([ti,dem?st/dem:0])});
+  S.bld.forEach(b=>{const T0=BT[b.t];if(!T0.out||!T0.out[r]||b.town<0||S.towns[b.town].lock)return;if(isSite(b)){o.sites++;return}
+    if(b.on&&b.eff>=0.35)o.run++;else{o.idle++;const w=b.on?b.why:'Paused';o.why[w]=(o.why[w]||0)+1}});
+  const by=(L0,asc)=>L0.sort((a,b)=>asc?a[1]-b[1]:b[1]-a[1]).slice(0,6);o.mkT=by(o.mkT);o.usT=by(o.usT);o.stT=by(o.stT);o.lowT=by(o.lowT,true);
+  o.makers=Object.keys(BT).filter(t=>BT[t].out&&BT[t].out[r]);o.users=Object.keys(BT).filter(t=>BT[t].in&&BT[t].in[r]);
+  o.want=WANTS.find(W=>W.r===r)||null;o.days=o.us>0.05?o.st/o.us:Infinity;return o}
+/* the country's work: people who can work, jobs, and how many of each go unfilled */
+function workStats(){const o={wf:0,jobs:0,vac:0,un:0,com:0};S.towns.forEach(t=>{if(t.lock)return;o.wf+=t.wf||0;o.jobs+=t.jobs||0;o.vac+=Math.max(0,(t.vac||0));o.un+=t.unemp||0;o.com+=t.comOut||0});return o}
