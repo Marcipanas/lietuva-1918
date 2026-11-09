@@ -523,7 +523,7 @@ function offerAccess(b) {
     if (tg && (!best || tg.d < best.d)) best = { x: px, z: pz, tx: tg.x, tz: tg.z, d: tg.d };
   });
   if (!best || best.d > 6) return false;
-  setTool('road'); TOOL.lv.road = 1;
+  setTool('road');
   TRACE = [[best.x, best.z], [best.tx, best.tz]]; K0 = 1; prepareLine();
   return !!(PEND && !PEND.bad);
 }
