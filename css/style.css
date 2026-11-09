@@ -412,6 +412,7 @@ body.tooling .prodbar,body.carded .prodbar,body.sheeted .prodbar{display:none}
 .bc.warn{color:var(--amber2)}.bc em{font-style:normal;color:var(--muted)}
 /* a building site in a list: amber while the builders work, grey-blue while it waits */
 .bl.site{--sv:var(--amber);border-left:3px solid var(--sv)}
+.needs+.note{margin-top:12px}
 .bl.site[data-c="wait"]{--sv:#8fb1c4}.bl.site[data-c="haul"]{--sv:var(--amber2)}.bl.site[data-c="hold"]{--sv:var(--dim)}.bl.site[data-c="road"]{--sv:var(--warn)}
 .bl.site .meter i{background:linear-gradient(90deg,var(--sv),var(--sv))}
 .bn small{font-weight:400;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -166,7 +166,7 @@ function govNow() {
     if (d < '1940-08-03') return { f: 'Occupied by the Red Army', who: '' };
     return { f: 'Lithuanian SSR, a Soviet republic', who: by([['1940-08-03', 'First Secretary Antanas Sniečkus'], ['1974-02-18', 'First Secretary Petras Griškevičius'], ['1987-12-01', 'First Secretary Ringaudas Songaila'], ['1988-10-20', 'First Secretary Algirdas Brazauskas']]) };
   }
-  if (h.restored) return { f: 'Republic of Lithuania', who: by([['1990-03-11', 'Vytautas Landsbergis, chairman of the Supreme Council'], ['1992-11-25', 'President Algirdas Brazauskas'], ['1998-02-26', 'President Valdas Adamkus'],
+  if (h.restored) return { f: 'Republic of Lithuania', who: by([['1990-03-11', 'Vytautas Landsbergis, chairman of the Supreme Council'], ['1992-11-25', 'Algirdas Brazauskas, acting president'], ['1993-02-25', 'President Algirdas Brazauskas'], ['1998-02-26', 'President Valdas Adamkus'],
     ['2003-02-26', 'President Rolandas Paksas'], ['2004-04-06', 'Artūras Paulauskas, acting president'], ['2004-07-12', 'President Valdas Adamkus'], ['2009-07-12', 'President Dalia Grybauskaitė'], ['2019-07-12', 'President Gitanas Nausėda']]) };
   if (h.path === 'neutral') return { f: 'Republic of Lithuania, neutral', who: '' };
   if (h.gov === 'auth') return { f: 'Rule by the president, without a Seimas', who: 'President Antanas Smetona' };
@@ -600,7 +600,7 @@ const HEV = [
   { id: 'power60', d: '1960-01-01', y: 1, card: 'power' },
   { id: 'kalanta72', d: '1972-05-14', t: 'In Kaunas, nineteen-year-old Romas Kalanta sets himself on fire in protest at Soviet rule. After his funeral thousands march through the city, and the militia and soldiers break up the crowds.', when: onPath('soviet') },
   { id: 'nuc74', d: '1974-01-01', y: 1, card: 'nuclear' },
-  { id: 'rally87', d: '1987-08-23', t: 'At the Adam Mickiewicz monument in Vilnius a few hundred people condemn the Molotov–Ribbentrop Pact in public, the first such meeting the authorities do not stop.', when: onPath('soviet') },
+  { id: 'rally87', d: '1987-08-23', t: 'At the Adam Mickiewicz monument in Vilnius several hundred people condemn the Molotov–Ribbentrop Pact in public, the first such meeting the authorities do not break up.', when: onPath('soviet') },
   { id: 'sajudis88', d: '1988-06-03', t: 'Sąjūdis, the reform movement, is founded in Vilnius.', when: onPath('soviet') },
   { id: 'flag88', d: '1988-10-07', t: 'The yellow, green and red flag is raised on Gediminas Tower in Vilnius.', when: onPath('soviet') },
   { id: 'way89', d: '1989-08-23', t: 'In the Baltic Way, about two million people join hands from Vilnius to Tallinn.', when: onPath('soviet') },

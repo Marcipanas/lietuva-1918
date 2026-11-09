@@ -31,6 +31,9 @@ function suggestOutlet(ti,r){let best=null;
 function buildFix(bt,ti,label){return bt&&BT[bt]&&unlocked(bt)?{t:label||BT[bt].n,a:{act:'build',bt,ti},b:1}:null}
 /* buy a lot of 25 from the local merchants, where they trade and the town may buy this good */
 function buyFix(ti,r){return S.hist.path!=='soviet'&&canBuyHere(ti,r)&&RI[r].era<=S.era?{t:`Buy 25 ${rname(r)}`,a:{act:'buy',ti,r},b:1}:null}
+/* A paved road from the nearest linked town, laid out in the Road tool for the player to confirm (act 'linkroad'). */
+function linkFrom(ti){const t=S.towns[ti];let best=-1,bd=1e9;S.towns.forEach((u,ui)=>{if(u.lock||u.vil||ui===ti||!NET.linked.has(ui))return;const d=Math.hypot(u.x-t.x,u.z-t.z);if(d<bd){bd=d;best=ui}});return best}
+function linkFix(ti){const o=linkFrom(ti);return o<0?null:{t:`Paved road from ${S.towns[o].n}`,a:{act:'linkroad',ti}}}
 /* goods that only come from abroad: open the Trade view */
 function importFix(ti,r){return {t:`Import ${rname(r)}`,a:{act:'nav',tab:'trade'},b:1}}
 /* the material the homes of each era are built of */
@@ -49,7 +52,7 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   /* power: no line reaches it, no station on its grid, stations that stand short of fuel or hands, or too few of them */
   if(!t.vil&&S.era>=2&&t.pr!==undefined&&t.pr<0.95){const G=gridInfo(ti),sev=t.pr<0.8&&darkNow()?2:1;let d,fix;
     if(!G.st.length){const lk=NET.linked.has(ti);d=lk?`No power station feeds the grid ${t.n} is on.`:'No power line reaches it. Railways and paved roads carry the grid.';
-      fix=lk?[F(buildFix,'power',ti)]:[{t:'Link it by paved road',a:{act:'tool',tool:'road',ti,lv:2}},F(buildFix,'power',ti,'A station of its own')]}
+      fix=lk?[F(buildFix,'power',ti)]:[F(linkFix,ti),F(buildFix,'power',ti,'A station of its own')]}
     else if(G.weak.length&&G.cap>=G.D*0.95){const b=G.weak[0],bt=S.towns[b.town];d=`Its grid could make ${num(G.cap)} MW and makes ${num(G.S)}: the ${BT[b.t].n.toLowerCase()} in ${bt.n} is ${b.why==='Fuel kept for homes'?'left without peat, which the town keeps for its homes':b.why.toLowerCase()}.`;
       fix=[b.lack?F(suggestRoute,b.town,[b.lack]):null,b.lack?F(buildFix,PRODUCER[b.lack],b.town):null,{t:'Open '+bt.n,a:{act:'seltown',ti:b.town}}]}
     else if(G.sites.length&&G.cap+G.sites.reduce((a,b)=>a+BT[b.t].pow,0)>=G.D*0.95){d=`It gets ${pct(t.pr)} of the power it needs. A power station is being built.`;fix=[{t:'Open the works',a:{act:'works'}}]}
@@ -74,22 +77,25 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
     else if(b.lack&&b.why&&b.why.startsWith('Missing '))(miss[b.lack]=miss[b.lack]||[]).push(b);
     else if(b.why==='Short of workers'&&b.eff<0.8)staff.push(b);else if(b.why==='Storage full')full.push(b)});
   for(const r in miss){const L0=miss[r];add('in:'+r,1,RI[r].ic,'Missing '+rname(r),`${typeList(L0)} ${L0.length>1?'wait':'waits'} for ${rname(r)}.`,
-    [F(suggestRoute,ti,[r]),RI[r].port?null:F(buildFix,PRODUCER[r],ti)])}
+    [F(suggestRoute,ti,[r]),RI[r].port?F(importFix,ti,r):F(buildFix,PRODUCER[r],ti),RI[r].port?F(buyFix,ti,r):null])}
   if(kept.length){const rs=[...new Set(kept.map(b=>b.lack))];add('kept',1,'fire','Fuel kept for homes',`${typeList(kept)} ${kept.length>1?'wait':'waits'}: ${t.n} keeps its last ${fmt(Math.round(t.fkeep||0))} peat and timber to heat homes in winter.`,
     [F(suggestRoute,ti,rs),...rs.map(r=>F(buildFix,PRODUCER[r],ti))])}
   if(staff.length){const r=S.routes.find(q=>(q.a===ti||q.b===ti)&&q.ok&&!q.pax);
     add('staff',1,'people','Short of workers',`${typeList(staff)} ${staff.length>1?'run':'runs'} below strength.`,[r?{t:'Carry commuters',a:{act:'rpax',r:r.id}}:null,zone])}
   /* a full store: send the surplus where it is needed, sell it, or store more */
-  if(full.length){const cap=t.cap||STORE_BASE,gs=RES.filter(r=>(t.stock[r]||0)>=cap*0.97),g0=gs[0],q=g0?Math.max(25,Math.min(100,Math.floor((t.stock[g0]||0)-cap*0.6))):0;
+  if(full.length){const cap=t.cap||STORE_BASE,gs=RES.filter(r=>(t.stock[r]||0)>=cap*0.9),g0=gs[0],q=g0?Math.max(25,Math.min(100,Math.floor((t.stock[g0]||0)-cap*0.6))):0;
     add('full',1,'box','Storage full',`${typeList(full)} ${full.length>1?'have':'has'} stopped: the stores are full${gs.length?' of '+gs.map(rname).join(' and '):''}.`,
       [g0?F(suggestOutlet,ti,g0):null,g0&&S.hist.path!=='soviet'?{t:`Sell ${q} ${rname(g0)}`,a:{act:'sell',ti,r:g0,q},b:1}:null,F(buildFix,'warehouse',ti,'Warehouse')])}
   if(t.pol>0.3)add('smog',1,'smog','Smoky air','Industry pollutes its homes, and morale suffers.',[]);
   if(!t.vil&&t.want){const k0=wantK();WANTS.forEach(W=>{const got=t.want[W.r];if(got===undefined||got>=0.99||!W.down||(W.era===S.era&&k0<=0.3))return;
-    add('want:'+W.r,1,RI[W.r].ic,'Wants '+rname(W.r),`It gets ${pct(got)} of the ${rname(W.r)} it wants, and morale suffers.`,[F(suggestRoute,ti,[W.r]),F(buildFix,PRODUCER[W.r],ti)])})}
-  if(t.h<45)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below 45% a town stops growing.`,[]);
+    /* its shops fetch the good from the nearest town with plenty: the fix is more of it in the country, or a route for a far town */
+    const bt=PRODUCER[W.r],staff=(t.wf||0)>=BT[bt].w*0.6;
+    add('want:'+W.r,1,RI[W.r].ic,'Wants '+rname(W.r),`It gets ${pct(got)} of the ${rname(W.r)} it wants, and morale suffers. Its shops fetch it from the nearest town with some to spare, up to ${HAUL_MAX} km away.`,
+      [F(suggestRoute,ti,[W.r]),staff?F(buildFix,bt,ti):null,{t:'See '+rname(W.r),a:{act:'good',r:W.r}}])})}
+  if(t.h<GROW_H)add('morale',1,'heart','Low morale',`Morale is ${Math.round(t.h)}%. Below ${GROW_H}% a town builds no homes.`,[]);
   /* dirt roads never link a town: before industrialization only a railway does */
   if(!t.vil&&!t.capital&&!NET.linked.has(ti))add('link',0,'rail','Not linked to '+capital().n,'Bring a railway or a paved road to its streets. Dirt roads do not count.',
-    [{t:'Lay track',a:{act:'tool',tool:'rail',ti}},{t:'Build a paved road',a:{act:'tool',tool:'road',ti,lv:2}}]);
+    [F(linkFix,ti),{t:'Lay track',a:{act:'tool',tool:'rail',ti}}]);
   /* the Vilnius region before a loss history brought: build there knowing it */
   if(t.rg==='vr'||t.rg==='vr2'){const d=ymd(S.day);
     if(d<'1919-01-05')add('front',0,'flag','Front line','In history the Red Army took Vilnius in January 1919, and Poland held it for most of the years until 1939. What is built here may be lost for years.');
@@ -104,7 +110,7 @@ function townAlert(t,heatOn){if(t.lock||t.fed===undefined)return 0;
   if(t.fed<0.97||(heatOn&&t.heat<0.9)||(!t.vil&&S.era>=2&&t.pr<0.8&&darkNow()))return 2;
   if(t.vil)return 0;
   const note=t.note||'';
-  if(t.pop>(t.house||0)+0.3||t.h<45||t.pol>0.3||(t.hint&&t.hint.length)||(t.nofuel&&t.pop-t.pop0>=0.3)||note==='Unemployment'||note==='Blackouts'||note.startsWith('Want'))return 1;
+  if(t.pop>(t.house||0)+0.3||t.h<GROW_H||t.pol>0.3||(t.hint&&t.hint.length)||(t.nofuel&&t.pop-t.pop0>=0.3)||note==='Unemployment'||note==='Blackouts'||note.startsWith('Want'))return 1;
   return note==='Thriving'?-1:0}
 
 /* The country's problems: each kind with the settlements that have it, worst and most common first. Kept for the day. */
@@ -171,6 +177,8 @@ function goodInfo(r){const o={r,mk:0,us:0,dl:0,st:0,cap:0,run:0,idle:0,sites:0,w
     if(b.on&&b.eff>=0.35)o.run++;else{o.idle++;const w=b.on?b.why:'Paused';o.why[w]=(o.why[w]||0)+1}});
   const by=(L0,asc)=>L0.sort((a,b)=>asc?a[1]-b[1]:b[1]-a[1]).slice(0,6);o.mkT=by(o.mkT);o.usT=by(o.usT);o.stT=by(o.stT);o.lowT=by(o.lowT,true);
   o.makers=Object.keys(BT).filter(t=>BT[t].out&&BT[t].out[r]);o.users=Object.keys(BT).filter(t=>BT[t].in&&BT[t].in[r]);
-  o.want=WANTS.find(W=>W.r===r)||null;o.days=o.us>0.05?o.st/o.us:Infinity;return o}
+  o.want=WANTS.find(W=>W.r===r)||null;o.days=o.us>0.05?o.st/o.us:Infinity;
+  /* what the towns want of it a day, all together */
+  o.wantD=o.want?S.towns.reduce((a,t)=>a+(t.lock||t.vil?0:t.pop*o.want.per),0):0;return o}
 /* the country's work: people who can work, jobs, and how many of each go unfilled */
 function workStats(){const o={wf:0,jobs:0,vac:0,un:0,com:0};S.towns.forEach(t=>{if(t.lock)return;o.wf+=t.wf||0;o.jobs+=t.jobs||0;o.vac+=Math.max(0,(t.vac||0));o.un+=t.unemp||0;o.com+=t.comOut||0});return o}

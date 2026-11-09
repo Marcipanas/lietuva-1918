@@ -10,7 +10,7 @@ const sc=(k,c)=>{C[k]=c;return ` data-s="${k}" data-c="${c}"`};
 function costHTML(c){return Object.entries(c).filter(([k,q])=>q>0).map(([k,q])=>k==='lt'?`<span style="--c:var(--amber)">${ic('coin')}${fmt(q)} Lt</span>`:`<span style="--c:var(--r-${k})">${ic(RI[k].ic)}${fmt(q)} ${rname(k)}</span>`).join('')}
 function io(T0,lv,k){const p=[];if(T0.in)p.push('uses '+Object.entries(T0.in).map(([r,q])=>num(q*INM[lv])+' '+rname(r)).join(' + '));if(T0.powNeed)p.push(num(T0.powNeed*LV[lv])+' MW');
   if(T0.out)p.push('makes '+Object.entries(T0.out).map(([r,q])=>num(q*LV[lv]*(k||1))+' '+rname(r)).join(', '));if(T0.pow)p.push('makes '+num(T0.pow*LV[lv])+' MW');return p.join(' · ')}
-function growthTxt(t){if(t.hint)return t.hint;if(t.fed<0.99)return t.pop>t.pop0?'Shrinking: short of food':'Not growing: short of food';if(t.h<45)return 'Not growing: morale too low';
+function growthTxt(t){if(t.hint)return t.hint;if(t.fed<0.99)return t.pop>t.pop0?'Shrinking: short of food':'Not growing: short of food';if(t.h<GROW_H)return 'Not growing: morale too low';
   const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0);if(t.pop>=t.pop0-0.05&&((t.fdays||0)<8||fbal<-0.01))return `Holding steady: its own fields feed ${popStr(t.pop0)}. More food lets it grow.`;
   return t.pop<t.house*0.92?'Moving into empty homes':'Building new homes on zoned land'}
 const attrs=a=>Object.entries(a).map(([k,x])=>`data-${k}="${x}"`).join(' ');
@@ -65,7 +65,9 @@ function healthTiles(ti){const t=S.towns[ti],heatOn=seasonOf(S.day).heat>0.05,fb
   const tile=(k,i,label,val,sub,st)=>`<div class="ht"${sc(ti+k,st)}><span class="hk">${ic(i)}${label}</span><b>${v(ti+k+'v',val)}</b><small>${v(ti+k+'s',sub)}</small></div>`;
   const fed=t.fed===undefined?1:t.fed,crowd=t.pop>(t.house||0)+0.3,full=RES.reduce((a,r)=>Math.max(a,(t.stock[r]||0)/cap),0);
   let h=tile('f','grain','Food',pct(fed)+' fed',`${t.vari||0} of 5 kinds`+((t.fdays||99)<60?` · ${Math.round(t.fdays)} days`:''),fed<0.97?'bad':(t.fdays||99)<6&&fbal<-0.01?'warn':'good');
-  h+=tile('w','fire','Heat',heatOn?pct(t.heat===undefined?1:t.heat)+' warm':'Not needed',heatOn?'peat or timber':'until autumn',!heatOn?'off':t.heat<0.9?'bad':t.heat<0.99?'warn':'good');
+  /* a town that outgrew its woodlots keeps fuel for winter: the tile says how full that store is, all year */
+  const ws=(t.fkeep||0)>0.5?`winter store ${pct(Math.min(1,t.fuelw||0))} full`:'';
+  h+=tile('w','fire','Heat',heatOn?pct(t.heat===undefined?1:t.heat)+' warm':'Not needed',ws||(heatOn?'peat or timber':'until autumn'),heatOn&&t.heat<0.9?'bad':ws&&t.nofuel?'warn':!heatOn?'off':t.heat<0.99?'warn':'good');
   h+=tile('o','house','Homes',popStr(t.house||0),crowd?popStr(t.pop-t.house)+' too few':(t.house||0)-t.pop<0.1?'all full':'room for '+popStr((t.house||0)-t.pop),crowd?'bad':t.hint&&t.hint.startsWith('No room')?'warn':'good');
   const jl=(t.unemp||0)>(t.wf||0)*0.25+1;
   h+=tile('j','factory','Jobs',popStr(t.jobs||0),jl?popStr(t.unemp)+' out of work':(t.vac||0)>0.3?popStr(t.vac)+' unfilled':'all filled',jl?'warn':(t.vac||0)>1?'warn':'good');
@@ -293,7 +295,15 @@ function workHTML(){const q=workStats();
   return `<div class="sec"><h3>Work<span>half of all residents work</span></h3><div class="kpis"><div class="kpi"><span class="k">${ic('people')}Workers</span><b>${v('wkw',popStr(q.wf))}</b><small>${v('wkc',popStr(q.com)+' walk or ride to work')}</small></div>
     <div class="kpi"><span class="k">${ic('factory')}Jobs</span><b>${v('wkj',popStr(q.jobs))}</b><small>${v('wkv',popStr(q.vac)+' unfilled')}</small></div>
     <div class="kpi"><span class="k">${ic('house')}Out of work</span><b>${v('wku',popStr(q.un))}</b><small>beyond those on their own land</small></div></div></div>`}
-function ecoPanel(){return budgetHTML()+goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day')+chainsHTML()+workHTML()}
+/* power, from the second era: the grid of the capital, its stations, and how many towns have light */
+function powerHTML(){if(S.era<2)return '';const ci=S.towns.findIndex(t=>t.capital),G=gridInfo(ci);let n=0,lit=0,short=0,off=0;
+  S.towns.forEach(t=>{if(t.lock||t.vil)return;n++;const pr=t.pr===undefined?1:t.pr;if(pr>=0.95)lit++;else if((t.gS||0)<0.01)off++;else short++});
+  const wk=G.weak[0],wt=wk?S.towns[wk.town]:null;
+  return `<div class="sec"><h3>Power<span>railways and paved roads carry the grid</span></h3><div class="kpis">
+    <div class="kpi"><span class="k">${ic('bolt')}Grid of ${capital().n}</span><b>${v('pwg',num(G.S)+' of '+num(G.D)+' MW')}</b><small>${v('pws',`${G.work.length} ${G.work.length===1?'station':'stations'} at work${G.sites.length?`, ${G.sites.length} being built`:''}`)}</small></div>
+    <div class="kpi"><span class="k">${ic('house')}Lit towns</span><b>${v('pwl',lit+' of '+n)}</b><small>${v('pwo',`${short} short of power, ${off} with no line or station`)}</small></div></div>
+    ${wk?`<p class="note">The ${BT[wk.t].n.toLowerCase()} in <button class="link sm" data-act="seltown" data-ti="${wk.town}">${wt.n}</button> runs at ${v('pww',pct(wk.eff))}: ${v('pwy',wk.why==='Fuel kept for homes'?'the town keeps its peat for its homes':wk.why.toLowerCase())}.</p>`:''}</div>`}
+function ecoPanel(){return budgetHTML()+goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day')+chainsHTML()+powerHTML()+workHTML()}
 
 /* ---------- one good: where it comes from, where it goes, and how its stock has moved ---------- */
 function townChips(L0,fn){return L0.length?`<div class="chips3 flat">${L0.map(([ti,q])=>`<button class="tchip" data-act="seltown" data-ti="${ti}">${S.towns[ti].n}<small>${fn(q)}</small></button>`).join('')}</div>`:''}
@@ -303,7 +313,7 @@ function goodPanel(r){const q=goodInfo(r),R0=RI[r],gs=S.gs&&S.gs.v&&S.gs.v[r]?S.
   const inCost=Object.keys(BT).filter(t=>BT[t].cost&&BT[t].cost[r]),lineMat=[...ROADT,...RAILT].filter(x=>x&&x.mat[r]).map(x=>x.n.toLowerCase()),homeLv=HOUSE.cost.findIndex(c=>c&&c[r]);
   if(inCost.length||lineMat.length||homeLv>0)uses.push('building: '+[inCost.length?`${inCost.length} kinds of building`:'',homeLv>0?HOUSE.n[homeLv].toLowerCase():'',...lineMat].filter(Boolean).join(', '));
   if(r==='fertiliser')uses.push('fields, which grow 30% more with it');
-  if(q.want)uses.push(q.want.down?`towns, which come to expect it (morale +${q.want.up} with it, −${q.want.down} without)`:`towns, which are happier with it (morale +${q.want.up})`);
+  if(q.want)uses.push((q.want.down?`towns, which come to expect it (morale +${q.want.up} with it, −${q.want.down} without)`:`towns, which are happier with it (morale +${q.want.up})`)+`: they want ${num(q.wantD)} a day in all, and their shops fetch it from the nearest town with some to spare`);
   const mk=Object.keys(MARKETS).filter(m=>MARKETS[m].buy[r]||MARKETS[m].sell[r]);
   let h=`<div class="kgrid">${kpiTile('gm','factory','Made a day',v('gm'+r,num(q.mk)),v('gmb'+r,`${q.run} ${q.run===1?'building':'buildings'} at work`),'')}
     ${kpiTile('gu','people','Used a day',v('gu'+r,num(q.us)),v('gn'+r,'net '+fd(q.dl)+' a day'),'')}

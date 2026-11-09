@@ -36,7 +36,9 @@ const RI={
 };
 /* Goods towns want beyond food and fuel, per thousand residents a day. up: morale where the want is met; down: morale lost where
    it is not, which grows over WANT_YEARS from the day the era begins, so a new era is not a cliff. Villages make their own. */
-const WANTS=[{r:'beer',era:1,per:0.008,up:4,down:0},{r:'textiles',era:2,per:0.012,up:7,down:7},{r:'sugar',era:2,per:0.006,up:4,down:3},{r:'electronics',era:3,per:0.004,up:8,down:8}], WANT_YEARS=4;
+const WANTS=[{r:'beer',era:1,per:0.008,up:4,down:0},{r:'textiles',era:2,per:0.012,up:7,down:5},{r:'sugar',era:2,per:0.006,up:4,down:2},{r:'electronics',era:3,per:0.004,up:8,down:6}], WANT_YEARS=4;
+/* morale below which a town builds no homes; what a town loses when it gets under four fifths of its power */
+const GROW_H=40, DARK_H=6;
 /* Building types. fp = footprint [width, depth] in km; the front (depth side) faces the road. w = workers in thousands; figures per day; pol = pollution.
    cost: what its construction site takes (money from the treasury, materials from its town's stock); bd: days the builders need once
    the materials are there. fert: its fields take fertiliser when the town has some. */

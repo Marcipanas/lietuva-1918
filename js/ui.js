@@ -95,7 +95,7 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
       btns=undo+pri('Upgrade','up',!!m)}
     else if(n===1){sub=`Now tap where the ${what} goes. Drag the map to move around.`;btns=undo}
     else if(p&&p.bad){sub=p.bad;state='bad';btns=undo}
-    else if(p&&p.kind==='line'){const tp=town?takePlan(p.cost,p.ti):{why:'',far:false},m=tp.why;sub=m||`${kmTxt(p.km)} km new${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · materials from ${town?town.n:'—'}${tp.far?' and towns near it':''}. Tap to add a bend.`;state=m?'bad':'';
+    else if(p&&p.kind==='line'){const tp=town?takePlan(p.cost,p.ti):{why:'',far:false},m=tp.why;sub=m||`${p.km>0.05?kmTxt(p.km)+' km new':''}${p.km>0.05&&p.upKm>0.05?', ':''}${p.upKm>0.05?kmTxt(p.upKm)+' km upgraded':''}${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · materials from ${town?town.n:'—'}${tp.far?' and towns near it':''}. Tap to add a bend.`;state=m?'bad':'';
       cost=costHTML(p.cost);btns=undo+pri('Build','check',!!m)}
     else btns=undo}
   else if(k==='zone'){icon='zone';title='Zone homes';
@@ -117,9 +117,12 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
       /* nothing has to be in hand: the site takes money and materials as they come, and carts bring what the town lacks */
       const local=jt?Object.keys(mat).filter(q=>(jt.stock[q]||0)<mat[q]):[],far=jt&&local.length?takePlan(mat,p.jt).ok:true,lack=[];
       if(S.funds-(S.keep||0)<p.cost.lt)lack.push('money');if(!far)lack.push(...local.map(rname));
+      /* hands: half of a town's residents work, and a works with too few makes that much less */
+      const staff=jt&&T0.w&&jt.wf!==undefined?Math.min(1,(jt.wf+(jt.comIn||0))/Math.max(1,(jt.jobs||0)+T0.w)):1;
       sub=(p.bonus?'Good land: it makes more here. ':T0.bonus?'It makes more on the lit ground. ':'')+(jt?(p.acc?`Joins ${jt.n}. `:`Joins ${jt.n} once a road reaches it: you lay one next. `):`No town will supply it here: it needs a road to a town hall within ${kmTxt(TERRITORY)} km. `)
+        +(staff<0.75?`It needs ${popStr(T0.w)} workers: ${jt.n} could then fill ${Math.round(staff*100)}% of its jobs. `:'')
         +(jt?(lack.length?`The site will wait for ${lack.join(' and ')}.`:local.length?`Carts bring ${local.map(rname).join(' and ')} from towns near it: ${daysTxt(T0.bd)} of work, and the haul.`:`Ready in about ${daysTxt(T0.bd)}.`):'');
-      state=!jt?'bad':lack.length?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
+      state=!jt?'bad':lack.length||staff<0.5?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
   const html=`<div class="bh"><span class="bico">${ic(icon)}</span>${extra&&extra.startsWith('<div class="seg')?'':`<b class="btitle">${title}</b>`}${extra}<button class="ib" data-act="tooloff" aria-label="Close the tool">${ic('close')}</button></div>
     <p class="bsub" data-c="${state}">${sub}</p>${cost||btns?`<div class="bfoot">${cost?`<div class="cost">${cost}</div>`:'<span></span>'}<div class="bbtn">${btns}</div></div>`:''}`;
   if(html!==lastBar){bar.innerHTML=html;lastBar=html}}
@@ -146,6 +149,11 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'pick':return startPlace(d.bt,VIEW.bti);
     case 'build':return startPlace(d.bt,ti);
     case 'tool':if(d.lv)TOOL.lv[d.tool]=+d.lv;return startTool(d.tool,ti);
+    /* link a town: a paved road from the nearest linked town, hall to hall, laid out for the player to confirm or change */
+    case 'linkroad':{const t=S.towns[ti],o=t?linkFrom(ti):-1;if(o<0)return toast('No linked town to start from');const u=S.towns[o],d=Math.hypot(u.x-t.x,u.z-t.z);
+      TOOL.lv.road=2;setSheet(0);setTool('road');cam.anim=null;cam.x=(t.x+u.x)/2;cam.z=(t.z+u.z)/2;cam.dist=clamp(d*1.7,10,220*MAPK);applyCam();
+      TRACE=[[u.x,u.z],[t.x,t.z]];K0=1;prepareLine();VIEW.ver++;
+      if(PEND&&PEND.kind==='line'&&!PEND.bad)toast(`A paved road from ${u.n} to ${t.n}. Drag a point to change it, or build it.`);return}
     case 'tooloff':return setTool('inspect');
     case 'undo':return undoStep();
     case 'find':return findGhost(false);

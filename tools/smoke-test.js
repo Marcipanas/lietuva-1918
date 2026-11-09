@@ -206,7 +206,9 @@ const session = `(function(){const out={};let t=0;
     act({act:'nseg',k:'eco'});out.ecoView=html().includes('Money a day')&&html().includes('Goods in Lithuania a day')&&html().includes('From field to shop');
     act({act:'good',r:'planks'});out.goodView=VIEW.good==='planks'&&html().includes('Sawmill')&&html().includes('Used for');act({act:'goodback'});out.segs=seen.every(Boolean)&&VIEW.good===null&&VIEW.nseg==='eco'}
    /* goods and chains: sawmills saw planks, Šiauliai brews beer, cement waits for its era */
-   for(let q=0;q<8;q++)tick();{const gi=goodInfo('planks');out.chain=gi.makers.join()==='sawmill'&&gi.users.includes('furniture')&&gi.mk>0&&goodOpen('planks')&&!goodOpen('cement')&&CHAINS.some(c=>c.join()==='timber,planks,furniture')&&(T('Šiauliai').mk.beer||0)>0;out.chainWhy=gi.mk.toFixed(1)+' planks a day'}
+   for(let q=0;q<8;q++)tick();{const gi=goodInfo('planks');out.chain=gi.makers.join()==='sawmill'&&gi.users.includes('furniture')&&gi.mk>0&&goodOpen('planks')&&!goodOpen('cement')&&CHAINS.some(c=>c.join()==='timber,planks,furniture')&&(T('Šiauliai').mk.beer||0)>0;out.chainWhy=gi.mk.toFixed(1)+' planks a day';
+    /* shops: towns fetch the beer they want from Šiauliai, which brews more than it drinks */
+    out.shops=S.towns.filter(t=>!t.lock&&!t.vil&&t.n!=='Šiauliai'&&(t.want.beer||0)>=0.99).length}
    /* a site kept through save and load */
    {const p0=wh.c.p,g0=wh.c.g.lt,id=wh.id,s0=keep();back(s0);const w2=BMAP.get(id);out.siteSave=!!w2&&!!w2.c&&Math.abs(w2.c.p-p0)<1e-3&&Math.abs(w2.c.g.lt-g0)<0.01&&w2.c.pri===1;tick();out.siteSave=out.siteSave&&!!BMAP.get(id).c;K=T('Kaunas');kk=S.towns.indexOf(K)}
    /* a modernization is a site on a building that keeps working */
@@ -219,8 +221,11 @@ const session = `(function(){const out={};let t=0;
    {const saw=S.bld.find(b=>b.t==='sawmill'&&b.town===kk&&!b.c);K.pop=K.pop0+20;K.stock.peat=0;K.stock.timber=40;tick();const iss=townIssues(kk);
     out.fuel=K.fkeep>80&&K.nofuel===1&&saw.why==='Fuel kept for homes'&&K.stock.timber>=38&&iss.some(x=>x.k==='kept')&&iss.some(x=>x.k==='fuel');out.fuelWhy=[Math.round(K.fkeep),K.nofuel,saw.why,Math.round(K.stock.timber)].join(' ');
     K.stock.peat=K.cap;K.stock.timber=K.cap;tick();tick();out.fuelOk=K.nofuel===0&&saw.why!=='Fuel kept for homes';K.pop=K.pop0}
-   /* a paved road drawn from one town's hall to another's reaches both, so the second is linked; its bricks may come from a third town */
-   {const A=T('Kybartai'),B=T('Kudirkos Naumiestis'),bi=S.towns.indexOf(B);S.funds+=3000;A.stock.bricks=0;B.stock.bricks=0;TOOL.lv.road=2;cam.dist=60;cam.x=(A.x+B.x)/2;cam.z=(A.z+B.z)/2;applyCam();setTool('road');tapTool(A.x,A.z);tapTool(B.x,B.z);showBar();
+   /* the fix for a town that is not linked lays out a paved road from the nearest linked town, hall to hall; the road paves the
+      streets up to both halls, so the town is linked, and its bricks may come from a third town */
+   {const B=T('Kudirkos Naumiestis'),bi=S.towns.indexOf(B),fx=(townIssues(bi).find(x=>x.k==='link')||{fix:[]}).fix.find(f=>f.a.act==='linkroad');S.funds+=3000;out.linkFixTxt=fx?fx.t:'';
+    if(fx)act(fx.a);out.linkPlan=TOOL.k==='road'&&!!PEND&&PEND.kind==='line'&&!PEND.bad&&TOOL.lv.road===2;
+    if(out.linkPlan){S.towns[PEND.ti].stock.bricks=0;B.stock.bricks=0;prepareLine();showBar()}
     const tp=PEND&&PEND.ti>=0?takePlan(PEND.cost,PEND.ti):null;out.farPay=!!tp&&tp.ok&&tp.far;out.linkUp=PEND&&PEND.upKm||0;const l0=NET.linked.has(bi);doConfirm();analyze();setTool('inspect');TOOL.lv.road=1;out.linkTown=!l0&&NET.linked.has(bi)}
    /* the state: taxes, a policy, public trust */
    {const t0=histTax(),v0=trustParts().v;act({act:'tax',q:'2'});out.tax=histTax()>t0*1.25&&trustParts().v<v0;act({act:'tax',q:'1'});
@@ -312,11 +317,12 @@ assert(o.cancel, 'a cancelled plan returns its money to the treasury and its mat
 assert(o.hold && o.pri, 'a site on hold takes nothing; one marked "build first" is served first');
 assert(o.siteCard && o.worksView && o.stateView && o.ecoView && o.goodView && o.segs, `the site card, the five parts of the Lithuania view and the view of one good render (${[o.siteCard, o.worksView, o.stateView, o.ecoView, o.goodView, o.segs].join(', ')})`);
 assert(o.chain, `sawmills saw timber into planks, Šiauliai brews beer, and the chains know what is made of what (${o.chainWhy})`);
+assert(o.shops >= 5, `shops in ${o.shops} other towns fetch beer from Šiauliai's brewery`);
 assert(o.siteSave, 'save and load keep a building site with its progress');
 assert(o.upSite && o.upWorks && o.upDone, `a modernization is a site on a building that keeps working, then it is Lv 2 (${o.upDays} days)`);
 assert(o.wants, `a new era's wants set in over four years: no cliff on the first day (${o.wantsWhy})`);
 assert(o.fuel && o.fuelOk, `a town that outgrew its woodlots keeps a winter's fuel: the sawmill leaves it, and growth waits for it (${o.fuelWhy})`);
-assert(o.farPay && o.linkTown && o.linkUp > 1, `a paved road from Kybartai links Kudirkos Naumiestis: it paves ${(o.linkUp || 0).toFixed(1)} km of streets on the way, with bricks from other towns`);
+assert(o.linkPlan && o.farPay && o.linkTown && o.linkUp > 1, `the fix "${o.linkFixTxt}" lays out a road that links Kudirkos Naumiestis: it paves ${(o.linkUp || 0).toFixed(1)} km of streets on the way, with bricks from other towns`);
 assert(o.tax && o.pol, 'high taxes bring in more and cost public trust; road gangs cost 6 Lt a day and make roads cheaper');
 assert(o.rev, `every random event runs${o.revWhy ? ': ' + o.revWhy : ''}`);
 assert(o.bermont && o.bermontWait && o.bermontWin, 'the Bermontians: attacking at Radviliškis adds security, waiting costs it and brings looting around Šiauliai');

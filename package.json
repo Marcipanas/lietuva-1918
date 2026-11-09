@@ -7,6 +7,7 @@
     "check": "node tools/check.js",
     "test": "node tools/check.js && node tools/smoke-test.js",
     "serve": "python3 -m http.server 8080",
+    "playtest": "node tools/playtest.js",
     "world": "node tools/build-world.js",
     "geo": "python3 -I tools/geo/write_geo.py",
     "build:artifact": "node tools/build-artifact.js",

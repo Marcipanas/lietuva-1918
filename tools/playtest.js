@@ -88,8 +88,16 @@ function bot(opt) {
       } else if (a.act === 'rveh') {
         const r = S.routes.find(q => q.id === +a.r); if (!r || r.n >= 5 || spare() < VT[r.vt].cost) continue;
         act({ act: 'rveh', r: String(a.r), d: '1' }); note('vehicle'); return true;
+      } else if (a.act === 'linkroad') {
+        act({ act: 'linkroad', ti: String(a.ti) });
+        const p = PEND, ok = TOOL.k === 'road' && p && p.kind === 'line' && !p.bad && p.ti >= 0 && takePlan(p.cost, p.ti).ok && S.funds - p.cost.lt > reserve();
+        if (ok) doConfirm(); setTool('inspect'); TOOL.lv.road = 1; if (ok) { note('link by road'); return true; }
       } else if (a.act === 'build') {
-        if (!canPlan(BT[a.bt].cost.lt) || siteCount(a.bt, +a.ti) || count(a.bt, +a.ti) >= 6) continue;
+        if (!canPlan(BT[a.bt].cost.lt) || siteCount(a.bt, +a.ti) || count(a.bt, +a.ti) >= 4) continue;
+        /* power and the goods towns want are planned for the country as a whole (program), not town by town */
+        if (BT[a.bt].pow || WANTS.some(W => PRODUCER[W.r] === a.bt)) continue;
+        /* a material the country has plenty of comes by cart: no need for another works */
+        const made = Object.keys(BT[a.bt].out || {})[0]; if (made && MATS.includes(made) && made !== 'timber' && totals().stock[made] > 300) continue;
         if (placeB(a.bt, +a.ti)) return true;
       } else if (a.act === 'buy') {
         const k = a.ti + ':' + a.r; if (spare() < buyVal(+a.ti, a.r) + 200 || S.day - (lastBuy[k] || -99) < 14) continue;
@@ -109,7 +117,7 @@ function bot(opt) {
   /* a workplace for a town with people out of work: what the country is short of first, then what sells abroad */
   function work(ti) {
     const t = S.towns[ti], T = totals(), want = [];
-    const short = r => T.dl[r] < -0.5 || T.stock[r] < 40;
+    const short = r => T.stock[r] < 100 || (T.dl[r] < -0.5 && T.stock[r] / -T.dl[r] < 200);
     if (short('planks')) want.push('sawmill');
     if (S.era >= 1 && (T.stock.bricks < ERAS[2].req.bricks * 1.5 || short('bricks'))) want.push('brick');
     if (short('peat')) want.push('peat'); if (short('timber')) want.push('forestry');
@@ -118,7 +126,7 @@ function bot(opt) {
     if (short('beer')) want.push('brewery');
     want.push('dairy', 'pigs', 'farm', 'potato', 'fishery', 'flax', 'sawmill');
     for (const bt of want) {
-      if (!unlocked(bt) || !canPlan(BT[bt].cost.lt) || siteCount(bt, ti) || count(bt, ti) >= 4) continue;
+      if (!unlocked(bt) || !canPlan(BT[bt].cost.lt) || siteCount(bt, ti) || count(bt, ti) >= 4 || BT[bt].w > (t.unemp || 0) * 2 + 4) continue;
       if (placeB(bt, ti)) return true;
     }
     return false;
@@ -155,7 +163,7 @@ function bot(opt) {
     for (const q of L) {
       if (n >= max) break;
       tried.set(q.k, S.day);
-      if (q.x.k === 'full') { const t = S.towns[q.ti], g0 = RES.find(r => (t.stock[r] || 0) >= t.cap * 0.97); if (g0 && exportFrom(q.ti, g0)) { n++; continue; } }
+      if (q.x.k === 'full') { const t = S.towns[q.ti], g0 = RES.find(r => (t.stock[r] || 0) >= t.cap * 0.9); if (g0 && exportFrom(q.ti, g0)) { n++; continue; } }
       if (q.x.fix.length && applyFix(q.ti, q.x)) n++;
     }
     return n;
@@ -208,9 +216,10 @@ function bot(opt) {
       const def = S.inc > 150 ? 50 : S.inc > 60 ? 25 : S.inc > 25 ? 10 : 0; if (def !== h.def) { act({ act: 'def', q: String(def) }); note('army'); }
       for (const k in POLICY) if (polOpen(k) && !h.pol[k] && S.inc > POLICY[k].cost * 4) { act({ act: 'pol', k }); note('policy ' + k); }
       for (const k in POLICY) if (h.pol[k] && S.inc < -5 && S.funds < 500) { act({ act: 'pol', k }); note('policy off'); }
-      const tax = S.funds < 300 && S.inc < 5 ? 2 : S.funds > 30000 && pubTrust() < 50 ? 0 : 1; if (tax !== (h.tax === undefined ? 1 : h.tax)) { act({ act: 'tax', q: String(tax) }); note('tax ' + TAXES[tax].n); }
+      const now = h.tax === undefined ? 1 : h.tax, tax = S.funds < 300 && S.inc < 5 ? 2 : now === 2 && S.funds < 2500 ? 2 : S.funds > 30000 && pubTrust() < 50 ? 0 : 1; if (tax !== now) { act({ act: 'tax', q: String(tax) }); note('tax ' + TAXES[tax].n); }
     }
-    if (eraReady()) { act({ act: 'era' }); act({ act: 'eraok' }); R.eras[S.era] = ymd(S.day); note('era'); }
+    /* the next era, with something left over for its first works */
+    if (eraReady() && S.funds >= ERAS[S.era + 1].req.lt + 3000) { act({ act: 'era' }); act({ act: 'eraok' }); R.eras[S.era] = ymd(S.day); note('era'); }
   }
   /* link the nearest unlinked town to the capital's network with a paved road (bricks) or a railway (timber) */
   function link() {
@@ -232,6 +241,31 @@ function bot(opt) {
       setTool('inspect');
     }
     TOOL.lv.road = 1;
+  }
+  /* What the era's industry needs: power on the capital's grid, the goods towns come to want, and what feeds those works. */
+  function program() {
+    if (S.era < 2) return;
+    const cap = S.towns.findIndex(t => t.capital);
+    const madeOf = r => S.towns.reduce((a, t) => a + (t.lock ? 0 : (t.mk && t.mk[r]) || 0), 0);
+    const host = (bt, w) => {   /* a linked town big enough to staff it, the one with the most idle hands first */
+      const L = S.towns.map((t, i) => i).filter(i => open(i) && !S.towns[i].vil && NET.linked.has(i) && count(bt, i) < 2 && S.towns[i].pop >= (w || 0) * 1.2)
+        .sort((a, b) => ((S.towns[b].wf || 0) - (S.towns[b].jobs || 0)) - ((S.towns[a].wf || 0) - (S.towns[a].jobs || 0)));
+      for (const ti of L.slice(0, 12)) if (placeB(bt, ti)) return ti;
+      return -1;
+    };
+    const G = gridInfo(cap), coming = G.sites.reduce((a, b) => a + BT[b.t].pow, 0);
+    if (G.D > (G.cap + coming) * 0.85 && !G.sites.length && canPlan(BT.power.cost.lt) && host('power', BT.power.w) >= 0) return;
+    for (const b of G.weak) if (b.lack === 'peat' && !siteCount('peat', b.town) && count('peat', b.town) < 3 && canPlan(BT.peat.cost.lt) && placeB('peat', b.town)) return;
+    for (const W of WANTS) {
+      if (W.era > S.era || W.era < 2) continue;
+      const bt = PRODUCER[W.r], need = S.towns.reduce((a, t) => a + (t.lock || t.vil ? 0 : t.pop * W.per), 0);
+      /* enough works for the need, standing or planned? Then the job is to make them run (the dashboards' fixes), not to add more */
+      if (Math.max(madeOf(W.r), count(bt) * BT[bt].out[W.r] * 0.7) >= need * 1.1 || siteCount(bt) || !canPlan(BT[bt].cost.lt)) continue;
+      const ti = host(bt, BT[bt].w); if (ti < 0) continue;
+      /* what it is made of, grown in the same town where the land allows */
+      for (const inp in BT[bt].in) { const src = PRODUCER[inp]; if (src && unlocked(src) && !siteCount(src, ti)) placeB(src, ti); }
+      return;
+    }
   }
   /* services, power and modernization, a little at a time */
   function invest() {
@@ -280,7 +314,7 @@ function bot(opt) {
       if (!opt.passive) {
         const step = Math.max(1, Math.round(30 / opt.pace));
         if (S.day % step === 0) fixPass(1);
-        if (S.day % 30 === 3) { analyze(); state(); trade(); posts(); link(); goals(); invest(); }
+        if (S.day % 30 === 3) { analyze(); state(); trade(); posts(); link(); program(); goals(); invest(); }
       }
       const y = dOf(S.day).getUTCFullYear(); if (y !== lastYear) { lastYear = y; yearRow(); }
       if (R.err.length > 5) break;
