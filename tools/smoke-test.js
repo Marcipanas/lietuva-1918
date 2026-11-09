@@ -66,10 +66,12 @@ assert(true, `loaded ${order.length} scripts in index.html order`);
 /* ---- play session (runs inside the game's global scope) ---- */
 const session = `(function(){const out={};let t=0;
   /* the player answers each decision card as history went */
-  const hopt=id=>Math.max(0,CARDS[id].opts.findIndex(o=>o.h)),answer=()=>{while(S.hist.cards.length)act({act:'card',o:String(hopt(S.hist.cards[0]))})};
+  const hopt=id=>Math.max(0,CARDS[id].opts.findIndex(o=>o.h));out.news=[];
+  /* news cards (history that moves a border) are read; decision cards are answered as history went */
+  const answer=()=>{for(;;){if(S.hist.news.length){out.news.push(S.hist.news[0].id);act({act:'newsok'})}else if(S.hist.cards.length)act({act:'card',o:String(hopt(S.hist.cards[0]))});else break}};
   const run=(n,dt)=>{for(let q=0;q<n;q++){t+=dt;rafCb(t);answer()}};
   /* history without the economy, a day at a time, answering cards as history went unless pick says otherwise */
-  const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
+  const jump=(ds,pick)=>{const end=Math.round((Date.parse(ds)-START)/864e5)-1;while(S.day<end){S.day++;histTick();while(S.hist.news.length)readNews();while(S.hist.cards.length){const id=S.hist.cards[0];pickCard(pick&&pick[id]!==undefined?pick[id]:hopt(id))}}};
   const keep=()=>JSON.stringify(serialize(),SAVE_NUM),back=s=>{restore(JSON.parse(s));analyze()},T=n=>S.towns.find(x=>x.n===n);
   /* a new game opens on its intro, paused on 16 February 1918, with every town housed and a first ministry task */
   showCard();out.intro=S.intro===1&&S.speed===0&&S.day===0&&document.getElementById('card').innerHTML.includes('Act of Independence');{const K=T('Kaunas');out.kauHomes=K.house>=K.pop0&&K.note!=='Overcrowded'}
@@ -226,6 +228,7 @@ assert(o.moved > 0, `the new route carries goods (${o.moved.toFixed(1)} a day)`)
 assert(o.post, `a border post in Kybartai trades with Germany (${o.postWhy})`);
 assert(o.deal, `a deal sells grain to Germany (${o.dealWhy})`);
 assert(o.vil19 === 'pl,pl,pl,lv,lv,' + (o.sejny ? 'pl' : 'de') + ',Kaunas,1' && o.red19, `the government moves to Kaunas, the Red Army takes Vilnius in January 1919 and Poland in April; Latvia takes the Palanga coast (${o.vil19})`);
+assert(['gov19', 'red19', 'pl19'].every(k => o.news.includes(k)), `a card explains each change: the government in Kaunas, the Red Army and then Poland in Vilnius (${o.news.join(', ')})`);
 assert(o.red20 === 'ra,ra,Kaunas' && o.back20 === 'lt,lt,Kaunas,0', `the Red Army takes Vilnius in July 1920 and hands it to Lithuania in August, while the government stays in Kaunas (${o.red20}; ${o.back20})`);
 assert(o.vol && o.card0 === 'vilnius', `the 1918 volunteers card is answered in play, and Żeligowski's march on Vilnius comes on 8 October 1920 (${o.card0})`);
 assert(o.defend && o.defendFail, 'defending Vilnius holds the city with security 40, and fails with security 10');

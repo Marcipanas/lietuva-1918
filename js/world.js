@@ -935,25 +935,38 @@ function nearestTownRoad(n, x, z) {
   const t = S.towns[n];
   let best = null;
   EDGES.forEach(e => {
-    if (e.k !== 'road') return;
+    if (e.k !== 'road' || e.off) return;
     const q = polyClosest(e.p, e.c, x, z);
     if (Math.hypot(q.x - t.x, q.z - t.z) > (t.R || 1) + 6) return;
     if (!best || q.d < best.d) best = { x: q.x, z: q.z, d: q.d };
   });
   return best;
 }
-/* Give a building a road to town n, from its front (side 1) or back (side -1). */
+/* Road distance from a box's road access to the town hall of town n (Infinity when no road joins them). */
+function roadToHall(o, n) {
+  const hall = S.bld.find(b => b.t === 'hall' && b.ti === n), a = accessOf(o, 'road');
+  const h = hall && accessOf(bOBB(hall), 'road', ACCESS + 0.15);
+  if (!a || !h) return Infinity;
+  const src = [{ e: h.e, s: h.s, o: n }], q = distTo(dijkstra(src, 'road'), a.e, a.s, src);
+  return q.o < 0 ? Infinity : q.d;
+}
+/* Give a building a road to town n, from its front (side 1) or back (side -1). A road beside it counts only when it leads to
+   the town without a long way round (the road on the Curonian Spit does not lead to Klaipėda). */
 function connectToTown(b, n, side) {
-  const o = bOBB(b);
-  if (accessOf(o, 'road')) return true;
+  const o = bOBB(b), t = S.towns[n], near = () => roadToHall(o, n) <= Math.hypot(b.x - t.x, b.z - t.z) * 2 + 3;
+  if (accessOf(o, 'road')) return near();
   const [, , fx, fz] = obbAxes(o), s = side || 1, d = o.d / 2 + 0.16, px = b.x + fx * d * s, pz = b.z + fz * d * s;
   const tgt = nearestTownRoad(n, px, pz);
   if (!tgt) return false;
   blk();
   const p = planPath(px, pz, tgt.x, tgt.z, 'road', true);
   if (!p) return false;
-  afterLine(buildLine('road', 1, p, 0.15));
-  return !!accessOf(o, 'road');
+  const made = buildLine('road', 1, p, 0.15);
+  afterLine(made);
+  if (accessOf(o, 'road') && near()) return true;
+  /* no good: take the new road away again, so no road is left leading nowhere */
+  made.forEach(e => { if (EDGES.has(e.id)) removeEdge(e); });
+  return false;
 }
 function placeNear(n, type) {
   const t = S.towns[n], rnd = rng(5000 + n * 131 + S.bld.length * 7), need = BT[type].need, r0 = (t.R || 1) + 0.6;

@@ -58,7 +58,7 @@ const FARMSTEAD_CAP=0.5;
 const HOUSE={cap:[0,2,6,15],n:[null,'Wooden houses','Brick apartments','Panel blocks'],cost:[null,{lt:10,timber:2},{lt:30,bricks:5},{lt:75,bricks:12}]};
 const LV=[0,1,1.7,2.6], INM=[0,1,1.5,2.1];
 /* Roads and railways: cost per km (BRIDGE times more over water), w = drawn width in km, up = upkeep per km a day (villages keep up dirt roads) */
-const ROADT=[null,{n:'Dirt road',era:1,lt:5,mat:{timber:0.3},spd:0.7,w:0.055,up:0},{n:'Paved road',era:2,lt:14,mat:{bricks:0.6},spd:1,w:0.065,up:0.006},
+const ROADT=[null,{n:'Dirt road',era:1,lt:5,mat:{timber:0.3},spd:0.7,w:0.055,up:0},{n:'Paved road',era:1,lt:14,mat:{bricks:0.6},spd:1,w:0.065,up:0.006},
   {n:'Highway',era:3,lt:30,mat:{bricks:1.2},spd:1.25,w:0.095,up:0.009}];
 const RAILT=[null,{n:'Railway',era:1,lt:20,mat:{timber:1},w:0.055,up:0.009},{n:'Electric railway',era:3,lt:45,mat:{bricks:1.2},w:0.055,up:0.018}];
 /* Vehicles: cap = loads per trip, spd = km per day, cost to buy, up = upkeep per day. Trips a day = spd / (2 × route km + TRIP_OVERHEAD). */
@@ -73,7 +73,7 @@ const ZONE_COST=5, BRIDGE=4, STORE_BASE=150, WH_CAP=[0,400,800,1300];
 const ERAS=[null,
   {n:'Independence',c:'#fdb913'},
   {n:'Industrialization',c:'#0f7b4f',req:{pop:850,linked:50,lt:6000,bricks:150},
-    unl:'Peat power stations, linen mills, furniture factories, trucks, paved roads, brick apartments and Lv 2 upgrades. Towns start wanting linen cloth and electric light.'},
+    unl:'Peat power stations, linen mills, furniture factories, trucks, brick apartments and Lv 2 upgrades. Towns start wanting linen cloth and electric light.'},
   {n:'Modern Lithuania',c:'#c1272d',req:{pop:1450,linked:70,lt:25000,bricks:500,textiles:200},
     unl:'Hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Towns start wanting electronics.'}];
 const GOAL_POP=2400;

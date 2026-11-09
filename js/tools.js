@@ -10,10 +10,11 @@ const TOOL = { k: 'inspect', bt: null, rot: 0, ti: -1, lv: { road: 0, rail: 0 },
 let PEND = null, TRACE = [], K0 = 0, ZONES = [], lastPlan = 0, planTimer = 0;
 const FIND_R = 15;
 const isLine = () => TOOL.k === 'road' || TOOL.k === 'rail', isBrush = () => TOOL.k === 'zone' || TOOL.k === 'bull';
-function roadMax() { return S.era >= 3 ? 3 : S.era >= 2 ? 2 : 1; }
+function roadMax() { return S.era >= 3 ? 3 : 2; }
 function railMax() { return S.era >= 3 ? 2 : 1; }
-/* the level the line tool builds: the player's choice, or the best the era allows */
-function lineLevel(k) { const mx = k === 'road' ? roadMax() : railMax(), c = TOOL.lv[k]; return c >= 1 && c <= mx ? c : mx; }
+/* the level the line tool builds: the player's choice, or else the best the era allows (for roads, the era's own kind:
+   dirt roads in the first era, though paved roads can be picked, at a price in bricks) */
+function lineLevel(k) { const mx = k === 'road' ? roadMax() : railMax(), c = TOOL.lv[k]; return c >= 1 && c <= mx ? c : k === 'road' ? Math.min(mx, S.era) : mx; }
 /* what the ground overlay highlights while placing a building: where it can go, or where it does best */
 function needKey(bt) { const T0 = BT[bt]; if (!T0) return null; return T0.need === 'clay' || T0.need === 'bog' || T0.need === 'forest' ? T0.need : T0.bonus || null; }
 
@@ -356,7 +357,8 @@ function setGhost(x, z, rot) {
   }
   const ti = payTown(gx, gz), jt = t === 'hall' ? -1 : townAtPoint(gx, gz, true);
   VIEW.ghost = { t, x: gx, z: gz, rot: r, ok: v.ok }; VIEW.ver++;
-  PEND = { kind: 'place', t, x: gx, z: gz, rot: r, ok: v.ok, why: v.why, bonus: v.bonus, ti, jt, cost: T0.cost, fx: x, fz: z };
+  const acc = t === 'hall' || !!accessOf({ x: gx, z: gz, rot: r, w, d }, 'road');
+  PEND = { kind: 'place', t, x: gx, z: gz, rot: r, ok: v.ok, why: v.why, bonus: v.bonus, ti, jt, acc, cost: T0.cost, fx: x, fz: z };
   TOOL.built = '';
   showBar();
 }
@@ -464,6 +466,7 @@ function findGhost(initial) {
 
 function doConfirm() {
   const p = PEND;
+  let placed = null;
   if (!p || p.bad) return;
   const town = p.ti >= 0 ? S.towns[p.ti] : null;
   if (p.kind === 'line' || p.kind === 'up') {
@@ -499,10 +502,30 @@ function doConfirm() {
     if (m) return toast(m);
     pay(p.cost, town);
     if (p.t === 'hall') newTownAt(p.x, p.z, p.rot);
-    else { addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
+    else { placed = addB(p.t, p.x, p.z, p.rot, 1); toast(`${BT[p.t].n} built`); log(`${BT[p.t].n} built near ${town.n}.`); tutEvent('build'); }
     VIEW.ghost = null; PEND = null; VIEW.ver++; TOOL.built = BT[p.t].n;
   }
   analyze(); save(); renderPanel(true); showBar();
+  /* built with no road to a town: lay out the road to it, for the player to confirm */
+  if (placed && placed.na === 'noroad' && offerAccess(placed)) toast(`${BT[placed.t].n} built. It needs a road to town: build the road shown, or draw your own.`);
+}
+/* A dirt road from a building that no road reaches to the nearest street of the town that would take it, planned in the Road
+   tool. A station's front faces its track, so its road leaves from the back or a side. Returns true when there is a plan. */
+function offerAccess(b) {
+  const o = bOBB(b), [rx, rz, fx, fz] = obbAxes(o);
+  let ti = townAtPoint(b.x, b.z, true);
+  if (ti < 0) ti = nearestTown(b.x, b.z, true);
+  if (ti < 0) return false;
+  const sides = [[fx, fz, o.d / 2], [-fx, -fz, o.d / 2], [rx, rz, o.w / 2], [-rx, -rz, o.w / 2]].filter((q, i) => !(b.t === 'station' && i === 0));
+  let best = null;
+  sides.forEach(([dx, dz, h]) => {
+    const px = b.x + dx * (h + 0.1), pz = b.z + dz * (h + 0.1), tg = nearestTownRoad(ti, px, pz);
+    if (tg && (!best || tg.d < best.d)) best = { x: px, z: pz, tx: tg.x, tz: tg.z, d: tg.d };
+  });
+  if (!best || best.d > 6) return false;
+  setTool('road'); TOOL.lv.road = 1;
+  TRACE = [[best.x, best.z], [best.tx, best.tz]]; K0 = 1; prepareLine();
+  return !!(PEND && !PEND.bad);
 }
 function newTownAt(x, z, rot) {
   const [lo, la] = xz2ll(x, z);

@@ -194,12 +194,18 @@ function townsBlock(){const sort=VIEW.tsort||'need',heatOn=seasonOf(S.day).heat>
     <ul class="tlist">${show.map(row).join('')}</ul>
     ${L0.length>10?`<button class="btn sm ghost wide" data-act="tall">${VIEW.tall?'Show fewer':'Show all '+L0.length+' towns'}</button>`:''}
     <p class="note">${vils.length} villages with ${v('tvp',popStr(vils.reduce((a,n)=>a+S.towns[n].pop,0)))} people farm the land between the towns${vp.length?`. ${vp.length} need help: ${vp.slice(0,6).map(n=>`<button class="link sm" data-act="seltown" data-ti="${n}">${S.towns[n].n}</button>`).join(', ')}${vp.length>6?' and more':''}`:''}.</p></div>`}
+/* where the treasury's money comes from and goes, a day (smoothed over about ten days) */
+const BUD_ROWS=[['tax','Taxes'],['trade','Trade abroad'],['bld','Building upkeep'],['lines','Roads and railways'],['routes','Route vehicles'],['army','Army and allies']];
+function budgetHTML(){const b=S.bud||{},st=x=>x<-0.05?'neg':x>0.05?'pos':'';
+  return `<div class="sec"><h3>Money a day</h3><div class="bud">${BUD_ROWS.map(([k,n])=>`<span>${n}</span><b${sc('bc'+k,st(b[k]||0))}>${v('bu'+k,fd(b[k]||0)+' Lt')}</b>`).join('')}
+    <span class="tot">Balance</span><b class="tot"${sc('bctot',st(S.inc))}>${v('butot',fd(S.inc)+' Lt')}</b></div></div>`}
 function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.filter(x=>x.ok).length:0;let h='';
   h+=`<div class="kgrid">${kpiTile('p','people','Residents',v('tp',popStr(t.pop)),v('tpg',trendTxt(popTrend())),sparkSvg('sp',ser.map(x=>x[1])))}
     ${kpiTile('f','coin','Treasury',v('tf',fmt(S.funds)+' Lt'),v('tfi',fd(S.inc)+' Lt a day'),sparkSvg('sf',ser.map(x=>x[2])))}
     ${kpiTile('l','rail','Linked towns',v('tl',t.linked+' of '+t.towns),'by rail or paved road',`<div class="mbar">${w('tlb',Math.round(t.linked/Math.max(1,t.towns)*100))}</div>`)}
     ${L0?kpiTile('e','star','Next era',v('te',done+' of '+L0.length),'requirements met',`<div class="mbar">${w('teb',Math.round(done/L0.length*100))}</div>`,{act:'goto',k:'era'}):kpiTile('e','star','Era',ERAS[S.era].n,'the last era','')}</div>`;
   h+=natIssuesHTML();
+  h+=budgetHTML();
   h+=goodsHTML(goodsRows(-1),'N','Goods in Lithuania a day');
   h+=townsBlock();
   h+=S.won?`<div class="goal"><b>Plan fulfilled</b><span>Every town is linked and lit, and ${popStr(t.pop)} people live in them.</span></div>`
@@ -236,6 +242,10 @@ function introHTML(){return `<div class="cbox intro"><div class="eyebrow">Vilniu
 function eraHTML(n){const E=ERAS[n];return `<div class="cbox intro era" style="--ec:${E.c}"><div class="eyebrow">A new era · ${dateStr(S.day)}</div><h2 id="cardt">${E.n}</h2>
   <p>${E.unl}</p><p class="lead">${n===2?'Plan the power grid as you grow: towns without electric light lose heart.':'The last era. Light up every town and link it to the capital to fulfil the plan.'}</p>
   <div class="opts"><button class="btn pri big" data-eraok="1">Continue</button></div></div>`}
+/* History that moved a border or the capital: what happened, what changed hands, and what it means for the player */
+function newsHTML(nw){const e=HEV.find(x=>x.id===nw.id)||{},d=e.d||'';return `<div class="cbox intro news"><div class="eyebrow">${cardDate(e.y?d.slice(0,4):d)}</div><h2 id="cardt">${e.news||''}</h2>
+  <p>${e.t||''}</p>${nw.more?`<p class="more">${nw.more}</p>`:''}${e.nd?`<p class="lead">${e.nd}</p>`:''}
+  <div class="opts"><button class="btn pri big" data-newsok="1">Continue</button></div></div>`}
 /* The decisions taken so far, each marked as history went or not, then the chronicle itself */
 function chronPanel(){const D=decisions(),as=D.filter(x=>x.as===1).length,off=D.filter(x=>x.as===0).length;
   const dec=D.length?`<details class="more" data-k="decisions"${D.length<=3?' open':''}><summary>Your decisions<span>${as} as in history${off?`, ${off} not`:''}</span></summary><ul class="decs">${D.map(x=>
@@ -248,7 +258,8 @@ function dealRow(d){const t=S.towns[d.ti],M=MARKETS[d.m],out=d.dir==='out';
   return `<li class="dl"><div class="dlt"><b>${out?'Sell':'Buy'} ${num(d.q)} ${rname(d.r)} a day</b><span class="lks">${out?'from':'into'} ${t?t.n:'—'} · ${out?'to':'from'} ${M.n}</span>
     <span class="note">${v('dv'+d.id,d.why?d.why:(d.val>=0?'+':'−')+fmt(Math.abs(d.val))+' Lt a day','stat3')}</span></div>
     <div class="row"><button class="btn sm ghost" data-act="dq" data-d="${d.id}" data-q="-1" aria-label="Less">${ic('minus')}</button><button class="btn sm ghost" data-act="dq" data-d="${d.id}" data-q="1" aria-label="More">${ic('plus')}</button>
-    <button class="btn sm ghost" data-act="ddel" data-d="${d.id}" aria-label="Remove deal">${ic('trash')}</button></div></li>`}
+    <button class="btn sm ghost" data-act="ddel" data-d="${d.id}" aria-label="Remove deal">${ic('trash')}</button></div>
+    <div class="row lim"><span class="note">${out?'Keep in store':'Fill store to'}</span>${DEAL_LIM[d.dir].map(q=>`<button class="chipb${(d.lim===undefined?(out?0.5:1):d.lim)===q?' on':''}" data-act="dlim" data-d="${d.id}" data-q="${q}">${Math.round(q*100)}%</button>`).join('')}</div></li>`}
 function priceChips(m){const M=MARKETS[m],ch=[];
   for(const r in M.buy)if(RI[r].era<=S.era)ch.push(`<span class="pc" style="--c:var(--r-${r})" title="They buy ${RI[r].n}">${ic(RI[r].ic)}${v('pb'+m+r,mktPrice(m,r,'out').toFixed(1))}</span>`);
   const sl=Object.keys(M.sell).filter(r=>RI[r].era<=S.era).map(r=>`<span class="pc in" style="--c:var(--r-${r})" title="They sell ${RI[r].n}">${ic(RI[r].ic)}${v('ps'+m+r,mktPrice(m,r,'in').toFixed(1))}</span>`);

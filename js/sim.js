@@ -18,7 +18,7 @@ function newGame(){
     {d:0,t:'Borders move with history. Vilnius will change hands several times from 1919, and the Klaipėda Region and the Palanga coast are not yet Lithuanian. Nothing can be built where others hold the land.',k:''},
     {d:0,t:'The Council of Lithuania signs the Act of Independence in Vilnius. The new state must build an economy almost from nothing.',k:'hist'}];
   /* one day of figures for the dashboards, without moving the date: the game starts paused on 16 February */
-  const f0=S.funds;tick();S.inc=S.funds-f0;S.day=0;
+  const f0=S.funds;tick();S.inc=S.funds-f0;S.bud={...BUD};S.day=0;
 }
 /* The start map puts some of a city's houses nearer a village hall. A town with fewer homes than people on the first day gets
    houses on its own zoned lots, nearest first, so no one starts overcrowded. */
@@ -54,6 +54,8 @@ function loadStartMap(W){S.gid=W.gid;S.nid=W.nid;S.lid=W.lid;
    without empty stock, and without the 1918 descriptions, which come back from the start map. */
 const slimMap=m=>{const r={};for(const k in m)if(Math.abs(m[k])>=1e-3)r[k]=m[k];return r};
 const DAILY=new Set(['dem','ate','mk','us','gr','_mk','_us','rg']);
+/* the day's money by kind (the tick fills it; S.bud keeps a smoothed copy for the Lithuania view) */
+const BUD={tax:0,trade:0,bld:0,lines:0,routes:0,army:0};
 function serialize(){if(typeof camSave==='function')S.cam=camSave();const o=Object.assign({...S},encWorld());
   o.towns=S.towns.map(t=>{const c={};for(const k in t){if(DAILY.has(k)||(k==='d'&&t.orig))continue;c[k]=k==='stock'||k==='dl'?slimMap(t[k]):t[k]}return c});return o}
 /* A save of this version back into S: the world is decoded, and what the save leaves out (DAILY, the 1918 descriptions) is
@@ -130,6 +132,14 @@ function houseCap(b){return b.f&&b.lv===1?FARMSTEAD_CAP:HOUSE.cap[b.lv]}
 function useInputs(b,e,st,dem,fill,us){const T0=BT[b.t];if(!T0.in)return 1;const im=INM[b.lv];let ir=1;b.lack='';
   for(const r in T0.in){dem[r]=(dem[r]||0)+T0.in[r]*im*fill;const need=T0.in[r]*im*e;if(need>0){const q=(st[r]||0)/need;if(q<ir){ir=q;b.lack=r}}}
   ir=clamp(ir,0,1);for(const r in T0.in){const q=T0.in[r]*im*e*ir;st[r]=(st[r]||0)-q;us[r]=(us[r]||0)+q}return ir}
+/* buildings that make nothing themselves: what they do for their town */
+const IDLE=new Set(['station','warehouse','customs','port']);
+function idleWhy(b,t){if(!b.on)return 'Paused';
+  if(b.t==='station')return `Trains stop here for ${t.n}`;
+  if(b.t==='warehouse')return `Stores goods for ${t.n}`;
+  if(b.t==='port')return `Ships load here for ${t.n}`;
+  const m=b.gate?Object.keys(MARKETS).filter(k=>MARKETS[k].gate.includes(b.gate)).map(k=>MARKETS[k].n):[];
+  return m.length?`Trade with ${m.join(' and ')} crosses here`:'No border near'}
 function why(b,fill,pr,ir){if(ir<0.9)return 'Missing '+rname(b.lack);if(pr<0.9)return 'Not enough power';if(fill<0.9)return 'Short of workers';return 'Running'}
 const NA_TXT={noroad:'No road to a town',far:'Too far from a town hall'};
 function naTxt(b){return b.na==='locked'?heldTxt(rgnAt(b.x,b.z)):NA_TXT[b.na]||'Not connected'}
@@ -179,8 +189,8 @@ function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.
   const fbal=FOOD.reduce((a,r)=>a+(t.dl[r]||0),0),full=FOOD.some(r=>(st[r]||0)>=t.cap*0.95);
   if(fed>=0.99&&t.pop<t.house&&(t.pop<base||(t.fdays>=8&&(fbal>=need*0.015||full))))t.pop=Math.min(t.house,t.pop+Math.max(0.01,t.pop*0.004)*hf*(1+0.3*t.med));
   if(fed<0.999)t.pop-=t.pop*(1-fed)*0.02;if(t.pop>t.house)t.pop-=(t.pop-t.house)*0.03;t.pop=Math.max(Math.min(base,0.2),t.pop);
-  S.funds+=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();
-  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station')S.funds-=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3)});
+  const tax=t.pop*(t.vil?0.04:0.08)*Math.min(1.4,hf)*histTax();S.funds+=tax;BUD.tax+=tax;
+  BYT[ti].forEach(b=>{if(b.t!=='house'&&b.t!=='hall'&&b.t!=='landmark'&&b.t!=='station'){const c=(BT[b.t].store?0.3:0.4)*b.lv*(b.on?1:0.3);S.funds-=c;BUD.bld-=c}});
   if(fed<0.9&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.food.push(t.n)}
   else if(t.heat<0.7&&S.day-t.lastWarn>45){t.lastWarn=S.day;WARN.cold.push(t.n)}
   RES.forEach(r=>{if((st[r]||0)<1e-4)st[r]=0;if(st[r]>t.cap)st[r]=t.cap})}
@@ -261,9 +271,9 @@ function curTask(){return OBJ.find(o=>!S.obj[o.id]&&(!o.can||o.can()))||null}
 
 function tick(){
   if(NET.dirty)analyze();
-  S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);
+  S.day++;const f0=S.funds,act=activeIdx(),before={},sea=seasonOf(S.day);for(const k in BUD)BUD[k]=0;
   RES.forEach(r=>{const base=RI[r].p*depAt(r);let p=S.prices[r]*(1+(Math.random()-0.5)*0.04);p+=(base-p)*0.012;S.prices[r]=clamp(p,base*0.6,base*1.6)});
-  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock)BYT[b.town].push(b);else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b)}});
+  BYT=S.towns.map(()=>[]);S.bld.forEach(b=>{if(b.town>=0&&!S.towns[b.town].lock){BYT[b.town].push(b);if(IDLE.has(b.t)){b.eff=b.on?1:0;b.why=idleWhy(b,S.towns[b.town])}}else if(b.t!=='house'&&b.t!=='hall'){b.eff=0;b.why=naTxt(b)}});
   act.forEach(n=>{before[n]={...S.towns[n].stock};before[n].pop=S.towns[n].pop;phase1(n)});
   S.routes.forEach(routeEval);commute(act);act.forEach(phase1b);
   const sup={},dem={};act.forEach(n=>{const t=S.towns[n],c=NET.grid[n];sup[c]=(sup[c]||0)+t.powS;dem[c]=(dem[c]||0)+t.powD});
@@ -274,8 +284,11 @@ function tick(){
   /* smoothed per-day figures: net change of each good (routes and trade included), made, used, and population growth */
   act.forEach(n=>{const t=S.towns[n],b0=before[n],mk=t.mk||(t.mk={}),us=t.us||(t.us={});RES.forEach(r=>{const d=(t.stock[r]||0)-(b0[r]||0);t.dl[r]=(t.dl[r]||0)*0.8+d*0.2;
     mk[r]=(mk[r]||0)*0.8+(t._mk[r]||0)*0.2;us[r]=(us[r]||0)*0.8+(t._us[r]||0)*0.2});t.gr=(t.gr||0)*0.9+(t.pop-b0.pop)*0.1});
-  S.funds-=NET.up;S.routes.forEach(r=>{if(!r.held)S.funds-=r.n*VT[r.vt].up});
+  S.funds-=NET.up;BUD.lines=-NET.up;S.routes.forEach(r=>{if(!r.held){const c=r.n*VT[r.vt].up;S.funds-=c;BUD.routes-=c}});
+  /* the army, allies and support schemes are paid before the day's balance is counted, so the top bar shows them */
+  const hs=histSpend();S.funds-=hs;BUD.army=-hs;
   S.inc=S.inc*0.9+(S.funds-f0)*0.1;
+  const bu=S.bud||(S.bud={});for(const k in BUD)bu[k]=(bu[k]||0)*0.9+BUD[k]*0.1;
   if(S.funds<0&&S.day-(S.ms.broke||-999)>90){S.ms.broke=S.day;log('The treasury is empty and upkeep runs up a debt. Remove routes or buildings you do not need, or sell goods abroad.','warn');NOTES.push('The treasury is empty')}
   histTick();
   if(S.day>=S.nextRnd){S.nextRnd=S.day+170+Math.floor(Math.random()*170);const r=pick(REV)();if(r)log(r[0],r[1])}
