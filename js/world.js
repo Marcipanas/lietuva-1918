@@ -1152,9 +1152,47 @@ function railBetween(ia, ib) {
   blk();
   const p = planPath(ea.x, ea.z, eb.x, eb.z, 'rail', true);
   if (!p) return false;
-  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
+  buildPlanned('rail', 1, turnouts(smoothLine(p, 'rail', true, 2)));
   return true;
 }
+/* ---------- railway turnouts ----------
+   A railway that joins another curves onto it at a shallow angle, as a switch does, instead of meeting it in a T: the last
+   stretch of the new line becomes a curve that runs onto the old track a little further along, the way a train would go on.
+   At the end of a line it carries the line straight on. pts ends on the track (within 0.16 km). The curve must stay on dry land
+   clear of buildings; when it does not fit, pts comes back unchanged. */
+function turnoutEnd(pts) {
+  const n = pts.length;
+  if (n < 2) return pts;
+  const B = pts[n - 1], ne = nearestEdge(B[0], B[1], 'rail', 0.16);
+  if (!ne) return pts;
+  const e = ne.e, c = polyCum(pts), L = c[c.length - 1];
+  const back = polyAt(pts, c, Math.max(0, L - 0.5)), dl = Math.hypot(B[0] - back[0], B[1] - back[1]);
+  if (dl < 0.1) return pts;
+  const dx = (B[0] - back[0]) / dl, dz = (B[1] - back[1]) / dl, q = polyAt(e.p, e.c, ne.s);
+  const atA = ne.s < 0.05 && NODES.get(e.a).e.length === 1, atB = ne.s > e.L - 0.05 && NODES.get(e.b).e.length === 1;
+  const sg = atA ? 1 : atB ? -1 : dx * q[2] + dz * q[3] >= 0 ? 1 : -1, cs = (dx * q[2] + dz * q[3]) * sg;
+  if (cs > Math.cos(14 * Math.PI / 180)) return pts;
+  /* sharper turns need longer curves; the merge point lies along the track the way the train goes on */
+  const ang = Math.acos(clamp(cs, -1, 1)), Lc = clamp(0.5 + ang / Math.PI * 1.8, 0.5, 1.6);
+  if (L < Lc * 0.9) return pts;
+  const sm = atA || atB ? ne.s : clamp(ne.s + sg * Lc * 0.75, 0.03, e.L - 0.03), M = polyAt(e.p, e.c, sm);
+  if (!atA && !atB && Math.abs(sm - ne.s) < Lc * 0.4) return pts;
+  const sc = L - Lc * 0.85, C = polyAt(pts, c, sc), tx = M[2] * sg, tz = M[3] * sg;
+  /* the curve comes in from the side it starts on, so it touches the track only where it joins it */
+  const side = Math.sign((C[0] - M[0]) * -tz + (C[1] - M[1]) * tx) || 1, k1 = Lc * 0.5, k2 = Lc * 0.45;
+  const P1 = [C[0] + dx * k1, C[1] + dz * k1], P2 = [M[0] - tx * k2 - tz * side * 0.03, M[1] - tz * k2 + tx * side * 0.03];
+  const curve = [];
+  for (let i = 1; i <= 20; i++) {
+    const t = i / 20, u = 1 - t, a = u * u * u, b = 3 * u * u * t, d = 3 * u * t * t, f = t * t * t;
+    curve.push([a * C[0] + b * P1[0] + d * P2[0] + f * M[0], a * C[1] + b * P1[1] + d * P2[1] + f * M[1]]);
+  }
+  for (const p of densify([[C[0], C[1]]].concat(curve), 0.05)) {
+    if (!passable(p[0], p[1]) || terrAt(p[0], p[1]) === T_RIVER || waterHit({ x: p[0], z: p[1], rot: 0, w: 0, d: 0 }, 0.03) || nearBld(p[0], p[1], 0.05)) return pts;
+  }
+  return polySlice(pts, c, 0, sc).concat(curve);
+}
+/* both ends of a new railway */
+function turnouts(pts) { return turnoutEnd(turnoutEnd(pts).slice().reverse()).reverse(); }
 /* The last point inside Lithuania on the way from (x, z) toward a place abroad. */
 function borderPoint(x, z, tx, tz) {
   const L = Math.hypot(tx - x, tz - z);
@@ -1175,7 +1213,7 @@ function railToBorder(ia, lon, lat) {
   blk();
   const p = planPath(e.x, e.z, bp[0], bp[1], 'rail', true);
   if (!p) return false;
-  buildPlanned('rail', 1, smoothLine(p, 'rail', true, 2));
+  buildPlanned('rail', 1, turnouts(smoothLine(p, 'rail', true, 2)));
   return true;
 }
 /* The road node of town n nearest to another place. */

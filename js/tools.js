@@ -155,6 +155,8 @@ function planLine() {
   VIEW.snaps = tr.map((q, i) => [q[0], q[1], i === 0 ? !!s0 : i === tr.length - 1 ? !!s1 : false, i > 0 && i < tr.length - 1]);
   let pts = null, pieces = null;
   if (tr.length > 1 && polyLen(tr) > 0.05) { blk(); pts = planTrace(tr, k, false, Math.max(0.06, cam.dist * 0.01)); if (pts) pieces = routePieces(pts, k); }
+  /* new track that meets old track curves onto it, as a switch does */
+  if (pieces && k === 'rail') pieces.forEach(P => { if (!P.net && polyLen(P.p) > 0.6) P.p = turnouts(P.p); });
   VIEW.path = pts || (tr.length > 1 ? tr : null); VIEW.pathOk = !!pts; VIEW.pathMode = k; VIEW.hit = null;
   VIEW.lines = pieces ? pieces.map(q => ({ p: q.p, k: q.net ? (q.segs.some(g => g.e.lv < lineLevel(k)) ? 'up' : 'use') : 'new' })) : null;
   VIEW.ver++;
