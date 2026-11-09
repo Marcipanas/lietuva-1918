@@ -3,17 +3,22 @@
 /* SAVE_KEY carries the version: a new version starts a new game, and older saves are dropped (dropOldSaves in sim.js). */
 const SAVE_KEY='lietuva1918-0.10.0', TPS=[0,2,5,12], START=Date.UTC(1918,1,16);
 /* The world is continuous: x = km east, z = km south of the map corner at 20.75°E, 56.55°N. North is -z.
-   Distances between places are true. Towns and buildings are drawn about five times larger than life
-   (a house lot is LOT_W km across) so they read well on a country-sized map. */
-const LON0=20.75, LAT1=56.55, KMX=111.32*Math.cos(55.2*Math.PI/180), KMY=111.32, MAPU=400, MAPV=310;
+   The country is drawn MAPK times its real size, so towns have room between them: a drawn km is 1/MAPK of a real km.
+   Towns and buildings keep their drawn size (a house lot is LOT_W km across), about five times larger than life.
+   Rules that span the country (territory, commuting, line costs, vehicle speeds) are set in real km and scaled by MAPK;
+   the player sees real km (kmTxt). */
+const MAPK=2, LON0=20.75, LAT1=56.55, KMX=111.32*Math.cos(55.2*Math.PI/180)*MAPK, KMY=111.32*MAPK, MAPU=400*MAPK, MAPV=310*MAPK;
+/* a drawn distance as real km, for the player */
+function kmTxt(x){return num(x/MAPK)}
 /* Hidden terrain raster used for rules and path planning only; the player never sees it. */
 const CELL=0.5, GW=Math.round(MAPU/CELL), GH=Math.round(MAPV/CELL);
 const T_FOREIGN=0,T_LAND=1,T_SEA=2,T_LAGOON=3,T_LAKE=4,T_RIVER=5,T_SAND=6;
 const F_FOREST=1,F_FERTILE=2,F_BOG=4,F_CLAY=8,F_FLAX=16,F_KR=32,F_LT=64;
-/* Distances in km. TERRITORY: road distance from a town hall within which buildings join that town.
+/* Distances in drawn km. TERRITORY: road distance from a town hall within which buildings join that town.
    VIL_OFF: workplaces join a village only when it is this much nearer than any town (villages have few workers).
-   ACCESS: how far a building may stand from the road that serves it. HALL_GAP: least distance between settlements. */
-const TERRITORY=15, WALK_KM=30, ACCESS=0.3, POL_R=2, HALL_GAP=4, TRIP_OVERHEAD=22, VIL_OFF=6;
+   ACCESS: how far a building may stand from the road that serves it. HALL_GAP: least distance between settlements.
+   ACCESS and POL_R work inside a town, at the towns' drawn size; the others span the country and scale with it. */
+const TERRITORY=15*MAPK, WALK_KM=30*MAPK, ACCESS=0.3, POL_R=2, HALL_GAP=4*MAPK, TRIP_OVERHEAD=22*MAPK, VIL_OFF=6*MAPK, BORDER_KM=3*MAPK;
 const LOT_W=0.42, LOT_D=0.42, LOT_GAP=0.46;
 
 const RES=['grain','potatoes','dairy','meat','fish','timber','peat','flax','bricks','textiles','furniture','metal','electronics'];
@@ -61,6 +66,8 @@ const LV=[0,1,1.7,2.6], INM=[0,1,1.5,2.1];
 const ROADT=[null,{n:'Dirt road',era:1,lt:5,mat:{timber:0.3},spd:0.7,w:0.055,up:0},{n:'Paved road',era:1,lt:14,mat:{bricks:0.6},spd:1,w:0.065,up:0.006},
   {n:'Highway',era:3,lt:30,mat:{bricks:1.2},spd:1.25,w:0.095,up:0.009}];
 const RAILT=[null,{n:'Railway',era:1,lt:20,mat:{timber:1},w:0.055,up:0.009},{n:'Electric railway',era:3,lt:45,mat:{bricks:1.2},w:0.055,up:0.018}];
+/* the costs above are per real km: per drawn km they are MAPK times less (lineCost shows them per real km again) */
+for(const T of [ROADT,RAILT])for(const s of T)if(s){s.lt/=MAPK;s.up/=MAPK;for(const m in s.mat)s.mat[m]/=MAPK}
 /* Vehicles: cap = loads per trip, spd = km per day, cost to buy, up = upkeep per day. Trips a day = spd / (2 × route km + TRIP_OVERHEAD). */
 const VT={
   cart:{n:'Horse carts',one:'horse cart',mode:'road',era:1,cap:4,spd:65,cost:60,up:0.2,ic:'cart'},
@@ -69,6 +76,8 @@ const VT={
   steam:{n:'Steam trains',one:'steam train',mode:'rail',era:1,cap:40,spd:215,cost:1500,up:2,ic:'train'},
   etrain:{n:'Electric trains',one:'electric train',mode:'rail',era:3,cap:90,spd:400,cost:4500,up:5,ic:'train',elec:1}
 };
+/* speeds are in real km a day: on the drawn map they cover MAPK times as many km */
+for(const k in VT)VT[k].spd*=MAPK;
 const ZONE_COST=5, BRIDGE=4, STORE_BASE=150, WH_CAP=[0,400,800,1300];
 const ERAS=[null,
   {n:'Independence',c:'#fdb913'},

@@ -40,7 +40,7 @@ function needTxt(t){const T0=BT[t],p=[];if(T0.need)p.push(NEED_TXT[T0.need]);if(
 function whatTxt(t){const T0=BT[t];if(T0.store)return `Adds ${fmt(WH_CAP[1])} storage for every good`;if(T0.svc==='school')return 'Raises output in its town';if(T0.svc==='clinic')return 'Lifts morale and growth';
   if(t==='hall')return 'Founds a new town';if(t==='station')return 'Joins its town to the railway';if(t==='customs')return 'Trade across the border';if(t==='port')return 'Trade by sea';
   const s=io(T0,1);return (s.charAt(0).toUpperCase()+s.slice(1))+(T0.w?` · ${popStr(T0.w)} workers`:'')}
-function lineCost(k){const sp=(k==='road'?ROADT:RAILT)[k==='road'?roadMax():railMax()],m=Object.keys(sp.mat)[0];return `${fmt(sp.lt)} Lt + ${num(sp.mat[m])} ${rname(m)} a km`}
+function lineCost(k){const sp=(k==='road'?ROADT:RAILT)[k==='road'?roadMax():railMax()],m=Object.keys(sp.mat)[0];return `${fmt(sp.lt*MAPK)} Lt + ${num(sp.mat[m]*MAPK)} ${rname(m)} a km`}
 function buildPanel(){const c=VIEW.bcat;
   if(!c){const tools=[['road','road','Road',lineCost('road')],['rail','rail','Railway',lineCost('rail')],['zone','zone','Zone homes',`${ZONE_COST} Lt a lot`],['bull','trash','Remove','Nothing is refunded']];
     return `<div class="sec"><h3>Lines and land</h3><div class="tgrid">${tools.map(([k,i,n,d])=>`<button class="ttile" data-act="tool" data-tool="${k}"${VIEW.bti>=0?` data-ti="${VIEW.bti}"`:''}><span class="ci">${ic(i)}</span><b>${n}</b><small>${d}</small></button>`).join('')}</div></div>
@@ -119,7 +119,7 @@ function townPanel(ti){const t=S.towns[ti];
   const ed=NET.adj[ti]||[],rs=S.routes.filter(r=>r.a===ti||r.b===ti);
   const lvOf=(k,o)=>{const p=pairPath(k,ti,o);return p?p.lv:1};
   h+=`<div class="sec"><h3>Neighbours<span>${ed.length?'start a route to trade':'not linked yet'}</span></h3><ul class="links">${ed.map(n=>{const e=NET.edges[n],o=e.a===ti?e.b:e.a;
-    return `<li class="lk"><div><button class="link" data-act="seltown" data-ti="${o}">${S.towns[o].n}</button><div class="lks">${[e.road?ROADT[lvOf('road',o)].n+` · ${Math.round(e.road.len)} km`:'',e.rail?RAILT[Math.min(2,lvOf('rail',o))].n+` · ${Math.round(e.rail.len)} km`:''].filter(Boolean).join(' + ')}</div></div>
+    return `<li class="lk"><div><button class="link" data-act="seltown" data-ti="${o}">${S.towns[o].n}</button><div class="lks">${[e.road?ROADT[lvOf('road',o)].n+` · ${Math.round(e.road.len/MAPK)} km`:'',e.rail?RAILT[Math.min(2,lvOf('rail',o))].n+` · ${Math.round(e.rail.len/MAPK)} km`:''].filter(Boolean).join(' + ')}</div></div>
       <div class="row">${e.road?`<button class="btn sm" data-act="newroute" data-a="${ti}" data-b="${o}" data-m="road">${ic('cart')}Road route</button>`:''}${e.rail?`<button class="btn sm" data-act="newroute" data-a="${ti}" data-b="${o}" data-m="rail">${ic('train')}Rail route</button>`:''}</div></li>`}).join('')}</ul>
     ${ed.length?'':`<p class="note">Use the Road tool to draw a road from this town’s streets to another town, then start a route.</p>`}
     ${rs.length?`<p class="note">${rs.length} route${rs.length>1?'s':''} serve${rs.length>1?'':'s'} ${t.n}. <button class="link sm" data-act="nav" data-tab="routes">Open routes</button></p>`:''}</div>`;
@@ -139,12 +139,12 @@ function buildingPanel(b){const T0=BT[b.t],t=b.town>=0?S.towns[b.town]:null;
   const key=b.why==='Storage full'?'full':b.why==='Short of workers'?'staff':b.lack&&b.why&&b.why.startsWith('Missing ')?'in:'+b.lack:'',iss=key&&b.on?townIssues(b.town).filter(x=>x.k===key):[];
   return `${T0.d?`<p class="lede">${T0.d}</p>`:''}
     <p class="status big">${v('y'+b.id,status||(b.on?b.why||'Running':'Paused'),'stat')}</p>
-    ${iss.length?issuesHTML(iss,'b'+b.id):b.town<0&&b.na!=='locked'?`<p class="note">A building joins a town when a road links it to the town hall within ${TERRITORY} km. Build a road to it.</p>`:''}
+    ${iss.length?issuesHTML(iss,'b'+b.id):b.town<0&&b.na!=='locked'?`<p class="note">A building joins a town when a road links it to the town hall within ${kmTxt(TERRITORY)} km. Build a road to it.</p>`:''}
     ${staffed?`<div class="kpis"><div class="kpi"><span class="k">${ic(bIcon(b.t))}Output</span><b>${v('e'+b.id,p+'%')}</b><div class="mbar">${w('m'+b.id,p)}</div></div>
       <div class="kpi"><span class="k">${ic('people')}Workers</span><b>${popStr(T0.w||0)}</b><small>needed</small></div></div>`:''}
     ${T0.store?`<p class="status">${ic('box')}Adds ${fmt(WH_CAP[b.lv])} storage for every good in ${t?t.n:'its town'}.</p>`:''}
     ${T0.out||T0.pow?`<p class="note">At full output it ${io(T0,b.lv,b.k)} per day${b.k&&b.k!==1&&!T0.pow?` (land ×${num(b.k)})`:''}.</p>`:''}
-    ${T0.pol?`<p class="note">${ic('smog')}Pollutes homes within ${POL_R} km.</p>`:''}
+    ${T0.pol?`<p class="note">${ic('smog')}Pollutes homes within ${kmTxt(POL_R)} km.</p>`:''}
     <div class="row">${up}${staffed?`<button class="btn ghost" data-act="toggle" data-id="${b.id}">${b.on?'Pause':'Resume'}</button>`:''}${t?`<button class="btn ghost" data-act="seltown" data-ti="${b.town}">Open ${t.n}</button>`:''}</div>
     <div class="row">${S.confirmDemo===b.id?`<span class="note">Demolish ${T0.n}? Nothing is refunded.</span><button class="btn sm" data-act="demolish2" data-id="${b.id}">Demolish</button><button class="btn sm ghost" data-act="canceld">Keep</button>`
       :`<button class="btn sm ghost" data-act="demolish" data-id="${b.id}">${ic('trash')}Demolish</button>`}</div>`}
@@ -156,7 +156,7 @@ function cargoRow(r,dir,A,B0){const spec=r[dir],auto=spec==='auto';
   return `<div class="cg"><div class="cgh"><b>${A.n} → ${B0.n}</b>${v('rm'+r.id+dir,movedTxt(r,dir))}</div><div class="chips2"><button class="chipb${auto?' on':''}" data-act="rauto" data-r="${r.id}" data-dir="${dir}">Auto</button>${RES.filter(x=>RI[x].era<=S.era).map(x=>
     `<button class="chipb ico${!auto&&spec.includes(x)?' on':''}" data-act="rcargo" data-r="${r.id}" data-dir="${dir}" data-res="${x}" style="--c:var(--r-${x})" title="${RI[x].n}" aria-label="${RI[x].n}">${ic(RI[x].ic)}</button>`).join('')}</div></div>`}
 function routeCard(r){routeEval(r);const A=S.towns[r.a],B0=S.towns[r.b],V0=VT[r.vt],vts=Object.keys(VT).filter(k=>VT[k].mode===r.mode&&VT[k].era<=S.era),nx=vts[(vts.indexOf(r.vt)+1)%vts.length];
-  return `<li class="rc${VIEW.route===r.id?' on':''}"><div class="rh"><span class="rmode">${ic(r.mode==='rail'?'train':'cart')}</span><div class="rt"><b>${A.n} ⇄ ${B0.n}</b><div class="lks">${r.ok?`${Math.round(r.len)} km · round trip ${num(r.trip)} days`:`<span class="bad">${r.why}</span>`}</div></div>
+  return `<li class="rc${VIEW.route===r.id?' on':''}"><div class="rh"><span class="rmode">${ic(r.mode==='rail'?'train':'cart')}</span><div class="rt"><b>${A.n} ⇄ ${B0.n}</b><div class="lks">${r.ok?`${Math.round(r.len/MAPK)} km · round trip ${num(r.trip)} days`:`<span class="bad">${r.why}</span>`}</div></div>
     <button class="btn sm ghost" data-act="rshow" data-r="${r.id}" aria-label="Show on map">${ic('target')}</button></div>
     <div class="rv"><button class="btn sm ghost" data-act="rveh" data-r="${r.id}" data-d="-1" aria-label="Fewer">${ic('minus')}</button><span><b>${r.n}</b> ${r.n===1?V0.one:V0.n.toLowerCase()}</span>
       <button class="btn sm ghost" data-act="rveh" data-r="${r.id}" data-d="1" aria-label="More">${ic('plus')}</button><span class="note">${fmt(V0.cost)} Lt each · upkeep ${num(V0.up*r.n)} Lt a day</span>
@@ -222,9 +222,9 @@ function natPanel(){const t=totals(),ser=S.series||[],L0=eraReq(),done=L0?L0.fil
     <li>Trade abroad goes through a border post near the border or a sea port, from that town’s stock. History opens and closes markets: the Depression, a German boycott, war.</li>
     <li>On key dates history asks you to decide. Some choices can avoid what happened, if Lithuania has enough security: allies, an army, friends in the West.</li>
     <li>People eat grain, potatoes, dairy, meat and fish. Each extra kind adds morale. In winter homes burn peat or timber.</li>
-    <li>Workers fill local jobs first, then walk to towns within ${WALK_KM} km by road, or ride routes set to carry commuters.</li>
-    <li>Factories and kilns pollute homes within ${POL_R} km. Schools raise output; clinics lift morale and growth.</li>
-    <li>Buildings join a town when a road links them to its town hall within ${TERRITORY} km. Villages have few workers, so workplaces join a village only when no town is near.</li>
+    <li>Workers fill local jobs first, then walk to towns within ${kmTxt(WALK_KM)} km by road, or ride routes set to carry commuters.</li>
+    <li>Factories and kilns pollute homes within ${kmTxt(POL_R)} km. Schools raise output; clinics lift morale and growth.</li>
+    <li>Buildings join a town when a road links them to its town hall within ${kmTxt(TERRITORY)} km. Villages have few workers, so workplaces join a village only when no town is near.</li>
     <li>Dirt roads join every town and village. A town is linked to the capital when a railway or a paved road from it reaches its streets. The capital is Vilnius, or Kaunas from January 1919 until Vilnius is back for good. Railways and paved roads also carry the power grid.</li>
     <li>The map shows the borders of the day. Land others hold, like Vilnius for most of the years between the wars or the Klaipėda Region until 1923, can’t be built on, and nothing travels through it. Its towns wait, with all you built there, until it comes back.</li>
     <li>On the map: one finger moves it, two fingers zoom, turn and tilt. With a tool, tap to act; hold and drag to draw or paint.</li>

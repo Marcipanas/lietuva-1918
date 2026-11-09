@@ -27,7 +27,7 @@ const FOODS = new Set(FOOD);
    (East Prussia and the Klaipėda Region trade as Germany; Poland held the Belarusian side between the wars). */
 function borderOf(x, z) {
   let best = '', bd = 1e9;
-  forDisk(x, z, 3.5, (k, d) => { if ((CTY[k] > 1 || heldOff(k)) && d < bd) { bd = d; best = OWN_GATE[ownerOf(k)] || ''; } });
+  forDisk(x, z, BORDER_KM + 0.5, (k, d) => { if ((CTY[k] > 1 || heldOff(k)) && d < bd) { bd = d; best = OWN_GATE[ownerOf(k)] || ''; } });
   return best;
 }
 /* How town ti reaches markets: 'sea' for a port, a country code for a border post, 'rail' for a station. */
@@ -306,7 +306,7 @@ function project(type, near, r, year, grant, reward) {
 function checkProjects() {
   for (const p of S.hist.proj) {
     if (p.done) continue;
-    const t = S.towns[tIdx(p.near)], ok = t && S.bld.some(b => b.t === p.type && Math.hypot(b.x - t.x, b.z - t.z) <= p.r);
+    const t = S.towns[tIdx(p.near)], ok = t && S.bld.some(b => b.t === p.type && Math.hypot(b.x - t.x, b.z - t.z) <= p.r * MAPK);
     if (ok) { p.done = 1; S.hist.trust += p.type === 'nuclear' ? 20 : 15; S.funds += p.reward; log(`Moscow praises the new ${BT[p.type].n.toLowerCase()} and sends ${fmt(p.reward)} Lt.`, 'good'); }
     else if (dOf(S.day).getTime() > p.by) { p.done = -1; S.hist.trust -= 20; log(`The ${BT[p.type].n.toLowerCase()} is not ready on time. Party trust falls.`, 'warn'); }
   }

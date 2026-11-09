@@ -24,7 +24,7 @@ SUN.shadow.mapSize.set(2048, 2048);
 SUN.shadow.bias = -0.0003;
 SUN.shadow.normalBias = 0.008;
 const SUN_DIR = new THREE.Vector3(-0.5, 0.78, 0.38).normalize();
-const CAM_LIM = { dist: [0.6, 720], pitch: [0.42, 1.52] };
+const CAM_LIM = { dist: [0.6, 720 * MAPK], pitch: [0.42, 1.52] };
 /* View offset: panels cover the bottom of the view, so the camera's target is drawn VOFF.y pixels higher, in the middle of what
    stays visible. The interface sets VOFF.ty; the view eases toward it. Picking and labels use the same projection. */
 const VOFF = { y: 0, ty: 0 };
@@ -228,6 +228,8 @@ function paintMask() {
    shader leans to it as the camera rises (POL_U), and lifts the snow from land others hold, so borders read in winter too. */
 const POLTEX = new THREE.DataTexture(new Uint8Array(GW * GH * 4), GW, GH, THREE.RGBAFormat);
 POLTEX.magFilter = THREE.LinearFilter; POLTEX.minFilter = THREE.LinearFilter; POLTEX.generateMipmaps = false;
+/* the colours are sRGB like the holders' materials beyond the map's edge, so both read the same */
+POLTEX.colorSpace = THREE.SRGBColorSpace;
 const POL_U = { value: 0 };
 function paintPol() {
   const d = POLTEX.image.data, lt = OWN_RGB.lt;
@@ -281,9 +283,9 @@ const GROUND = (() => {
   const m = new THREE.Mesh(geo, groundMat());
   m.receiveShadow = true; m.renderOrder = 0;
   SCENE.add(m);
-  const outer = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2).translate(MAPU / 2, -0.05, MAPV / 2),
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(4000 * MAPK, 4000 * MAPK).rotateX(-Math.PI / 2).translate(MAPU / 2, -0.05, MAPV / 2),
     snowy(new THREE.MeshLambertMaterial({ color: '#b3b5a4' }), 1, true));
-  outer.renderOrder = -1; SCENE.add(outer);
+  outer.renderOrder = -1; SCENE.add(outer); OUTER._far = outer.material;
   /* the neighbours' land beyond the edge of the map, in their holders' colours (outerColours); Masuria (ep) lies on top of
      today's Poland and is drawn in front of it */
   for (const c of ['lv', 'by', 'pl', 'ru', 'ep']) {
@@ -295,7 +297,7 @@ const GROUND = (() => {
   }
   return m;
 })();
-function outerColours() { for (const c in OUTER) OUTER[c].color.set(OWN_COL[S.own[c]] || OWN_COL[c]); }
+function outerColours() { for (const c in OUTER) if (c !== '_far') OUTER[c].color.set(OWN_COL[S.own[c]] || OWN_COL[c]); }
 
 /* ---------- water ---------- */
 function shapeGeo(pxz, holes) {
@@ -363,7 +365,7 @@ function borderPieces() {
   const out = [], grid = new Map();
   const landCell = (x, z) => { const k = cellAt(x, z); return k >= 0 && TT[k] !== T_SEA && TT[k] !== T_LAGOON ? k : -1; };
   /* the part of Lithuania nearest a point, within 15 km (the lagoon is wide where the border crosses it) */
-  const ltNear = (x, z) => { for (let r = 0.5; r <= 15; r += r < 6 ? 0.5 : 1.5) { let best = -1, bd = 1e9; forDisk(x, z, r, (k, d) => { if ((TF[k] & F_LT) && d < bd) { bd = d; best = k; } }); if (best >= 0) return { r: RGN[best] }; } return { r: 0 }; };
+  const ltNear = (x, z) => { for (let r = 0.5; r <= 15 * MAPK; r += r < 6 ? 0.5 : 1.5) { let best = -1, bd = 1e9; forDisk(x, z, r, (k, d) => { if ((TF[k] & F_LT) && d < bd) { bd = d; best = k; } }); if (best >= 0) return { r: RGN[best] }; } return { r: 0 }; };
   const gk = (x, z) => (Math.floor(x / 0.5) + 2000) * 8192 + Math.floor(z / 0.5) + 2000;
   let line = 0;
   /* a piece repeats one already kept when a piece of another line lies within 0.3 km */
@@ -926,7 +928,8 @@ function place(el, x, y, show) {
   el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
 }
 /* Cities always show their names; towns until the whole country is in view (small ones a little closer); villages only up close. */
-function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : t.vil ? 38 : t.pop0 >= 4 ? 230 : 120; }
+/* how far out a town's label shows: the bigger the place, the further (scaled with the map, so labels crowd as before) */
+function labelZoom(t) { return t.capital || t.pop0 >= 20 ? 1e9 : (t.vil ? 38 : t.pop0 >= 4 ? 230 : 120) * MAPK; }
 function updateLabels() {
   syncLabels();
   const sb = VIEW.sel && VIEW.sel.kind === 'b' ? BMAP.get(VIEW.sel.id) : null, heatOn = SEASON.heat > 0.05;
@@ -946,7 +949,7 @@ function updateLabels() {
   NLBL.forEach(n => {
     if (n.k === 'r' || n.k === 'c') { const tx = nlText(n); if (tx !== n.txt) { n.txt = tx; const [a, b] = tx.split('\n'); n.el.innerHTML = b ? `${a}<small>${b}</small>` : a; } }
     const [x, y, ok] = toScreen(n.p[0], 0, n.p[1]);
-    place(n.el, x, y, ok && !!n.txt && (n.k === 't' ? cam.dist > 14 && cam.dist < 300 : n.k === 's' ? cam.dist > 100 : n.k === 'r' ? cam.dist > 28 : cam.dist > 60));
+    place(n.el, x, y, ok && !!n.txt && (n.k === 't' ? cam.dist > 14 * MAPK && cam.dist < 300 * MAPK : n.k === 's' ? cam.dist > 100 * MAPK : n.k === 'r' ? cam.dist > 28 * MAPK : cam.dist > 60 * MAPK));
   });
   /* problem markers over buildings */
   let i = 0;
@@ -998,7 +1001,7 @@ let seasonKey = '';
 function seasonUpdate() {
   SNOW_U.value += (SEASON.snow - SNOW_U.value) * 0.08;
   /* from about 90 km up the map turns political: holders' colours, and no snow on others' land or beyond the edge */
-  const q = clamp((cam.dist - 90) / 140, 0, 1), pq = q * q * (3 - 2 * q);
+  const q = clamp((cam.dist - 90 * MAPK) / (140 * MAPK), 0, 1), pq = q * q * (3 - 2 * q);
   if (Math.abs(pq - POL_U.value) > 1e-3) { POL_U.value = pq; for (const c in OUTER) OUTER[c].userData.snowMul.value = 1 - pq; }
   const ice = SEASON.snow > 0.75 ? 1 : 0, key = (SEASON.aut > 0.5 ? 1 : 0) + ':' + ice + ':' + WV.own;
   const fk = farmSeason();

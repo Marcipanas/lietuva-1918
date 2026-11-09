@@ -376,7 +376,7 @@ function validPlace(t, x, z, rot, gen) {
     case 'coast': if (!ring(0.7, tt => tt === T_SEA || tt === T_LAGOON)) return bad('Must be on the coast'); break;
     case 'lake': if (!ring(0.8, tt => tt === T_LAKE)) return bad('Must be next to a lake'); break;
     case 'water': if (!ring(0.6, tt => isWaterT(tt))) return bad('Must be on a shore'); break;
-    case 'border': { let c = 0; forCellsIn(o, 3, k => { if (CTY[k] > 1 || heldOff(k)) c++; }); if (!c) return bad('Must be within 3 km of the border'); break; }
+    case 'border': { let c = 0; forCellsIn(o, BORDER_KM, k => { if (CTY[k] > 1 || heldOff(k)) c++; }); if (!c) return bad(`Must be within ${kmTxt(BORDER_KM)} km of the border`); break; }
   }
   if (t === 'hall') for (const tw of S.towns) if (Math.hypot(tw.x - x, tw.z - z) < HALL_GAP) return bad(`Too close to ${tw.n}`);
   return { ok: true, bonus: (B0.bonus === 'fertile' && fert >= n * 0.4) || (B0.bonus === 'flaxland' && flx >= n * 0.4) };
@@ -1059,7 +1059,7 @@ function borderPoint(x, z, tx, tz) {
   let last = null;
   for (let s = 0; s <= L; s += 0.25) {
     const px = x + (tx - x) * s / L, pz = z + (tz - z) * s / L;
-    if (passable(px, pz)) last = [px, pz, s]; else if (last && s - last[2] > 3) break;
+    if (passable(px, pz)) last = [px, pz, s]; else if (last && s - last[2] > 3 * MAPK) break;
   }
   if (!last) return null;
   const back = Math.min(0.6, last[2]);
@@ -1133,7 +1133,7 @@ function linkSettlements() {
   const T = S.towns, n = T.length, near = [];
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
     const d = Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z);
-    if (d < 32) near.push([i, j, d]);
+    if (d < 32 * MAPK) near.push([i, j, d]);
   }
   const dist = (i, j) => Math.hypot(T[i].x - T[j].x, T[i].z - T[j].z), pairs = [];
   for (const [i, j, d] of near) {

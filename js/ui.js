@@ -90,11 +90,11 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
     icon=k;title=spec[lv].n;
     if(mx>1)extra=`<div class="seg lvs" role="group" aria-label="Kind">${Array.from({length:mx},(x,i)=>i+1).map(l=>`<button data-act="lv" data-lv="${l}" aria-pressed="${l===lv}">${spec[l].n}</button>`).join('')}</div>`;
     if(!n)sub=`Tap where the ${what} starts, then tap where it goes. Hold and drag to draw it.`;
-    else if(p&&p.kind==='up'){const m=missing(p.cost,town);sub=m||`Upgrade this ${num(p.km)} km stretch to ${p.name.toLowerCase()}, or tap where a new ${what} goes.`;state=m?'bad':'';cost=costHTML(p.cost);
+    else if(p&&p.kind==='up'){const m=missing(p.cost,town);sub=m||`Upgrade this ${kmTxt(p.km)} km stretch to ${p.name.toLowerCase()}, or tap where a new ${what} goes.`;state=m?'bad':'';cost=costHTML(p.cost);
       btns=undo+pri('Upgrade','up',!!m)}
     else if(n===1){sub=`Now tap where the ${what} goes. Drag the map to move around.`;btns=undo}
     else if(p&&p.bad){sub=p.bad;state='bad';btns=undo}
-    else if(p&&p.kind==='line'){const m=missing(p.cost,town);sub=m||`${num(p.km)} km new${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · paid from ${town?town.n:'—'}. Tap to add a bend.`;state=m?'bad':'';
+    else if(p&&p.kind==='line'){const m=missing(p.cost,town);sub=m||`${kmTxt(p.km)} km new${p.br?` · ${p.br} bridge${p.br>1?'s':''}`:''} · paid from ${town?town.n:'—'}. Tap to add a bend.`;state=m?'bad':'';
       cost=costHTML(p.cost);btns=undo+pri('Build','check',!!m)}
     else btns=undo}
   else if(k==='zone'){icon='zone';title='Zone homes';
@@ -105,7 +105,7 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
   else if(k==='bull'){icon='trash';title='Remove';
     if(!p)sub='Tap a building, road or lot. Hold and drag to paint over more.';
     else if(p.bad){sub=p.bad;state='bad'}
-    else{const i=p.plan;sub=[i.b.length?`${i.b.length} building${i.b.length>1?'s':''}`:'',i.road>0.05?`${num(i.road)} km of road`:'',i.rail>0.05?`${num(i.rail)} km of track`:'',
+    else{const i=p.plan;sub=[i.b.length?`${i.b.length} building${i.b.length>1?'s':''}`:'',i.road>0.05?`${kmTxt(i.road)} km of road`:'',i.rail>0.05?`${kmTxt(i.rail)} km of track`:'',
       i.lots.length?`${i.lots.length} zoned lot${i.lots.length>1?'s':''}`:''].filter(Boolean).join(' · ')+'. Nothing is refunded.';state='warn';btns=`<button class="btn ghost" data-act="cancelp">${ic('close')}Clear</button>`+pri('Remove','trash',false,'danger')}}
   else if(k==='place'){const T0=BT[TOOL.bt];icon=bIcon(TOOL.bt);title=T0.n;extra=`<button class="btn sm ghost" data-act="buildmenu" data-cat="${T0.cat}"${TOOL.ti>=0?` data-ti="${TOOL.ti}"`:''}>Change</button>`;
     const turn=`<button class="btn ghost" data-act="rotg" aria-label="Turn">${ic('turn')}Turn</button>`,find=`<button class="btn ghost" data-act="find">${ic('spot')}Find a spot</button>`;
@@ -168,7 +168,7 @@ function act(d){const ti=d.ti!==undefined?+d.ti:-1,b=d.id!==undefined?BMAP.get(+
     case 'rauto':if(r)r[d.dir]='auto';break;
     case 'rcargo':{if(!r)return;let s=r[d.dir];s=s==='auto'?[]:s.slice();const q=s.indexOf(d.res);if(q>=0)s.splice(q,1);else s.push(d.res);r[d.dir]=s.length?s:'auto';break}
     case 'rpax':if(r){r.pax=!r.pax;toast(r.pax?'The route now carries commuters':'The route carries goods only')}break;
-    case 'rshow':{if(!r)return;VIEW.route=VIEW.route===r.id?null:r.id;const p=routePath(r);if(p&&VIEW.route!==null){const m=p.path[p.path.length>>1];focusAt(m[0],m[1],Math.max(cam.dist,Math.min(300,p.len*0.9)));if(!WIDE())setSheet(0)}break}
+    case 'rshow':{if(!r)return;VIEW.route=VIEW.route===r.id?null:r.id;const p=routePath(r);if(p&&VIEW.route!==null){const m=p.path[p.path.length>>1];focusAt(m[0],m[1],Math.max(cam.dist,Math.min(300*MAPK,p.len*0.9)));if(!WIDE())setSheet(0)}break}
     case 'rdel':S.confirmRoute=r?r.id:null;break;case 'rkeep':S.confirmRoute=null;break;
     case 'rdel2':if(r){S.funds+=r.n*VT[r.vt].cost*0.5;S.routes.splice(S.routes.indexOf(r),1);if(VIEW.route===r.id)VIEW.route=null;toast('Route removed')}S.confirmRoute=null;break;
     case 'tutorial':tutStart(true);if(!WIDE())setSheet(0);return;

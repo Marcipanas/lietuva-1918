@@ -315,7 +315,7 @@ function prepareZone() {
   const lots = ZONES.flat();
   PEND = { kind: 'zone', lots, n: lots.length, cost: { lt: lots.length * ZONE_COST } };
   if (!lots.length) PEND.bad = 'Nothing here can be zoned. Tap beside a street, on dry land inside Lithuania.';
-  else if (lots.every(c => townAtPoint(c.x, c.z) < 0)) PEND.warn = `These lots are more than ${TERRITORY} km by road from a town hall, so no town will build here.`;
+  else if (lots.every(c => townAtPoint(c.x, c.z) < 0)) PEND.warn = `These lots are more than ${kmTxt(TERRITORY)} km by road from a town hall, so no town will build here.`;
   VIEW.brush = null; VIEW.ver++;
   showBar();
 }
@@ -376,7 +376,7 @@ function nearMask(kind) {
   if (NEARM.v !== WV.own) { for (const q in NEARM) delete NEARM[q]; NEARM.v = WV.own; }
   if (NEARM[kind]) return NEARM[kind];
   const src = kind === 'border' ? k => CTY[k] > 1 || heldOff(k) : kind === 'coast' ? k => TT[k] === T_SEA || TT[k] === T_LAGOON : kind === 'lake' ? k => TT[k] === T_LAKE : k => isWaterT(TT[k]);
-  const reach = Math.ceil((kind === 'border' ? 3 : kind === 'lake' ? 0.8 : kind === 'coast' ? 0.7 : 0.6) / CELL) + 1, d = new Uint8Array(GW * GH).fill(255), q = [];
+  const reach = Math.ceil((kind === 'border' ? BORDER_KM : kind === 'lake' ? 0.8 : kind === 'coast' ? 0.7 : 0.6) / CELL) + 1, d = new Uint8Array(GW * GH).fill(255), q = [];
   for (let k = 0; k < GW * GH; k++) if (src(k)) { d[k] = 0; q.push(k); }
   for (let h = 0; h < q.length; h++) {
     const k = q[h], v = d[k];
@@ -450,12 +450,12 @@ function findGhost(initial) {
   const from = !initial && PEND && PEND.kind === 'place' ? [PEND.x, PEND.z] : T ? [T.x, T.z] : [cam.x, cam.z];
   /* nothing near: look further out, for any town (bogs, clay pits and borders can be far away) */
   let s = findSpot(t, from[0], from[1], TOOL.ti);
-  if (!s && BT[t].need) for (const R of [45, 90, 160, 260]) { s = findSpot(t, from[0], from[1], -1, R); if (s) break; }
+  if (!s && BT[t].need) for (const R of [45, 90, 160, 260]) { s = findSpot(t, from[0], from[1], -1, R * MAPK); if (s) break; }
   if (s) {
     setGhost(s[0], s[1], s[2]);
     const far = cam.dist > 14, d = Math.hypot(s[0] - from[0], s[1] - from[1]);
     if (far || !onScreen(s[0], s[1])) focusAt(s[0], s[1], far ? 8 : cam.dist);
-    if (d > FIND_R) { const jt = PEND && PEND.jt >= 0 ? S.towns[PEND.jt] : null; toast(`The nearest good spot is ${Math.round(d)} km away${jt ? ', by ' + jt.n : ''}.`); }
+    if (d > FIND_R) { const jt = PEND && PEND.jt >= 0 ? S.towns[PEND.jt] : null; toast(`The nearest good spot is ${Math.round(d / MAPK)} km away${jt ? ', by ' + jt.n : ''}.`); }
   } else {
     setGhost(from[0], from[1]);
     /* the search above went 260 km out: no coast at all means others hold all of it (before 1921, or after losing it) */
@@ -474,11 +474,11 @@ function doConfirm() {
     const m = missing(p.cost, town);
     if (m) return toast(m);
     pay(p.cost, town);
-    if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${num(p.km)} km to ${p.name.toLowerCase()}`); log(`${num(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
+    if (p.kind === 'up') { if (EDGES.has(p.e.id)) { p.e.lv = p.lv; netChanged(); } toast(`Upgraded ${kmTxt(p.km)} km to ${p.name.toLowerCase()}`); log(`${kmTxt(p.km)} km near ${town.n} upgraded to ${p.name.toLowerCase()}.`); }
     else {
       if (p.ups && p.ups.length) applyUps(p.ups, p.lv);
       p.runs.forEach(r => afterLine(buildLine(p.mode, p.lv, r.p, 0.12)));
-      const what = [p.km > 0.05 ? `${num(p.km)} km built` : '', p.upKm > 0.05 ? `${num(p.upKm)} km upgraded` : ''].filter(Boolean).join(', ');
+      const what = [p.km > 0.05 ? `${kmTxt(p.km)} km built` : '', p.upKm > 0.05 ? `${kmTxt(p.upKm)} km upgraded` : ''].filter(Boolean).join(', ');
       toast(`${p.name}: ${what}`); log(`${p.name} near ${town.n}: ${what}.`); tutEvent(p.mode);
     }
     clearPreview();
@@ -492,7 +492,7 @@ function doConfirm() {
     const q = p.plan, nb = q.b.length;
     applyBull(q);
     if (VIEW.sel && VIEW.sel.kind === 'b' && !BMAP.get(VIEW.sel.id)) VIEW.sel = null;
-    toast(`Removed ${nb} building${nb === 1 ? '' : 's'}${q.road + q.rail > 0.05 ? `, ${num(q.road + q.rail)} km of line` : ''}${q.lots.length ? `, ${q.lots.length} lots` : ''}`);
+    toast(`Removed ${nb} building${nb === 1 ? '' : 's'}${q.road + q.rail > 0.05 ? `, ${kmTxt(q.road + q.rail)} km of line` : ''}${q.lots.length ? `, ${q.lots.length} lots` : ''}`);
     clearPreview();
   } else if (p.kind === 'place') {
     const v = validPlace(p.t, p.x, p.z, p.rot);
