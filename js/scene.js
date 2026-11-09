@@ -588,9 +588,12 @@ function buildBuildings() {
   for (const b of S.bld) {
     if (b.x < box[0] || b.x > box[2] || b.z < box[1] || b.z > box[3]) continue;
     if (b.t === 'house') {
-      if (far && b.lv === 1) { BLD.add(b.f ? 'h:farmFar' : 'h:far', housePart(b.f ? 'farmFar' : 'far'), MAT.bld, b.x, 0, b.z, b.rot, 1, 1, 1, WALL_TINT[Math.floor(hash2(b.id, 40, 77) * 6)]); continue; }
+      if (far && b.lv === 1) {
+        const st = lotStyle(b), fk = st === 'v' ? 'farmFar' : st === 'c' || st === 'm' ? 'cityFar' : 'townFar', pal = PART_PAL[fk];
+        BLD.add('h:' + fk, housePart(fk), MAT.bld, b.x, 0, b.z, b.rot, 1, 1, 1, pal ? pal[Math.floor(hash2(b.id, 40, 77) * pal.length)] : undefined); continue;
+      }
       for (const [part, lx, lz, lr, tint] of lotLayout(b)) {
-        const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, lx, lz), col = part === 'woodWalls' ? WALL_TINT[tint] : part === 'woodRoof' ? ROOF_TINT[tint] : undefined;
+        const [x, z] = toWorld({ x: b.x, z: b.z, rot: b.rot }, lx, lz), pal = PART_PAL[part], col = pal && tint !== undefined ? pal[tint % pal.length] : undefined;
         if (part === 'tree') BLD.add('h:tree', treeGeo('pine'), MAT.tree, x, 0, z, lr, 0.85, 0.85, 0.85);
         else BLD.add('h:' + part, housePart(part), MAT.bld, x, 0, z, b.rot + lr, 1, 1, 1, col);
       }
