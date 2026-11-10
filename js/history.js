@@ -169,7 +169,8 @@ function govNow() {
   if (h.restored) return { f: 'Republic of Lithuania', who: by([['1990-03-11', 'Vytautas Landsbergis, chairman of the Supreme Council'], ['1992-11-25', 'Algirdas Brazauskas, acting president'], ['1993-02-25', 'President Algirdas Brazauskas'], ['1998-02-26', 'President Valdas Adamkus'],
     ['2003-02-26', 'President Rolandas Paksas'], ['2004-04-06', 'Artūras Paulauskas, acting president'], ['2004-07-12', 'President Valdas Adamkus'], ['2009-07-12', 'President Dalia Grybauskaitė'], ['2019-07-12', 'President Gitanas Nausėda']]) };
   if (h.path === 'neutral') return { f: 'Republic of Lithuania, neutral', who: '' };
-  if (h.gov === 'auth') return { f: 'Rule by the president, without a Seimas', who: 'President Antanas Smetona' };
+  /* Smetona left Lithuania on 15 June 1940; a Lithuania that stayed free past that day is not history's, so no name is given */
+  if (h.gov === 'auth') return { f: 'Rule by the president, without a Seimas', who: d < '1940-06-15' ? 'President Antanas Smetona' : '' };
   if (d < '1920-05-15') return { f: d < '1919-04-04' ? 'The Council of Lithuania' : 'Provisional government', who: d < '1919-04-04' ? 'Antanas Smetona, chairman of the Council' : 'President Antanas Smetona' };
   return { f: 'Parliamentary republic', who: d < '1926-06-07' ? 'President Aleksandras Stulginskis' : d < '1929-06-07' ? 'President Kazys Grinius' : '' };
 }
