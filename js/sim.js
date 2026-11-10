@@ -506,5 +506,10 @@ function eraReq(){const n=S.era+1;if(n>3)return null;const R0=ERAS[n].req,t=tota
   L0.push({t:`${lk} towns linked to ${capital().n} by rail or paved road`,ok:t.linked>=lk,q:t.linked+' of '+t.towns});
   if(R0.bricks)L0.push({t:`${R0.bricks} bricks in stock`,ok:t.stock.bricks>=R0.bricks,q:fmt(t.stock.bricks)});
   if(R0.textiles)L0.push({t:`${R0.textiles} linen cloth in stock`,ok:t.stock.textiles>=R0.textiles,q:fmt(t.stock.textiles)});
+  /* an era is more than size: goods sold abroad within one year (last year's books, or this year's so far), a schooled people,
+     light in every linked town */
+  if(R0.ex){const need=Math.round(R0.ex*sh.pop/500)*500,got=Math.max(sumVals((S.tb0||{}).ex),sumVals((S.tb||{}).ex));L0.push({t:`${need.toLocaleString('en-US')} Lt of goods sold abroad in one year`,ok:got>=need,q:fmt(got)+' Lt'})}
+  if(R0.pol&&S.hist.path!=='soviet'){const P=POLICY[R0.pol];L0.push({t:`${P.n} (a policy, in the State view)`,ok:polOn(R0.pol),q:polOn(R0.pol)?'in force':polOpen(R0.pol)?'not in force':'from '+MON[+P.from.slice(5,7)-1]+' '+P.from.slice(0,4)})}
+  if(R0.lit){const dark=S.towns.filter((x,i)=>!x.lock&&!x.vil&&NET.linked.has(i)&&(x.pr===undefined?1:x.pr)<0.95).length;L0.push({t:'Power for every linked town',ok:dark===0,q:dark?dark+' short of power':'all lit'})}
   L0.push({t:`${fmt(R0.lt)} Lt to invest`,ok:S.funds>=R0.lt,q:fmt(S.funds)});return L0}
 function eraReady(){const x=eraReq();return !!x&&x.every(q=>q.ok)}

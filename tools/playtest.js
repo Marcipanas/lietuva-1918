@@ -214,8 +214,8 @@ function bot(opt) {
     const h = S.hist;
     if (h.path !== 'soviet') {
       const def = S.inc > 150 ? 50 : S.inc > 60 ? 25 : S.inc > 25 ? 10 : 0; if (def !== h.def) { act({ act: 'def', q: String(def) }); note('army'); }
-      for (const k in POLICY) if (polOpen(k) && !h.pol[k] && S.inc > POLICY[k].cost * 4) { act({ act: 'pol', k }); note('policy ' + k); }
-      for (const k in POLICY) if (h.pol[k] && S.inc < -5 && S.funds < 500) { act({ act: 'pol', k }); note('policy off'); }
+      for (const k in POLICY) if (polOpen(k) && !h.pol[k] && (S.inc > POLICY[k].cost * 4 || (ERAS[S.era + 1] && ERAS[S.era + 1].req.pol === k && S.inc > POLICY[k].cost))) { act({ act: 'pol', k }); note('policy ' + k); }
+      for (const k in POLICY) if (h.pol[k] && S.inc < -5 && S.funds < 500 && !(ERAS[S.era + 1] && ERAS[S.era + 1].req.pol === k)) { act({ act: 'pol', k }); note('policy off'); }
       const now = h.tax === undefined ? 1 : h.tax, tax = S.funds < 300 && S.inc < 5 ? 2 : now === 2 && S.funds < 2500 ? 2 : S.funds > 30000 && pubTrust() < 50 ? 0 : 1; if (tax !== now) { act({ act: 'tax', q: String(tax) }); note('tax ' + TAXES[tax].n); }
     }
     /* the next era, with something left over for its first works */
@@ -254,7 +254,13 @@ function bot(opt) {
       return -1;
     };
     const G = gridInfo(cap), coming = G.sites.reduce((a, b) => a + BT[b.t].pow, 0);
-    if (G.D > (G.cap + coming) * 0.85 && !G.sites.length && canPlan(BT.power.cost.lt) && host('power', BT.power.w) >= 0) return;
+    /* a power station where peat can be dug, with a peat works of its own; failing that, in any town that can staff it */
+    const peatHost = () => {
+      const L = S.towns.map((t, i) => i).filter(i => open(i) && !S.towns[i].vil && NET.linked.has(i) && count('power', i) < 2 && S.towns[i].pop >= 20).sort((a, b) => S.towns[b].pop - S.towns[a].pop);
+      for (const ti of L.slice(0, 16)) { if (!count('peat', ti) && !placeB('peat', ti)) continue; if (placeB('power', ti)) return ti; }
+      return -1;
+    };
+    if (G.D > (G.cap + coming) * 0.85 && !G.sites.length && canPlan(BT.power.cost.lt) && (peatHost() >= 0 || host('power', BT.power.w) >= 0)) return;
     for (const b of G.weak) if (b.lack === 'peat' && !siteCount('peat', b.town) && count('peat', b.town) < 3 && canPlan(BT.peat.cost.lt) && placeB('peat', b.town)) return;
     for (const W of WANTS) {
       if (W.era > S.era || W.era < 2) continue;

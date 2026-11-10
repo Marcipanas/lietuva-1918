@@ -117,12 +117,15 @@ function showBar(){const bar=$('bar'),nav=$('nav');if(!bar)return;const k=TOOL.k
       /* nothing has to be in hand: the site takes money and materials as they come, and carts bring what the town lacks */
       const local=jt?Object.keys(mat).filter(q=>(jt.stock[q]||0)<mat[q]):[],far=jt&&local.length?takePlan(mat,p.jt).ok:true,lack=[];
       if(S.funds-(S.keep||0)<p.cost.lt)lack.push('money');if(!far)lack.push(...local.map(rname));
+      /* what it works with: a town that neither makes the input nor has a store of it will have to be supplied */
+      const dry=jt&&T0.in&&jt.mk?Object.keys(T0.in).filter(r=>!RI[r].port&&((jt.mk[r]||0)-(jt.us&&jt.us[r]||0))<T0.in[r]*0.5&&(jt.stock[r]||0)<T0.in[r]*30):[];
       /* hands: half of a town's residents work, and a works with too few makes that much less */
       const staff=jt&&T0.w&&jt.wf!==undefined?Math.min(1,(jt.wf+(jt.comIn||0))/Math.max(1,(jt.jobs||0)+T0.w)):1;
       sub=(p.bonus?'Good land: it makes more here. ':T0.bonus?'It makes more on the lit ground. ':'')+(jt?(p.acc?`Joins ${jt.n}. `:`Joins ${jt.n} once a road reaches it: you lay one next. `):`No town will supply it here: it needs a road to a town hall within ${kmTxt(TERRITORY)} km. `)
         +(staff<0.75?`It needs ${popStr(T0.w)} workers: ${jt.n} could then fill ${Math.round(staff*100)}% of its jobs. `:'')
+        +(dry.length?`It uses ${dry.map(r=>num(T0.in[r])+' '+rname(r)).join(' and ')} a day, and ${jt.n} makes too little: it will need a route or a works that makes it. `:'')
         +(jt?(lack.length?`The site will wait for ${lack.join(' and ')}.`:local.length?`Carts bring ${local.map(rname).join(' and ')} from towns near it: ${daysTxt(T0.bd)} of work, and the haul.`:`Ready in about ${daysTxt(T0.bd)}.`):'');
-      state=!jt?'bad':lack.length||staff<0.5?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
+      state=!jt?'bad':lack.length||staff<0.5||dry.length?'warn':p.bonus?'good':'';cost=costHTML(p.cost)+`<span>${ic('clock')}${daysTxt(T0.bd)}</span>`;btns=turn+pri('Build','check',false)}}
   const html=`<div class="bh"><span class="bico">${ic(icon)}</span>${extra&&extra.startsWith('<div class="seg')?'':`<b class="btitle">${title}</b>`}${extra}<button class="ib" data-act="tooloff" aria-label="Close the tool">${ic('close')}</button></div>
     <p class="bsub" data-c="${state}">${sub}</p>${cost||btns?`<div class="bfoot">${cost?`<div class="cost">${cost}</div>`:'<span></span>'}<div class="bbtn">${btns}</div></div>`:''}`;
   if(html!==lastBar){bar.innerHTML=html;lastBar=html}}

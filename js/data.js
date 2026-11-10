@@ -56,7 +56,7 @@ const BT={
   flax:{n:'Flax fields',cat:'raw',era:1,fp:[1,1],w:8,out:{flax:6},need:'open',bonus:'flaxland',fert:1,cost:{lt:250,planks:10},bd:12,d:'40% more in the Aukštaitija flax belt.'},
   beet:{n:'Sugar beet fields',cat:'raw',era:2,fp:[1,1],w:8,out:{beet:9},need:'open',bonus:'fertile',fert:1,cost:{lt:300,planks:15},bd:12,d:'Beet for the sugar factories. 35% more on fertile soil.'},
   sawmill:{n:'Sawmill',cat:'industry',era:1,fp:[0.6,0.5],w:8,in:{timber:6},out:{planks:5},cost:{lt:350,timber:25},bd:20,d:'Saws timber into planks, which most buildings are made of. Sawn timber also sells well abroad.'},
-  brick:{n:'Brickworks',cat:'industry',era:1,fp:[0.55,0.5],w:14,in:{peat:3},out:{bricks:5},need:'clay',pol:2,cost:{lt:600,planks:30},bd:30,d:'Must sit on clay ground.'},
+  brick:{n:'Brickworks',cat:'industry',era:1,fp:[0.55,0.5],w:14,in:{peat:3},out:{bricks:5},need:'clay',pol:2,cost:{lt:600,planks:30},bd:30,d:'Must sit on clay ground. Its kilns burn peat.'},
   brewery:{n:'Brewery',cat:'industry',era:1,fp:[0.55,0.5],w:6,in:{grain:3},out:{beer:4},cost:{lt:500,planks:25,bricks:15},bd:35,d:'Brews beer from grain. Towns with beer are happier, and Latvia buys it.'},
   warehouse:{n:'Warehouse',cat:'transport',era:1,fp:[0.8,0.6],store:1,cost:{lt:500,planks:40},bd:25,d:'Raises the town’s storage by 400 of every good. Upgrades hold more.'},
   station:{n:'Railway station',cat:'transport',era:1,fp:[0.65,0.3],need:'rail',noUp:1,ic:'rail',cost:{lt:300,planks:20},bd:20,d:'Joins a town to the railway. Place it next to a track, with a road to town.'},
@@ -64,7 +64,7 @@ const BT={
   port:{n:'Sea port',cat:'transport',era:1,fp:[1,0.8],need:'coast',noUp:1,ic:'anchor',cost:{lt:3000,planks:80,bricks:40},bd:150,d:'Trades by sea with Britain and Germany. Sells to local merchants for more.'},
   school:{n:'School',cat:'civic',era:1,fp:[0.5,0.4],w:3,svc:'school',ic:'school',cost:{lt:600,planks:30},bd:40,d:'One school per 50k residents raises output in the whole town by up to 10%.'},
   clinic:{n:'Clinic',cat:'civic',era:1,fp:[0.45,0.4],w:3,svc:'clinic',ic:'clinic',cost:{lt:700,planks:30},bd:40,d:'One clinic per 70k residents lifts morale and growth.'},
-  power:{n:'Peat power station',cat:'power',era:2,fp:[0.9,0.9],w:14,in:{peat:4},pow:30,pol:4,ic:'bolt',cost:{lt:1800,bricks:60,metal:10},bd:120,d:'Burns peat. Linked towns share one grid.'},
+  power:{n:'Peat power station',cat:'power',era:2,fp:[0.9,0.9],w:14,in:{peat:4},pow:30,pol:4,ic:'bolt',cost:{lt:1800,bricks:60,metal:10},bd:120,d:'Burns 4 peat a day, so build it where peat is dug or a railway brings it. Linked towns share one grid.'},
   linen:{n:'Linen mill',cat:'industry',era:2,fp:[1,0.8],w:24,in:{flax:4},powNeed:5,out:{textiles:4},pol:2,cost:{lt:2200,bricks:80,metal:20},bd:150,d:'Flax to cloth, like Linas in Panevėžys.'},
   furniture:{n:'Furniture factory',cat:'industry',era:2,fp:[0.9,0.75],w:20,in:{planks:5},powNeed:4,out:{furniture:3},pol:1,cost:{lt:2000,bricks:60,metal:10},bd:120,d:'Planks to furniture, for the towns and for export.'},
   sugar:{n:'Sugar factory',cat:'industry',era:2,fp:[1,0.8],w:20,in:{beet:6},powNeed:4,out:{sugar:4},pol:2,cost:{lt:2400,bricks:80,metal:15},bd:150,d:'Beet to sugar, like the Marijampolė factory of 1931. Towns come to expect sugar.'},
@@ -98,11 +98,14 @@ const VT={
 /* speeds are in real km a day: on the drawn map they cover MAPK times as many km */
 for(const k in VT)VT[k].spd*=MAPK;
 const ZONE_COST=5, BRIDGE=4, STORE_BASE=150, WH_CAP=[0,400,800,1300];
+/* req: what the next era asks for. pop and linked scale with the land Lithuania holds, and so does ex (Lt of goods sold abroad
+   within one calendar year); pol is a policy that must be in force (not asked under Soviet rule); lit: every linked town has
+   its power. */
 const ERAS=[null,
   {n:'Independence',c:'#fdb913'},
-  {n:'Industrialization',c:'#0f7b4f',req:{pop:850,linked:50,lt:6000,bricks:150},
+  {n:'Industrialization',c:'#0f7b4f',req:{pop:850,linked:50,lt:6000,bricks:150,ex:15000,pol:'schools'},
     unl:'Peat power stations, linen mills, furniture and sugar factories, sugar beet, trucks, brick apartments and Lv 2 upgrades. Factories need metal from abroad. Over the next four years towns come to expect linen cloth, sugar and electric light.'},
-  {n:'Modern Lithuania',c:'#c1272d',req:{pop:1450,linked:70,lt:25000,bricks:500,textiles:200},
+  {n:'Modern Lithuania',c:'#c1272d',req:{pop:1450,linked:70,lt:25000,bricks:500,textiles:200,ex:60000,lit:1},
     unl:'Cement works, fertiliser plants, hydro and nuclear power, electronics plants, lorries, electric trains, highways, panel blocks and Lv 3 upgrades. Over the next four years towns come to expect electronics.'}];
 const GOAL_POP=2400;
 /* Parts of today's Lithuania that others held for a while (RGN_KEY in terrain.js, outlines in geo.js), and the holders of land.

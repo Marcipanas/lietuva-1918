@@ -213,7 +213,7 @@ const session = `(function(){const out={};let t=0;
    {const p0=wh.c.p,g0=wh.c.g.lt,id=wh.id,s0=keep();back(s0);const w2=BMAP.get(id);out.siteSave=!!w2&&!!w2.c&&Math.abs(w2.c.p-p0)<1e-3&&Math.abs(w2.c.g.lt-g0)<0.01&&w2.c.pri===1;tick();out.siteSave=out.siteSave&&!!BMAP.get(id).c;K=T('Kaunas');kk=S.towns.indexOf(K)}
    /* a modernization is a site on a building that keeps working */
    {S.era=2;S.eraDay=S.day;const saw=S.bld.find(b=>b.t==='sawmill'&&b.town===kk&&!b.c);K.stock.bricks=100;K.stock.metal=20;K.stock.timber=400;act({act:'up',id:String(saw.id)});
-    out.upSite=!!saw.c&&saw.c.up===1&&!isSite(saw);tick();out.upWorks=saw.eff>0&&BYT[kk].includes(saw);let n=0;while(saw.c&&n++<60)tick();out.upDone=!saw.c&&saw.lv===2;out.upDays=n;
+    out.upSite=!!saw.c&&saw.c.up===1&&!isSite(saw);tick();out.upWorks=saw.eff>0&&BYT[kk].includes(saw);let n=0;while(saw.c&&n++<60)tick();out.upDone=!saw.c&&saw.lv===2;out.upDays=n;out.eraLit=eraReq().some(x=>/Power for every linked town/.test(x.t)&&!x.ok)&&eraReq().some(x=>/sold abroad/.test(x.t));
     /* a new era is not a cliff: its wants set in over WANT_YEARS */
     S.eraDay=S.day;for(let q=0;q<25;q++)tick();const h0=K.h,n0=K.note;S.eraDay=S.day-WANT_YEARS*365;for(let q=0;q<25;q++)tick();
     out.wants=wantK()===1&&!/^Want|Blackouts/.test(n0)&&/^Want|Blackouts/.test(K.note)&&K.h<h0-3;out.wantsWhy=n0+' '+h0.toFixed(0)+' → '+K.note+' '+K.h.toFixed(0);S.era=1;S.eraDay=0}
@@ -230,6 +230,9 @@ const session = `(function(){const out={};let t=0;
    /* the state: taxes, a policy, public trust */
    {const t0=histTax(),v0=trustParts().v;act({act:'tax',q:'2'});out.tax=histTax()>t0*1.25&&trustParts().v<v0;act({act:'tax',q:'1'});
     act({act:'pol',k:'roads'});tick();out.pol=polOn('roads')&&lineDisc('road')===0.75&&Math.round(BUD.policy)===-POLICY.roads.cost&&!polOpen('schools')&&S.hist.gov==='council';act({act:'pol',k:'roads'})}
+   /* the next era asks for more than size: goods sold abroad within a year, and schools for all, which the law allows from October 1922 */
+   {const q=eraReq(),ex=q.find(x=>/sold abroad/.test(x.t)),sc=q.find(x=>/Primary schools/.test(x.t));out.eraReq=q.length===6&&!!ex&&!ex.ok&&!!sc&&!sc.ok&&/Oct 1922/.test(sc.q)&&!eraReady();out.eraReqWhy=q.map(x=>x.t+' ['+x.q+']').join('; ');
+    const was=S.tb.ex.de;S.tb.ex.de=(was||0)+20000;out.eraEx=eraReq().find(x=>/sold abroad/.test(x.t)).ok;if(was===undefined)delete S.tb.ex.de;else S.tb.ex.de=was}
    /* chance: every random event runs */
    {let bad='';REV.forEach((f,i)=>{try{f()}catch(e){bad+=i+': '+e+' '}});out.rev=!bad;out.revWhy=bad;S.fx=[]}
    /* history: the Bermontians, the Seimas, land reform, the coup of 1926 both ways */
@@ -237,6 +240,7 @@ const session = `(function(){const out={};let t=0;
    jump('1920-05-17');out.seimas=S.hist.gov==='dem'&&!!S.ev.elect20;
    jump('1922-02-15');tick();out.landCard=S.hist.cards[0]==='land';act({act:'card',o:'0'});out.land=S.mod.farm===1.15&&S.hist.ptm.some(m=>m.n==='Land reform');
    jump('1926-12-17');tick();out.coupCard=S.hist.cards[0]==='coup';{const s=keep();S.hist.pt=70;act({act:'card',o:'1'});out.coupHeld=S.hist.gov==='dem'&&S.hist.risk.coup===1;back(s);S.hist.pt=40;act({act:'card',o:'1'});out.coupLost=S.hist.gov==='auth'&&S.hist.risk.coup===0;back(s);act({act:'card',o:'0'});out.coup=S.hist.gov==='auth'}
+   act({act:'pol',k:'schools'});out.eraPol=eraReq().find(x=>/Primary schools/.test(x.t)).ok;
    /* September 1939: marching on Vilnius, which did not happen, takes the city and breaks with Britain */
    jump('1939-09-10');tick();out.marchCard=S.hist.cards[0]==='march39';{const s=keep();act({act:'card',o:'1'});out.march=S.own.vr==='lt'&&!S.mkt.gb.open&&capital().n==='Vilnius';back(s);act({act:'card',o:'0'})}
    /* and on through the Soviet years to the restored republic: Union projects, privatization, the litas of 1993 */
@@ -324,6 +328,7 @@ assert(o.wants, `a new era's wants set in over four years: no cliff on the first
 assert(o.fuel && o.fuelOk, `a town that outgrew its woodlots keeps a winter's fuel: the sawmill leaves it, and growth waits for it (${o.fuelWhy})`);
 assert(o.linkPlan && o.farPay && o.linkTown && o.linkUp > 1, `the fix "${o.linkFixTxt}" lays out a road that links Kudirkos Naumiestis: it paves ${(o.linkUp || 0).toFixed(1)} km of streets on the way, with bricks from other towns`);
 assert(o.tax && o.pol, 'high taxes bring in more and cost public trust; road gangs cost 6 Lt a day and make roads cheaper');
+assert(o.eraReq && o.eraEx && o.eraLit && o.eraPol, `Industrialization asks for goods sold abroad and primary schools (open from October 1922), the Modern era for power in every linked town (${o.eraReqWhy})`);
 assert(o.rev, `every random event runs${o.revWhy ? ': ' + o.revWhy : ''}`);
 assert(o.bermont && o.bermontWait && o.bermontWin, 'the Bermontians: attacking at Radviliškis adds security, waiting costs it and brings looting around Šiauliai');
 assert(o.seimas && o.landCard && o.land, 'the Constituent Assembly makes Lithuania a democracy, and the land reform card raises farm output');

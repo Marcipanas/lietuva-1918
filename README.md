@@ -2,7 +2,7 @@
 
 A 3D economy and city builder set in Lithuania from 16 February 1918, in the spirit of Workers & Resources. There is no grid: draw roads and railways as free curves across the whole country, zone lots along your streets, place farms and industry at any angle, run transport routes so 89 towns and 362 villages, each at its real place, supply each other, and trade abroad through border posts and the port. Buildings start as plans: a site takes its money and materials as they come, and the builders need their days. Timber becomes planks, grain beer, beet sugar, and limestone cement. History moves the borders and interrupts with decisions: raise volunteers in 1918, watch Vilnius change hands in 1919 and 1920, hold or lose it to Żeligowski, take Klaipėda in 1923, face the coup of 1926, the Depression and the ultimatums of 1938 to 1940; avoid the occupation if Lithuania is strong enough, or run a Soviet republic's five-year plans and see independence restored in 1990.
 
-<img src="docs/screenshot.png" alt="Kaunas in July 1918 on a phone: Laisvės alėja runs to St Michael the Archangel, and the town's card shows its residents, morale, six health tiles and a problem to fix" width="300">
+<img src="docs/screenshot.png" alt="Kaunas in June 1918 on a phone: a school stands a third built inside its scaffolding, and the card of the building site shows 35% built, 26 days of work left, and the money and planks it has taken" width="300">
 
 ## Play
 

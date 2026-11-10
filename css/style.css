@@ -400,10 +400,9 @@ body.tooling .prodbar,body.carded .prodbar,body.sheeted .prodbar{display:none}
 .gr .gn.link{display:flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 
 /* ---------- v0.12: the Lithuania view in parts, building sites, goods and chains, the state ---------- */
-.nseg{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;align-self:flex-start;max-width:100%}
+.nseg{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:100%}
 .nseg::-webkit-scrollbar{display:none}
-.nseg button{flex:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding:6px 9px}
-@media (min-width:420px){.nseg button{padding:6px 12px}}
+.nseg button{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;padding:6px 6px}
 .nseg i{font-style:normal;font-size:10.5px;font-weight:700;min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:grid;place-items:center;background:var(--amber);color:var(--amber-ink)}
 .nseg button[aria-pressed="true"] i{background:var(--amber-ink);color:var(--amber2)}
 .wline{display:grid;grid-template-columns:22px minmax(0,1fr) 18px;gap:10px;align-items:center;width:100%;text-align:left;border:1px solid rgba(242,169,59,.45);background:rgba(242,169,59,.07);border-radius:12px;padding:10px 12px;cursor:pointer;color:var(--ink);font:inherit}
