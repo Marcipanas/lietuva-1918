@@ -10,15 +10,19 @@ function bOfTown(ti){return BYT[ti]||S.bld.filter(b=>b.town===ti&&!isSite(b))}
 /* "Brickworks ×2, Linen mill" */
 function typeList(bs){const c=new Map();bs.forEach(b=>c.set(b.t,(c.get(b.t)||0)+1));return [...c].map(([t,n])=>BT[t].n+(n>1?' ×'+n:'')).join(', ')}
 
-/* The neighbour with the most to spare of these goods: a route to start, or a vehicle to add to the route there is. */
+/* The neighbour with the most to spare of these goods, or, when no neighbour has any, the nearest town on the roads and
+   railways that has (peat is dug in a few places only): a route to start, or a vehicle to add to the route there is.
+   What a town keeps for its winter is not to spare. */
 function suggestRoute(ti,goods){let best=null;
+  const spare=T=>{let sp=0;goods.forEach(r=>{sp+=Math.max(0,(T.stock[r]||0)-Math.max((T.dem[r]||0)*6,keptOf(T,r)))});return sp};
   for(const n of NET.adj[ti]||[]){const e=NET.edges[n],o=e.a===ti?e.b:e.a,T=S.towns[o];if(!T||T.lock)continue;
-    let sp=0;goods.forEach(r=>{sp+=Math.max(0,(T.stock[r]||0)-(T.dem[r]||0)*6)});
-    if(sp>=8&&(!best||sp>best.sp))best={o,sp,m:e.rail&&pairPath('rail',ti,o)?'rail':'road'}}
+    const sp=spare(T);if(sp>=8&&(!best||sp>best.sp))best={o,sp,m:e.rail&&pairPath('rail',ti,o)?'rail':'road'}}
+  if(!best)for(const [o] of haulFrom(ti)){const T=S.towns[o];if(!T||T.lock||T.vil||spare(T)<20)continue;
+    const pr=pairPath('rail',ti,o),p=pr||pairPath('road',ti,o);if(p){best={o,m:pr?'rail':'road',km:p.len};break}}
   if(!best)return null;
   const r=S.routes.find(q=>(q.a===ti&&q.b===best.o)||(q.b===ti&&q.a===best.o)),nm=S.towns[best.o].n;
-  if(r)return {t:`Add a ${VT[r.vt].one} from ${nm}`,a:{act:'rveh',r:r.id,d:1}};
-  return {t:`Route from ${nm}`,a:{act:'newroute',a:best.o,b:ti,m:best.m}}}
+  if(r)return r.ok?{t:`Add a ${VT[r.vt].one} from ${nm}`,a:{act:'rveh',r:r.id,d:1}}:null;
+  return {t:`Route from ${nm}`+(best.km?`, ${Math.round(best.km/MAPK)} km`:''),a:{act:'newroute',a:best.o,b:ti,m:best.m}}}
 /* The neighbour that needs this good most (fewest days of it in stock): a route to send a surplus there, or a vehicle for the route there is. */
 function suggestOutlet(ti,r){let best=null;
   for(const n of NET.adj[ti]||[]){const e=NET.edges[n],o=e.a===ti?e.b:e.a,T=S.towns[o];if(!T||T.lock)continue;
@@ -53,10 +57,17 @@ function townIssues(ti,lite){const t=S.towns[ti],out=[];if(!t||t.lock)return out
   if(!t.vil&&S.era>=2&&t.pr!==undefined&&t.pr<0.95){const G=gridInfo(ti),sev=t.pr<0.8&&darkNow()?2:1;let d,fix;
     if(!G.st.length){const lk=NET.linked.has(ti);d=lk?`No power station feeds the grid ${t.n} is on.`:'No power line reaches it. Railways and paved roads carry the grid.';
       fix=lk?[F(buildFix,'power',ti)]:[F(linkFix,ti),F(buildFix,'power',ti,'A station of its own')]}
-    else if(G.weak.length&&G.cap>=G.D*0.95){const b=G.weak[0],bt=S.towns[b.town];d=`Its grid could make ${num(G.cap)} MW and makes ${num(G.S)}: the ${BT[b.t].n.toLowerCase()} in ${bt.n} is ${b.why==='Fuel kept for homes'?'left without peat, which the town keeps for its homes':b.why.toLowerCase()}.`;
-      fix=[b.lack?F(suggestRoute,b.town,[b.lack]):null,b.lack?F(buildFix,PRODUCER[b.lack],b.town):null,{t:'Open '+bt.n,a:{act:'seltown',ti:b.town}}]}
-    else if(G.sites.length&&G.cap+G.sites.reduce((a,b)=>a+BT[b.t].pow,0)>=G.D*0.95){d=`It gets ${pct(t.pr)} of the power it needs. A power station is being built.`;fix=[{t:'Open the works',a:{act:'works'}}]}
-    else{d=`Its grid makes ${num(G.S)} MW and needs ${num(G.D)}.`;fix=[F(buildFix,'power',ti),F(buildFix,'hydro',ti)]}
+    else{const enough=G.cap>=G.D*0.95,soon=G.cap+G.sites.reduce((a,b)=>a+BT[b.t].pow,0)>=G.D*0.95;
+      /* stations that stand short come first, the one that loses most at their head: a station with nothing to burn is no
+         reason to build another */
+      if(G.weak.length){const lost=b=>BT[b.t].pow*LV[b.lv]*(1-b.eff),b=G.weak.slice().sort((p,q)=>lost(q)-lost(p))[0],bt=S.towns[b.town],
+          wy=b.why==='Fuel kept for homes'?'left without peat, which the town keeps for its homes':b.why.toLowerCase();
+        d=(enough?`Its grid could make ${num(G.cap)} MW and makes ${num(G.S)}`:`Its grid makes ${num(G.S)} MW and needs ${num(G.D)}`)+
+          (G.weak.length>1?`. ${G.weak.length} of its ${G.work.length} power stations are not at full strength: the one in ${bt.n} is ${wy}.`:`: the ${BT[b.t].n.toLowerCase()} in ${bt.n} is ${wy}.`);
+        const rf=b.lack?F(suggestRoute,b.town,[b.lack]):null;if(rf&&b.town!==ti&&rf.a.act==='newroute')rf.t=`Route from ${S.towns[rf.a.a].n} to ${bt.n}`;
+        fix=[rf,b.lack?F(buildFix,PRODUCER[b.lack],b.town):null,{t:'Open '+bt.n,a:{act:'seltown',ti:b.town}},soon?null:F(buildFix,'power',ti)]}
+      else if(G.sites.length&&soon){d=`It gets ${pct(t.pr)} of the power it needs. A power station is being built.`;fix=[{t:'Open the works',a:{act:'works'}}]}
+      else{d=`Its grid makes ${num(G.S)} MW and needs ${num(G.D)}.`;fix=[F(buildFix,'power',ti),F(buildFix,'hydro',ti)]}}
     add('power',sev,'bolt','Short of power',d,fix)}
   if(t.pop>(t.house||0)+0.3)add('crowd',1,'house','Overcrowded',`${popStr(t.pop-t.house)} more people than homes.`,[zone]);
   else if(t.hint&&t.hint.startsWith('No room'))add('room',1,'zone','No land to build on','Every zoned lot has houses. Zone land along its streets so it can keep growing.',[zone]);

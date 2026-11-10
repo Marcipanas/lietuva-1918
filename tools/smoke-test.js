@@ -227,6 +227,20 @@ const session = `(function(){const out={};let t=0;
     if(fx)act(fx.a);out.linkPlan=TOOL.k==='road'&&!!PEND&&PEND.kind==='line'&&!PEND.bad&&TOOL.lv.road===2;
     if(out.linkPlan){S.towns[PEND.ti].stock.bricks=0;B.stock.bricks=0;prepareLine();showBar()}
     const tp=PEND&&PEND.ti>=0?takePlan(PEND.cost,PEND.ti):null;out.farPay=!!tp&&tp.ok&&tp.far;out.linkUp=PEND&&PEND.upKm||0;const l0=NET.linked.has(bi);doConfirm();analyze();setTool('inspect');TOOL.lv.road=1;out.linkTown=!l0&&NET.linked.has(bi)}
+   /* power: stations that stand without peat are named before another station is asked for, and the fix is a route from
+      the nearest town that has peat to spare, though it is no neighbour (or one more train on the route there is); in the
+      Modern era homes come to need twice the power over four years, not on the first day */
+   {const s0=keep();K=T('Kaunas');kk=S.towns.indexOf(K);S.era=2;S.eraDay=S.day;S.funds+=20000;K.stock.planks=300;
+    const p1=plan('power',K),p2=plan('power',K);[p1,p2].forEach(b=>{if(b)delete b.c});const Sh=T('Šiauliai'),si=S.towns.indexOf(Sh),Tg=T('Tauragė'),gi=S.towns.indexOf(Tg),only=X=>{S.towns.forEach(t=>{t.stock.peat=0});X.stock.peat=500};
+    only(Tg);tick();only(Tg);const far=o=>!(NET.adj[kk]||[]).some(n=>{const e=NET.edges[n];return (e.a===kk?e.b:e.a)===o});
+    const x=townIssues(kk).find(q=>q.k==='power'),rf=x&&x.fix.find(f=>f.a.act==='newroute');out.gridWhy=x?x.d+' → '+x.fix.map(f=>f.t).join(' | '):'no power problem';
+    out.gridWeak=!!p1&&!!p2&&!!x&&/could make 60 MW and makes 0[.] 2 of its 2 power stations are not at full strength: the one in Kaunas is missing peat/.test(x.d)&&!x.fix.some(f=>f.a.act==='build'&&f.a.bt==='power');
+    out.farRoute=!!rf&&/^Route from Tauragė, [0-9]+ km$/.test(rf.t)&&+rf.a.a===gi&&+rf.a.b===kk&&far(gi);
+    only(Sh);const x2=townIssues(kk).find(q=>q.k==='power'),f2=x2&&x2.fix.find(f=>(f.a.act==='newroute'||f.a.act==='rveh')&&/Šiauliai/.test(f.t));out.gridWhy+=' → '+(f2?f2.t:'no fix from Šiauliai');
+    if(f2){const rt=()=>S.routes.find(q=>(q.a===si&&q.b===kk)||(q.a===kk&&q.b===si)),n0=rt()?rt().n:0;act(f2.a);out.farMade=far(si)&&!!rt()&&rt().ok&&rt().n>n0;for(let q=0;q<12;q++)tick();
+     out.farFed=p1.eff>0.3&&p2.eff>0.3&&!/peat/.test(p1.why+p2.why)&&(K.pr||0)>0.95;out.gridWhy+=', and the stations run at '+Math.round(p1.eff*100)+'%'}
+    S.era=3;S.eraDay=S.day;tick();const d1=K.powD,pp=K.pop;S.eraDay=S.day-WANT_YEARS*365;tick();const d2=K.powD;out.powRamp=d1>0&&Math.abs(d2-d1-pp*0.03)<pp*0.005;out.rampWhy=d1.toFixed(1)+' → '+d2.toFixed(1)+' MW for '+Math.round(pp)+'k';
+    setTool('inspect');back(s0);K=T('Kaunas');kk=S.towns.indexOf(K)}
    /* the state: taxes, a policy, public trust */
    {const t0=histTax(),v0=trustParts().v;act({act:'tax',q:'2'});out.tax=histTax()>t0*1.25&&trustParts().v<v0;act({act:'tax',q:'1'});
     act({act:'pol',k:'roads'});tick();out.pol=polOn('roads')&&lineDisc('road')===0.75&&Math.round(BUD.policy)===-POLICY.roads.cost&&!polOpen('schools')&&S.hist.gov==='council';act({act:'pol',k:'roads'})}
@@ -327,6 +341,8 @@ assert(o.upSite && o.upWorks && o.upDone, `a modernization is a site on a buildi
 assert(o.wants, `a new era's wants set in over four years: no cliff on the first day (${o.wantsWhy})`);
 assert(o.fuel && o.fuelOk, `a town that outgrew its woodlots keeps a winter's fuel: the sawmill leaves it, and growth waits for it (${o.fuelWhy})`);
 assert(o.linkPlan && o.farPay && o.linkTown && o.linkUp > 1, `the fix "${o.linkFixTxt}" lays out a road that links Kudirkos Naumiestis: it paves ${(o.linkUp || 0).toFixed(1)} km of streets on the way, with bricks from other towns`);
+assert(o.gridWeak && o.farRoute && o.farMade && o.farFed, `a grid whose stations stand without peat says so and offers a route from the nearest town with peat to spare, which feeds them (${o.gridWhy})`);
+assert(o.powRamp, `homes in the Modern era come to need twice the power over four years (${o.rampWhy})`);
 assert(o.tax && o.pol, 'high taxes bring in more and cost public trust; road gangs cost 6 Lt a day and make roads cheaper');
 assert(o.eraReq && o.eraEx && o.eraLit && o.eraPol, `Industrialization asks for goods sold abroad and primary schools (open from October 1922), the Modern era for power in every linked town (${o.eraReqWhy})`);
 assert(o.rev, `every random event runs${o.revWhy ? ': ' + o.revWhy : ''}`);

@@ -11,15 +11,19 @@
      --seed=N      seed for the game's random numbers (default 1)
      --pace=N      player's moves a month (default 6)
      --quiet       only the summary
+     --progress    a line a year on stderr while it plays (the table itself is printed at the end)
+     --then=FILE   when the game is over, run FILE in it and print what its last expression gives (to look into the end state)
+     --save=FILE   write the end state to FILE, as the game saves it
    The numbers depend on the bot's habits as much as on the rules: compare runs, do not read them as targets. */
-const path = require('path'), vm = require('vm');
+const path = require('path'), vm = require('vm'), fs = require('fs');
 const root = path.join(__dirname, '..');
 const args = process.argv.slice(2), flag = n => args.includes('--' + n), val = (n, d) => { const a = args.find(x => x.startsWith('--' + n + '=')); return a ? a.split('=')[1] : d; };
-const opt = { end: args.find(a => /^\d{4}-\d\d-\d\d$/.test(a)) || '1941-01-01', passive: flag('passive'), wild: flag('wild'), seed: +val('seed', 1), pace: +val('pace', 6), quiet: flag('quiet') };
+const opt = { end: args.find(a => /^\d{4}-\d\d-\d\d$/.test(a)) || '1941-01-01', passive: flag('passive'), wild: flag('wild'), seed: +val('seed', 1), pace: +val('pace', 6), quiet: flag('quiet'), progress: flag('progress'), then: val('then', ''), save: val('save', '') };
 
 /* the same game every run: a seeded Math.random (the sandbox shares Math with this process) */
 { let s = (opt.seed * 2654435761) >>> 0 || 1; Math.random = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
 const { sandbox } = require('./headless.js')(root);
+if (opt.progress) sandbox.__tell = s => process.stderr.write(s + '\n');
 
 function bot(opt) {
   const R = { rows: [], sites: [], eras: {}, acts: {}, cards: [], err: [], waits: {} };
@@ -46,9 +50,13 @@ function bot(opt) {
   const owed = () => sites().reduce((a, b) => a + (b.c.hold ? 0 : Math.max(0, (b.c.n.lt || 0) - (b.c.g.lt || 0))), 0);
   const canPlan = cost => sites().length < 6 + S.era * 4 && owed() + (cost || 0) < Math.max(1500, spare() + Math.max(0, S.inc) * 120);
 
+  /* a works of this kind stands idle for want of what it uses: feed that one before planning another */
+  const starved = bt => !!BT[bt].in && S.bld.some(b => b.t === bt && !b.c && b.on && b.town >= 0 && open(b.town) && b.eff < 0.5 && !!b.lack);
   const born = new Map();
   function placeB(bt, ti) {
-    if (!unlocked(bt) || !open(ti)) return null;
+    if (!unlocked(bt) || !open(ti) || starved(bt)) return null;
+    /* no works that runs on power for a town that gets under four fifths of what it needs: the grid comes first */
+    if (BT[bt].powNeed && (S.towns[ti].pr === undefined ? 1 : S.towns[ti].pr) < 0.8) return null;
     setTool('place', bt, ti);
     let b = null;
     /* like a player who reads the action bar: build only where the town in question takes the building in */
@@ -157,7 +165,7 @@ function bot(opt) {
   const tried = new Map();
   function fixPass(max) {
     const L = [];
-    S.towns.forEach((t, ti) => { if (t.lock) return; for (const x of townIssues(ti)) { if (x.sev < (t.vil ? 2 : 1)) continue; const k = ti + ':' + x.k; if (S.day - (tried.get(k) || -999) < 20) continue; L.push({ ti, x, k }); } });
+    S.towns.forEach((t, ti) => { if (t.lock) return; for (const x of townIssues(ti)) { if (x.sev < (t.vil ? 2 : 1)) continue; const k = x.k === 'power' && NET.linked.has(ti) ? 'grid:power' : ti + ':' + x.k; if (S.day - (tried.get(k) || -999) < 20 || L.some(q => q.k === k)) continue; L.push({ ti, x, k }); } });
     L.sort((a, b) => b.x.sev - a.x.sev || rank(a.x.k) - rank(b.x.k) || S.towns[b.ti].pop - S.towns[a.ti].pop);
     let n = 0;
     for (const q of L) {
@@ -242,6 +250,16 @@ function bot(opt) {
     }
     TOOL.lv.road = 1;
   }
+  /* towns where a peat works can stand by a road: looked up once a year, as a player learns the map */
+  let bogs = { day: -999, L: [] };
+  function bogTowns() {
+    if (S.day - bogs.day > 365) {
+      const L = [];
+      S.towns.forEach((t, ti) => { if (t.lock || t.vil) return; if (count('peat', ti)) { L.push(ti); return; } setTool('place', 'peat', ti); if (PEND && PEND.kind === 'place' && PEND.ok && PEND.jt === ti) L.push(ti); });
+      setTool('inspect'); bogs = { day: S.day, L };
+    }
+    return bogs.L.filter(open);
+  }
   /* What the era's industry needs: power on the capital's grid, the goods towns come to want, and what feeds those works. */
   function program() {
     if (S.era < 2) return;
@@ -254,14 +272,21 @@ function bot(opt) {
       return -1;
     };
     const G = gridInfo(cap), coming = G.sites.reduce((a, b) => a + BT[b.t].pow, 0);
-    /* a power station where peat can be dug, with a peat works of its own; failing that, in any town that can staff it */
+    /* A power station where peat is dug, each with a peat works of its own, in the bog town with the most idle hands.
+       Only where no bog town can take one: in any town that can staff it, for a route to feed. */
+    const hands = i => (S.towns[i].wf || 0) - (S.towns[i].jobs || 0);
     const peatHost = () => {
-      const L = S.towns.map((t, i) => i).filter(i => open(i) && !S.towns[i].vil && NET.linked.has(i) && count('power', i) < 2 && S.towns[i].pop >= 20).sort((a, b) => S.towns[b].pop - S.towns[a].pop);
-      for (const ti of L.slice(0, 16)) { if (!count('peat', ti) && !placeB('peat', ti)) continue; if (placeB('power', ti)) return ti; }
+      const L = bogTowns().filter(i => NET.linked.has(i) && S.towns[i].pop >= 20 && hands(i) > 8).sort((a, b) => hands(b) - hands(a));
+      for (const ti of L) { if (count('peat', ti) <= count('power', ti) && !placeB('peat', ti)) continue; if (placeB('power', ti)) return ti; }
       return -1;
     };
-    if (G.D > (G.cap + coming) * 0.85 && !G.sites.length && canPlan(BT.power.cost.lt) && (peatHost() >= 0 || host('power', BT.power.w) >= 0)) return;
-    for (const b of G.weak) if (b.lack === 'peat' && !siteCount('peat', b.town) && count('peat', b.town) < 3 && canPlan(BT.peat.cost.lt) && placeB('peat', b.town)) return;
+    if (G.D > (G.cap + coming) * 0.85 && !G.sites.length && !starved('power') && canPlan(BT.power.cost.lt) && (peatHost() >= 0 || host('power', BT.power.w) >= 0)) return;
+    /* stations or kilns stand without peat and no town has any to spare: dig more, where the bog is and hands are free */
+    const noPeat = S.bld.some(b => !b.c && b.on && b.town >= 0 && open(b.town) && b.lack === 'peat' && b.eff < 0.5);
+    const toSpare = S.towns.some(T => !T.lock && (T.stock.peat || 0) - Math.max(((T.dem || {}).peat || 0) * 6, keptOf(T, 'peat')) >= 20);
+    if (noPeat && !toSpare && !siteCount('peat') && canPlan(BT.peat.cost.lt)) {
+      for (const ti of bogTowns().filter(i => S.towns[i].pop >= 12 && hands(i) > 4).sort((a, b) => hands(b) - hands(a))) if (placeB('peat', ti)) return;
+    }
     for (const W of WANTS) {
       if (W.era > S.era || W.era < 2) continue;
       const bt = PRODUCER[W.r], need = S.towns.reduce((a, t) => a + (t.lock || t.vil ? 0 : t.pop * W.per), 0);
@@ -307,6 +332,7 @@ function bot(opt) {
       held: iss.filter(q => q.sev === 1).map(q => q.k + ' ' + q.towns.length).join(', '), acts: yAct, stock: Object.fromEntries(MATS.concat(['beer', 'sugar', 'textiles', 'electronics']).map(r => [r, Math.round(T.stock[r])])),
       routes: S.routes.length, deals: S.deals.length, path: S.hist.path, gov: S.hist.gov };
     R.rows.push(row); built0 = S.stats.built || 0; yAct = {};
+    if (typeof __tell === 'function') __tell(`${row.y}  era ${row.era}  ${row.pop}k residents  ${row.funds} Lt  ${row.sites} sites`);
   };
   try {
     while (S.day < end) {
@@ -357,4 +383,6 @@ console.log('Buildings under half strength, by reason: ' + (Object.entries(R.why
 console.log(`Town-days hungry: ${R.hungry}; cold: ${R.cold}. Ministry tasks done: ${R.obj.join(', ') || 'none'}.`);
 if (R.open.length) console.log('Still open: ' + R.open.slice(0, 12).join(' | '));
 console.log('Cards: ' + R.cards.join(', '));
+if (opt.save) fs.writeFileSync(opt.save, vm.runInContext('JSON.stringify(serialize(), SAVE_NUM)', sandbox));
+if (opt.then) { const out = vm.runInContext(fs.readFileSync(opt.then, 'utf8'), sandbox, { filename: opt.then }); console.log('\n' + (typeof out === 'string' ? out : JSON.stringify(out, null, 1))); }
 if (R.err.length) { console.error('\nErrors:\n' + R.err.join('\n')); process.exit(1); }

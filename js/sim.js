@@ -302,7 +302,9 @@ function phase1b(ti){const t=S.towns[ti],st=t.stock;t.edu=Math.min(1,t.nsch*50*t
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(!T0.pow)return;if(!b.on){b.eff=0;b.why='Paused';return}
     const ir=useInputs(b,t.fill,st,t.dem,t.fill,t._us,t.hold);t.powS+=T0.pow*LV[b.lv]*t.fill*ir;b.eff=t.fill*ir;b.why=why(b,t.fill,1,ir)});
   BYT[ti].forEach(b=>{const T0=BT[b.t];if(T0.powNeed&&b.on)t.powD+=T0.powNeed*LV[b.lv]*t.fill;if(T0.svc){b.eff=b.on?t.fill:0;b.why=b.on?(t.fill<0.9?'Short of workers':'Running'):'Paused'}});
-  if(S.era>=2&&!t.vil)t.powD+=t.pop*(S.era>=3?0.06:0.03)}
+  /* homes: 0.03 MW a thousand residents with electric light; twice that in the Modern era, which comes in over its first
+     four years like the era's wants, so the grid is not short by half on the day the era begins */
+  if(S.era>=2&&!t.vil)t.powD+=t.pop*(S.era>=3?0.03+0.03*wantK():0.03)}
 function phase2(ti,sea){const t=S.towns[ti],st=t.stock,era=S.era,pr=t.pr,fill=t.fill,hp=histProd()*fxMul('prod',t),mk=t._mk,us=t._us;
   const fxFarm=fxMul('farm',t),fxStock=fxMul('stock',t)*(polOn('coops')?1.15:1),fxFish=fxMul('fish',t);
   /* fields take fertiliser when the town has some (or can be sent some) */

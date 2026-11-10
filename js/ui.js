@@ -13,7 +13,8 @@ Object.assign(ICON,{
 });
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2600)}
 const toastBusy=()=>$('toast').classList.contains('show');
-function hint(m){const h=$('hint');if(!m){h.hidden=true;return}h.textContent=m;h.hidden=false;clearTimeout(ht);ht=setTimeout(()=>{h.hidden=true},8000)}
+/* a note at the top of the map: gone after 8 s or a tap; with keep it stays until tapped */
+function hint(m,keep){const h=$('hint');if(!m){h.hidden=true;return}h.textContent=m;h.hidden=false;clearTimeout(ht);if(!keep)ht=setTimeout(()=>{h.hidden=true},8000)}
 const WIDE=()=>window.innerWidth>=960;
 Object.assign(VIEW,{sheet:0,prev:'nat',bcat:null,bti:-1,iss:null,tsort:'need',tall:false,seen:0,spd:1,nseg:'over',good:null});
 

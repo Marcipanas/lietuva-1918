@@ -79,10 +79,12 @@
 <script>
 /* Offline support: register the service worker when served over http(s). Not available inside claude.ai artifacts. */
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener('load',()=>{
-  /* when a new version has taken over an open game, say so: a tap on the note loads it */
+  /* when a new version has taken over an open game, say so, and that it starts a new game: a tap on the note loads it */
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had)return;const h=document.getElementById('hint');if(!h)return;
-    h.textContent='A new version is ready. Tap here to load it.';h.hidden=false;h.addEventListener('click',()=>location.reload(),{once:true})});
+    const msg='A new version is ready. It starts a new game: tap here to load it, or play this one until you close it.';
+    if(typeof hint==='function')hint(msg,1);else{h.textContent=msg;h.hidden=false}
+    h.addEventListener('click',()=>{if(h.textContent===msg)location.reload()})});
   navigator.serviceWorker.register('sw.js').catch(()=>{})})}
 </script>
 </body>
